@@ -1,0 +1,8 @@
+# Entorno virtual
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets y logs
+.env
+logs/
