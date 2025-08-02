@@ -16,8 +16,11 @@ seaborn>=0.11.0
 # Optional: For backtesting
 backtrader>=1.9.76
 
-# Optional: For web interface (future feature)
+# Web API
+fastapi>=0.100.0
+uvicorn>=0.20.0
+websockets>=10.0
+
+# Legacy web interface (deprecated)
 flask>=2.0.0
 flask-cors>=3.0.10
-
-matplotlib

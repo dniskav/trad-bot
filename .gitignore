@@ -34,6 +34,20 @@ ENV/
 env.bak/
 venv.bak/
 
+# Backend specific
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+
+# Frontend specific
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
 # IDE
 .vscode/
 .idea/
