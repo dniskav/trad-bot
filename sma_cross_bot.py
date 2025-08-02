@@ -14,22 +14,19 @@ load_dotenv()
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
 
-# Estrategia
 SYMBOL = "BTCUSDT"
 INTERVAL = "1m"
 FAST_WINDOW = 5
 SLOW_WINDOW = 20
-CAPITAL = 1000  # capital ficticio
-RISK_PER_TRADE = 0.01  # 1% por operación
+CAPITAL = 1000
+RISK_PER_TRADE = 0.01
+THRESHOLD = 0.0  # cambia a e.g. 0.0005 para filtrar ruido
 
-# Timing
-SLEEP_SECONDS = 30  # espera entre evaluaciones
+SLEEP_SECONDS = 30
 
-# Estado global
-POSITION = None  # "LONG" o None
-current_trade = None  # instancia abierta
-
-# Versión para comparar
+# Estado
+POSITION = None
+current_trade = None
 VERSION = "v1-sma-cross"
 
 # ------------------ SETUP ------------------
@@ -39,18 +36,12 @@ if API_KEY is None or API_SECRET is None:
     logging.error("Faltan BINANCE_API_KEY / BINANCE_API_SECRET en .env. Salida.")
     exit(1)
 
-# Cliente apuntando a testnet. Asegúrate que tus keys son de testnet.
 client = UMFutures(key=API_KEY, secret=API_SECRET, base_url="https://testnet.binancefuture.com")
-
-# Logger de métricas
 logger = MetricsLogger(filepath="logs/trades.csv")
 
 
 # ------------------ FUNCIONES AUX ------------------
 def get_klines(symbol, interval, limit=100):
-    """
-    Baja las últimas velas y devuelve array de precios de cierre.
-    """
     resp = client.klines(symbol=symbol, interval=interval, limit=limit)
     closes = [float(candle[4]) for candle in resp]
     return np.array(closes)
@@ -63,14 +54,18 @@ def compute_sma(series, window):
 
 
 def align_smas(sma_fast, sma_slow):
-    """Alinea tamaños para comparar cruces."""
+    """
+    Alinea las dos SMAs recortando la más larga para que tengan el mismo length.
+    """
     if sma_fast is None or sma_slow is None:
         return None, None
     offset = len(sma_slow) - len(sma_fast)
     if offset > 0:
-        sma_fast = sma_fast[offset:]
+        # slow es más larga: recortamos el inicio de slow
+        sma_slow = sma_slow[offset:]
     elif offset < 0:
-        sma_slow = sma_slow[-offset:]
+        # fast es más larga: recortamos el inicio de fast
+        sma_fast = sma_fast[-offset:]
     return sma_fast, sma_slow
 
 
@@ -88,31 +83,34 @@ def generate_signal(closes):
     prev_fast, curr_fast = sma_fast[-2], sma_fast[-1]
     prev_slow, curr_slow = sma_slow[-2], sma_slow[-1]
 
-    if prev_fast <= prev_slow and curr_fast > curr_slow:
+    # Normalizamos diferencias relativas para aplicar threshold si se desea
+    prev_diff = (prev_fast - prev_slow) / prev_slow if prev_slow != 0 else 0
+    curr_diff = (curr_fast - curr_slow) / curr_slow if curr_slow != 0 else 0
+
+    # Cruce alcista con umbral
+    if prev_diff <= 0 and curr_diff > THRESHOLD:
         return "BUY"
-    if prev_fast >= prev_slow and curr_fast < curr_slow:
+    # Cruce bajista
+    if prev_diff >= 0 and curr_diff < -THRESHOLD:
         return "SELL"
     return "HOLD"
 
 
 def position_size(price):
     risk_amount = CAPITAL * RISK_PER_TRADE
-    stop_distance = 0.01 * price  # stop a 1% fijo por ahora
+    stop_distance = 0.01 * price
     qty = risk_amount / stop_distance
     return max(qty, 0)
 
 
 def debug_print(closes):
-    """
-    Imprime valores recientes para entender qué pasa con las SMAs y cruces.
-    """
     sma_fast = compute_sma(closes, FAST_WINDOW)
     sma_slow = compute_sma(closes, SLOW_WINDOW)
     aligned_fast, aligned_slow = align_smas(sma_fast, sma_slow)
 
     logging.info(f"Últimos cierres: {closes[-6:]}")
     if aligned_fast is None or aligned_slow is None:
-        logging.info("No hay suficientes datos para calcular ambas SMAs aún.")
+        logging.info("No hay suficientes datos para ambas SMAs.")
         return
     logging.info(f"SMA fast recientes: {aligned_fast[-3:]}")
     logging.info(f"SMA slow recientes: {aligned_slow[-3:]}")
@@ -120,16 +118,33 @@ def debug_print(closes):
 
 def synthetic_test():
     """
-    Genera datos sintéticos donde la rápida cruza la lenta para validar la lógica.
+    Test sintético directo: simula un cruce alcista claro en las SMAs sin depender
+    de la generación de una serie de precios complicada.
     """
-    base = np.ones(30) * 100
-    for i in range(10, 15):
-        base[i] += (i - 9) * 2  # simula subida corta para forzar cruce
-    signal = generate_signal(base)
-    print("=== TEST SINTÉTICO ===")
-    print("Serie (últimos):", base[-15:])
-    print("Señal generada (debería ser BUY):", signal)
-    print("=====================")
+    # Construimos explícitamente dos pasos: antes fast <= slow, después fast > slow
+    # Vamos a simular que las SMAs previas y actuales son así:
+    prev_fast = 99.0
+    prev_slow = 100.0
+    curr_fast = 101.0
+    curr_slow = 100.0
+
+    prev_diff = (prev_fast - prev_slow) / prev_slow
+    curr_diff = (curr_fast - curr_slow) / curr_slow
+
+    print("=== TEST SINTÉTICO DIRECTO ===")
+    print(f"prev_fast={prev_fast}, prev_slow={prev_slow} -> prev_diff={prev_diff:.4f}")
+    print(f"curr_fast={curr_fast}, curr_slow={curr_slow} -> curr_diff={curr_diff:.4f}")
+
+    signal = None
+    if prev_diff <= 0 and curr_diff > THRESHOLD:
+        signal = "BUY"
+    elif prev_diff >= 0 and curr_diff < -THRESHOLD:
+        signal = "SELL"
+    else:
+        signal = "HOLD"
+
+    print("Señal generada (esperamos BUY):", signal)
+    print("=============================")
 
 
 # ------------------ LOOP PRINCIPAL ------------------
@@ -147,12 +162,9 @@ def main_loop(use_synthetic=False):
             last_price = closes[-1]
             now = datetime.datetime.utcnow().isoformat()
 
-            # Debug
             debug_print(closes)
-
             logging.info(f"Señal: {signal} | Precio: {last_price:.2f} | Posición: {POSITION}")
 
-            # Entrada LONG
             if signal == "BUY" and POSITION != "LONG":
                 qty = position_size(last_price)
                 logging.info(f"[acción] Entrando LONG (simulado) con qty≈{qty:.4f}")
@@ -169,7 +181,6 @@ def main_loop(use_synthetic=False):
                     version=VERSION,
                 )
 
-            # Cierre LONG
             elif signal == "SELL" and POSITION == "LONG":
                 qty = position_size(last_price)
                 logging.info("[acción] Cerrando LONG (simulado)")

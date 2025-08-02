@@ -19,3 +19,5 @@ backtrader>=1.9.76
 # Optional: For web interface (future feature)
 flask>=2.0.0
 flask-cors>=3.0.10
+
+matplotlib
