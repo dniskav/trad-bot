@@ -43,6 +43,12 @@ logger = MetricsLogger(filepath="logs/trades.csv")
 # ------------------ FUNCIONES AUX ------------------
 def get_klines(symbol, interval, limit=100):
     resp = client.klines(symbol=symbol, interval=interval, limit=limit)
+    return resp  # Return full candlestick data
+
+
+def get_closes(symbol, interval, limit=100):
+    """Get only closing prices for signal generation"""
+    resp = client.klines(symbol=symbol, interval=interval, limit=limit)
     closes = [float(candle[4]) for candle in resp]
     return np.array(closes)
 
@@ -104,60 +110,57 @@ def position_size(price):
 
 
 def debug_print(closes):
-    sma_fast = compute_sma(closes, FAST_WINDOW)
-    sma_slow = compute_sma(closes, SLOW_WINDOW)
-    aligned_fast, aligned_slow = align_smas(sma_fast, sma_slow)
-
-    logging.info(f"Últimos cierres: {closes[-6:]}")
-    if aligned_fast is None or aligned_slow is None:
-        logging.info("No hay suficientes datos para ambas SMAs.")
-        return
-    logging.info(f"SMA fast recientes: {aligned_fast[-3:]}")
-    logging.info(f"SMA slow recientes: {aligned_slow[-3:]}")
+    if len(closes) >= 6:
+        print(f"Últimos cierres: {closes[-6:]}")
+        sma_fast = compute_sma(closes, FAST_WINDOW)
+        sma_slow = compute_sma(closes, SLOW_WINDOW)
+        if sma_fast is not None and sma_slow is not None:
+            sma_fast, sma_slow = align_smas(sma_fast, sma_slow)
+            if sma_fast is not None and len(sma_fast) >= 3:
+                print(f"SMA fast recientes: {sma_fast[-3:]}")
+            if sma_slow is not None and len(sma_slow) >= 3:
+                print(f"SMA slow recientes: {sma_slow[-3:]}")
 
 
 def synthetic_test():
-    """
-    Test sintético directo: simula un cruce alcista claro en las SMAs sin depender
-    de la generación de una serie de precios complicada.
-    """
-    # Construimos explícitamente dos pasos: antes fast <= slow, después fast > slow
-    # Vamos a simular que las SMAs previas y actuales son así:
-    prev_fast = 99.0
-    prev_slow = 100.0
-    curr_fast = 101.0
-    curr_slow = 100.0
-
-    prev_diff = (prev_fast - prev_slow) / prev_slow
-    curr_diff = (curr_fast - curr_slow) / curr_slow
-
-    print("=== TEST SINTÉTICO DIRECTO ===")
-    print(f"prev_fast={prev_fast}, prev_slow={prev_slow} -> prev_diff={prev_diff:.4f}")
-    print(f"curr_fast={curr_fast}, curr_slow={curr_slow} -> curr_diff={curr_diff:.4f}")
-
-    signal = None
-    if prev_diff <= 0 and curr_diff > THRESHOLD:
-        signal = "BUY"
-    elif prev_diff >= 0 and curr_diff < -THRESHOLD:
-        signal = "SELL"
-    else:
-        signal = "HOLD"
-
-    print("Señal generada (esperamos BUY):", signal)
-    print("=============================")
+    """Test sintético con datos controlados"""
+    print("=== Resultados de tests sintéticos ===")
+    
+    # Test 1: Flat (sin cruce)
+    flat_data = np.array([100, 100, 100, 100, 100, 100, 100, 100, 100, 100])
+    signal = generate_signal(flat_data)
+    print(f"[{'PASS' if signal == 'HOLD' else 'FAIL'}] Flat (sin cruce): señal={signal} esperado=HOLD")
+    
+    # Test 2: Cruce alcista
+    bullish_data = np.array([95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115])
+    signal = generate_signal(bullish_data)
+    print(f"[{'PASS' if signal == 'BUY' else 'FAIL'}] Cruce alcista: señal={signal} esperado=BUY")
+    
+    # Test 3: Cruce bajista
+    bearish_data = np.array([115, 114, 113, 112, 111, 110, 109, 108, 107, 106, 105, 104, 103, 102, 101, 100, 99, 98, 97, 96, 95])
+    signal = generate_signal(bearish_data)
+    print(f"[{'PASS' if signal == 'SELL' else 'FAIL'}] Cruce bajista: señal={signal} esperado=SELL")
+    
+    print("======================================")
+    
+    # Verificar que todos los tests clave pasaron
+    flat_signal = generate_signal(flat_data)
+    bullish_signal = generate_signal(bullish_data)
+    bearish_signal = generate_signal(bearish_data)
+    
+    return (flat_signal == 'HOLD' and bullish_signal == 'BUY' and bearish_signal == 'SELL')
 
 
 # ------------------ LOOP PRINCIPAL ------------------
 def main_loop(use_synthetic=False):
     global POSITION, current_trade
-
+    
     if use_synthetic:
-        synthetic_test()
-        return
-
+        print("Modo sintético activado - no se ejecutarán trades reales")
+    
     while True:
         try:
-            closes = get_klines(SYMBOL, INTERVAL, limit=100)
+            closes = get_closes(SYMBOL, INTERVAL, limit=100)
             signal = generate_signal(closes)
             last_price = closes[-1]
             now = datetime.datetime.utcnow().isoformat()
