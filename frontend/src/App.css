@@ -1,70 +1,261 @@
 .App {
+  text-align: center;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+    'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 12px; /* Base font size reduced from ~16px */
 }
 
 .App-header {
+  padding: 1.5rem 0; /* Reduced from 2rem */
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  padding: 20px;
-  text-align: center;
-  color: white;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .App-header h1 {
-  margin: 0 0 10px 0;
-  font-size: 2.5rem;
-  font-weight: 300;
+  margin: 0;
+  font-size: 1.9rem; /* Reduced from 2.5rem */
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .App-header p {
-  margin: 0;
-  font-size: 1.1rem;
+  margin: 0.4rem 0 0 0; /* Reduced from 0.5rem */
+  font-size: 0.85rem; /* Reduced from 1.1rem */
   opacity: 0.9;
 }
 
 .App-main {
   flex: 1;
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1.5rem; /* Reduced from 2rem */
 }
 
-.App-main > * {
-  margin-bottom: 20px;
+.health-container {
+  max-width: 1200px;
+  width: 100%;
+}
+
+.status-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px; /* Reduced from 16px */
+  padding: 1.5rem; /* Reduced from 2rem */
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1); /* Reduced from 8px 32px */
+  transition: all 0.3s ease;
+  margin-bottom: 1.1rem; /* Reduced from 1.5rem */
+}
+
+.status-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 9px 30px rgba(0, 0, 0, 0.15); /* Reduced from 12px 40px */
+}
+
+.status-icon {
+  font-size: 2.3rem; /* Reduced from 3rem */
+  margin-bottom: 0.75rem; /* Reduced from 1rem */
+  display: block;
+}
+
+.status-card h3 {
+  margin: 0 0 0.75rem 0; /* Reduced from 1rem */
+  font-size: 1.1rem; /* Reduced from 1.5rem */
+  font-weight: 600;
+}
+
+.status-card p {
+  margin: 0.4rem 0; /* Reduced from 0.5rem */
+  opacity: 0.9;
+  line-height: 1.4; /* Reduced from 1.5 */
+}
+
+.health-details {
+  margin-top: 1.1rem; /* Reduced from 1.5rem */
+  text-align: left;
+}
+
+.health-details p {
+  margin: 0.6rem 0; /* Reduced from 0.75rem */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-value {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.check-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 0.6rem 1.1rem; /* Reduced from 0.75rem 1.5rem */
+  border-radius: 6px; /* Reduced from 8px */
+  font-size: 0.75rem; /* Reduced from 1rem */
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 0.75rem; /* Reduced from 1rem */
+}
+
+.check-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.check-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.retry-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 0.6rem 1.1rem; /* Reduced from 0.75rem 1.5rem */
+  border-radius: 6px; /* Reduced from 8px */
+  font-size: 0.75rem; /* Reduced from 1rem */
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 0.75rem; /* Reduced from 1rem */
+}
+
+.retry-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.status-card.loading {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.status-card.error {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.status-card.success {
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+/* WebSocket Data Boxes Container */
+.websocket-boxes-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.1rem; /* Reduced from 1.5rem */
+  margin-top: 1.1rem; /* Reduced from 1.5rem */
+}
+
+/* WebSocket Data Box */
+.websocket-data-box {
+  background: #000000;
+  border-radius: 12px; /* Reduced from 16px */
+  padding: 1.1rem; /* Reduced from 1.5rem */
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3); /* Reduced from 8px 32px */
+}
+
+.websocket-data-box h3 {
+  margin: 0 0 0.75rem 0; /* Reduced from 1rem */
+  font-size: 1rem; /* Reduced from 1.3rem */
+  font-weight: 600;
+  color: white;
+  text-align: center;
+}
+
+.websocket-status {
+  margin-bottom: 0.75rem; /* Reduced from 1rem */
+  padding: 0.4rem; /* Reduced from 0.5rem */
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px; /* Reduced from 8px */
+  font-size: 0.7rem; /* Reduced from 0.9rem */
+}
+
+.websocket-status .connected {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+.websocket-status .disconnected {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.json-display {
+  background: #1a1a1a;
+  border-radius: 6px; /* Reduced from 8px */
+  padding: 0.75rem; /* Reduced from 1rem */
+  border: 1px solid #333;
+  max-height: 225px; /* Reduced from 300px */
+  overflow-y: auto;
+}
+
+.json-display pre {
+  margin: 0;
+  color: #e5e5e5;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.6rem; /* Reduced from 0.8rem */
+  line-height: 1.3; /* Reduced from 1.4 */
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .App-footer {
-  background: rgba(0, 0, 0, 0.1);
-  padding: 15px;
-  text-align: center;
-  color: white;
-  font-size: 0.9rem;
+  padding: 0.75rem; /* Reduced from 1rem */
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.App-footer p {
+  margin: 0;
   opacity: 0.8;
+  font-size: 0.7rem; /* Reduced from 0.9rem */
 }
 
 /* Responsive design */
 @media (max-width: 768px) {
   .App-header h1 {
-    font-size: 2rem;
-  }
-
-  .App-main {
-    padding: 15px;
-  }
-}
-
-@media (max-width: 480px) {
-  .App-header h1 {
-    font-size: 1.5rem;
+    font-size: 1.5rem; /* Reduced from 2rem */
   }
 
   .App-header p {
-    font-size: 1rem;
+    font-size: 0.75rem; /* Reduced from 1rem */
+  }
+
+  .status-card {
+    padding: 1.1rem; /* Reduced from 1.5rem */
+    margin: 0 0.75rem 1.1rem 0.75rem; /* Reduced from 1rem 1.5rem 1rem */
+  }
+
+  .status-icon {
+    font-size: 1.9rem; /* Reduced from 2.5rem */
+  }
+
+  .health-details p {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem; /* Reduced from 0.25rem */
+  }
+
+  .websocket-boxes-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem; /* Reduced from 1rem */
+    margin: 1.1rem 0.75rem 0 0.75rem; /* Reduced from 1.5rem 1rem 0 1rem */
+  }
+
+  .websocket-data-box {
+    padding: 0.75rem; /* Reduced from 1rem */
+  }
+
+  .json-display {
+    font-size: 0.5rem; /* Reduced from 0.7rem */
   }
 }

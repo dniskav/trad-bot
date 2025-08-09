@@ -1,19 +1,36 @@
-import { useEffect, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 
-interface UseWebSocketReturn {
+interface WebSocketContextType {
   isConnected: boolean
   isConnecting: boolean
   error: string | null
+  lastMessage: any
   reconnect: () => void
 }
 
-export const useWebSocket = (
-  url: string = 'ws://localhost:8000/ws',
-  onMessage?: (message: any) => void
-): UseWebSocketReturn => {
+const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined)
+
+export const useWebSocketContext = () => {
+  const context = useContext(WebSocketContext)
+  if (!context) {
+    throw new Error('useWebSocketContext must be used within a WebSocketProvider')
+  }
+  return context
+}
+
+interface WebSocketProviderProps {
+  children: React.ReactNode
+  url?: string
+}
+
+export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
+  children,
+  url = 'ws://localhost:8000/ws'
+}) => {
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [lastMessage, setLastMessage] = useState<any>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
@@ -42,9 +59,7 @@ export const useWebSocket = (
         try {
           const message = JSON.parse(event.data)
           console.log('📨 Mensaje WebSocket recibido:', message)
-          if (onMessage) {
-            onMessage(message)
-          }
+          setLastMessage(message)
         } catch (err) {
           console.error('❌ Error parseando mensaje WebSocket:', err)
         }
@@ -109,10 +124,13 @@ export const useWebSocket = (
     }
   }, [url])
 
-  return {
+  const value: WebSocketContextType = {
     isConnected,
     isConnecting,
     error,
+    lastMessage,
     reconnect
   }
+
+  return <WebSocketContext.Provider value={value}>{children}</WebSocketContext.Provider>
 }
