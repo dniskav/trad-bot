@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import './App.css'
+import CandlestickChart from './components/CandlestickChart'
 import WebSocketStatus from './components/WebSocketStatus'
 import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext'
 
@@ -130,6 +131,14 @@ function AppContent() {
                   {candleData ? JSON.stringify(candleData, null, 2) : 'Esperando datos de velas...'}
                 </pre>
               </div>
+            </div>
+          </div>
+
+          {/* Chart Section */}
+          <div className="chart-section">
+            <div className="chart-container">
+              <h3>📈 Gráfico de Velas</h3>
+              <CandlestickChart />
             </div>
           </div>
         </div>

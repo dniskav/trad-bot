@@ -6,6 +6,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   font-size: 12px; /* Base font size reduced from ~16px */
+  overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
 .App-header {
@@ -34,11 +35,14 @@
   justify-content: center;
   align-items: center;
   padding: 1.5rem; /* Reduced from 2rem */
+  max-width: 100vw; /* Prevent overflow */
+  box-sizing: border-box;
 }
 
 .health-container {
   max-width: 1200px;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .status-card {
@@ -150,6 +154,8 @@
   grid-template-columns: 1fr 1fr;
   gap: 1.1rem; /* Reduced from 1.5rem */
   margin-top: 1.1rem; /* Reduced from 1.5rem */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* WebSocket Data Box */
@@ -160,6 +166,8 @@
   text-align: left;
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3); /* Reduced from 8px 32px */
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .websocket-data-box h3 {
@@ -205,6 +213,125 @@
   line-height: 1.3; /* Reduced from 1.4 */
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Chart Section */
+.chart-section {
+  margin-top: 1.1rem; /* Reduced from 1.5rem */
+}
+
+/* Chart Container (for the section wrapper) */
+.chart-container {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px; /* Reduced from 16px */
+  padding: 1.5rem; /* Reduced from 2rem */
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1); /* Reduced from 8px 32px */
+  transition: all 0.3s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chart-container:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 9px 30px rgba(0, 0, 0, 0.15); /* Reduced from 12px 40px */
+}
+
+.chart-container h3 {
+  margin: 0 0 1.1rem 0; /* Reduced from 1.5rem */
+  font-size: 1.1rem; /* Reduced from 1.5rem */
+  font-weight: 600;
+  color: white;
+}
+
+.chart-placeholder {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px; /* Reduced from 12px */
+  padding: 2rem; /* Reduced from 3rem */
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  min-height: 200px; /* Reduced from 300px */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.chart-icon {
+  font-size: 3rem; /* Reduced from 4rem */
+  margin-bottom: 0.75rem; /* Reduced from 1rem */
+  opacity: 0.6;
+}
+
+.chart-placeholder p {
+  margin: 0 0 0.5rem 0; /* Reduced from 0.75rem */
+  font-size: 0.9rem; /* Reduced from 1.2rem */
+  font-weight: 500;
+}
+
+.chart-placeholder small {
+  font-size: 0.6rem; /* Reduced from 0.7rem */
+  opacity: 0.8;
+}
+
+/* Candlestick Chart Component */
+.candlestick-chart {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px; /* Reduced from 16px */
+  padding: 1.1rem; /* Reduced from 1.5rem */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1); /* Reduced from 8px 32px */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem; /* Reduced from 1rem */
+  color: white;
+}
+
+.chart-header h3 {
+  margin: 0;
+  font-size: 1rem; /* Reduced from 1.3rem */
+  font-weight: 600;
+}
+
+.chart-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* Reduced from 0.75rem */
+  font-size: 0.7rem; /* Reduced from 0.9rem */
+  opacity: 0.8;
+}
+
+.chart-info span {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Chart Canvas Container (for the actual chart div) */
+.chart-canvas-container {
+  height: 300px; /* Fixed height for the chart canvas */
+  border-radius: 6px; /* Reduced from 8px */
+  overflow: hidden;
+  background: #1e1e1e;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chart-footer {
+  margin-top: 0.5rem; /* Reduced from 0.75rem */
+  text-align: center;
+}
+
+.chart-footer small {
+  font-size: 0.6rem; /* Reduced from 0.8rem */
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .App-footer {
@@ -257,5 +384,53 @@
 
   .json-display {
     font-size: 0.5rem; /* Reduced from 0.7rem */
+  }
+
+  .chart-container {
+    padding: 1.1rem; /* Reduced from 1.5rem */
+    margin: 0 0.75rem; /* Reduced from 1rem */
+  }
+
+  .chart-placeholder {
+    padding: 1.5rem; /* Reduced from 2rem */
+    min-height: 150px; /* Reduced from 200px */
+  }
+
+  .chart-icon {
+    font-size: 2.3rem; /* Reduced from 3rem */
+  }
+
+  .chart-placeholder p {
+    font-size: 0.75rem; /* Reduced from 0.9rem */
+  }
+
+  .chart-placeholder small {
+    font-size: 0.6rem; /* Reduced from 0.7rem */
+  }
+
+  .candlestick-chart {
+    padding: 0.75rem; /* Reduced from 1.1rem */
+  }
+
+  .chart-header {
+    flex-direction: column;
+    gap: 0.5rem; /* Reduced from 0.75rem */
+    align-items: flex-start;
+  }
+
+  .chart-header h3 {
+    font-size: 0.9rem; /* Reduced from 1rem */
+  }
+
+  .chart-info {
+    font-size: 0.6rem; /* Reduced from 0.7rem */
+  }
+
+  .chart-canvas-container {
+    height: 250px; /* Reduced from 300px */
+  }
+
+  .chart-footer small {
+    font-size: 0.5rem; /* Reduced from 0.6rem */
   }
 }
