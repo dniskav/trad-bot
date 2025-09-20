@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import BotControl from './BotControl'
 
 interface BotSignalsProps {
   signals: {
@@ -15,6 +16,58 @@ interface BotSignalsProps {
 }
 
 const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
+  const [botStatus, setBotStatus] = useState({
+    conservative: true,
+    aggressive: true
+  })
+
+  const [dynamicLimits, setDynamicLimits] = useState({
+    total_max_positions: 10,
+    active_bots: 2,
+    available_positions_per_bot: 5,
+    current_positions: {
+      conservative: 0,
+      aggressive: 0
+    }
+  })
+
+  // Fetch bot status and dynamic limits on component mount
+  useEffect(() => {
+    const fetchBotStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/bot/status')
+        const result = await response.json()
+        if (result.status === 'success') {
+          setBotStatus(result.data.bot_status)
+          if (result.data.dynamic_limits) {
+            setDynamicLimits(result.data.dynamic_limits)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching bot status:', error)
+      }
+    }
+
+    fetchBotStatus()
+  }, [])
+
+  const handleBotToggle = async (botType: string, newStatus: boolean) => {
+    setBotStatus((prev) => ({
+      ...prev,
+      [botType]: newStatus
+    }))
+
+    // Refresh dynamic limits after bot status change
+    try {
+      const response = await fetch('http://localhost:8000/bot/status')
+      const result = await response.json()
+      if (result.status === 'success' && result.data.dynamic_limits) {
+        setDynamicLimits(result.data.dynamic_limits)
+      }
+    } catch (error) {
+      console.error('Error refreshing dynamic limits:', error)
+    }
+  }
   if (!signals) {
     return (
       <div className="bot-signals">
@@ -126,6 +179,21 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
   return (
     <div className="bot-signals">
       <h3>🤖 Trading Bot Signals</h3>
+
+      {/* Bot Controls */}
+      <div className="bot-controls">
+        <BotControl
+          botType="conservative"
+          isActive={botStatus.conservative}
+          onToggle={handleBotToggle}
+        />
+        <BotControl
+          botType="aggressive"
+          isActive={botStatus.aggressive}
+          onToggle={handleBotToggle}
+        />
+      </div>
+
       <div className="bot-status">
         <div className="price-display">
           <span className="price-label">Precio Actual:</span>
@@ -155,6 +223,32 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
             </div>
             <div className="signal-description">SMA 3 vs 8, Threshold 0.0001</div>
             {getPositionInfo('aggressive')}
+          </div>
+        </div>
+
+        <div className="dynamic-limits-info">
+          <h4>📊 Límites Dinámicos de Posiciones</h4>
+          <div className="limits-grid">
+            <div className="limit-item">
+              <span className="limit-label">Total Máximo:</span>
+              <span className="limit-value">{dynamicLimits.total_max_positions}</span>
+            </div>
+            <div className="limit-item">
+              <span className="limit-label">Bots Activos:</span>
+              <span className="limit-value">{dynamicLimits.active_bots}</span>
+            </div>
+            <div className="limit-item">
+              <span className="limit-label">Por Bot Activo:</span>
+              <span className="limit-value">{dynamicLimits.available_positions_per_bot}</span>
+            </div>
+            <div className="limit-item">
+              <span className="limit-label">Conservador:</span>
+              <span className="limit-value">{dynamicLimits.current_positions.conservative}</span>
+            </div>
+            <div className="limit-item">
+              <span className="limit-label">Agresivo:</span>
+              <span className="limit-value">{dynamicLimits.current_positions.aggressive}</span>
+            </div>
           </div>
         </div>
 

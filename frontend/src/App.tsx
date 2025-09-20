@@ -1,18 +1,15 @@
 import React, { useState } from 'react'
 import './App.css'
+import Accordion from './components/Accordion'
 import AccountBalance from './components/AccountBalance'
+import ActivePositions from './components/ActivePositions'
 import BotSignals from './components/BotSignals'
 import CandlestickChart from './components/CandlestickChart'
 import PositionHistory from './components/PositionHistory'
 import TimeframeSelector from './components/TimeframeSelector'
+import Toast from './components/Toast'
 import WebSocketStatus from './components/WebSocketStatus'
 import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext'
-
-interface HealthStatus {
-  status: string
-  timestamp: string
-  message: string
-}
 
 interface AppContentProps {
   selectedTimeframe: string
@@ -20,9 +17,11 @@ interface AppContentProps {
 }
 
 function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
-  const [health, setHealth] = useState<HealthStatus | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'info'
+  } | null>(null)
 
   const { isConnected, lastMessage } = useWebSocketContext()
 
@@ -33,6 +32,7 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
   const [positionHistory, setPositionHistory] = useState<any[]>([])
   const [botStatistics, setBotStatistics] = useState<any>(null)
   const [accountBalance, setAccountBalance] = useState<any>(null)
+  const [activePositions, setActivePositions] = useState<any>(null)
 
   // Update data based on message type
   React.useEffect(() => {
@@ -66,6 +66,10 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
               console.log('💰 Setting account balance:', positions.account_balance)
               setAccountBalance(positions.account_balance)
             }
+            if (positions.active_positions) {
+              console.log('📊 Setting active positions:', positions.active_positions)
+              setActivePositions(positions.active_positions)
+            }
           } else {
             console.log('❌ No positions data found in:', lastMessage.data)
           }
@@ -77,7 +81,6 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
   const checkHealth = async () => {
     try {
       setLoading(true)
-      setError(null)
 
       const response = await fetch('http://localhost:8000/health')
 
@@ -86,10 +89,21 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
       }
 
       const data = await response.json()
-      setHealth(data)
+
+      // Show success toast
+      setToast({
+        message: `Servidor funcionando - ${data.status}`,
+        type: 'success'
+      })
     } catch (err) {
       console.error('Error checking health:', err)
-      setError(err instanceof Error ? err.message : 'Error desconocido')
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido'
+
+      // Show error toast
+      setToast({
+        message: `Error de conexión: ${errorMessage}`,
+        type: 'error'
+      })
     } finally {
       setLoading(false)
     }
@@ -97,58 +111,70 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
 
   return (
     <div className="App">
-      <WebSocketStatus />
+      {/* Toast */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          duration={3000}
+          onClose={() => setToast(null)}
+        />
+      )}
 
       <header className="App-header">
-        <h1>🚀 Trading Bot</h1>
-        <p>Server Health Monitor</p>
+        <div className="header-content">
+          {/* Status Boxes */}
+          <div className="status-boxes">
+            <div className="status-box green-box">
+              <WebSocketStatus />
+            </div>
+          </div>
+
+          {/* Title Section */}
+          <div className="header-title">
+            <h1>🚀 Trading Bot</h1>
+            <p>Server Health Monitor</p>
+          </div>
+
+          {/* Status Boxes */}
+          <div className="status-boxes">
+            <div className="status-box red-box">
+              <button onClick={checkHealth} className="health-button-compact" disabled={loading}>
+                Status
+              </button>
+            </div>
+          </div>
+        </div>
       </header>
 
       <main className="App-main">
         <div className="health-container">
-          <div className="status-card">
-            <div className="status-icon">🔍</div>
-            <h3>Estado del Servidor</h3>
-            <p>Verifica el estado del servidor manualmente</p>
-            <button onClick={checkHealth} className="check-button" disabled={loading}>
-              {loading ? '🔄 Verificando...' : '🔍 Verificar Health'}
-            </button>
-          </div>
-
-          {error && (
-            <div className="status-card error">
-              <div className="status-icon">❌</div>
-              <h3>Error de conexión</h3>
-              <p>{error}</p>
-            </div>
-          )}
-
-          {health && (
-            <div className="status-card success">
-              <div className="status-icon">✅</div>
-              <h3>Servidor funcionando</h3>
-              <div className="health-details">
-                <p>
-                  <strong>Status:</strong> <span className="status-value">{health.status}</span>
-                </p>
-                <p>
-                  <strong>Mensaje:</strong> {health.message}
-                </p>
-                <p>
-                  <strong>Última verificación:</strong>{' '}
-                  {new Date(health.timestamp).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Account Balance */}
-          {accountBalance && <AccountBalance balance={accountBalance} />}
+          {accountBalance && (
+            <AccountBalance balance={accountBalance} currentPrice={priceData?.data?.price} />
+          )}
 
-          {/* Price Data Box */}
-          <div className="websocket-boxes-container">
+          {/* Bot Signals Accordion */}
+          <Accordion
+            title="Señales de Trading"
+            icon="🤖"
+            defaultExpanded={false}
+            className="bot-signals-accordion"
+            storageKey="bot-signals">
+            <BotSignals signals={botSignals} />
+          </Accordion>
+
+          {/* Active Positions */}
+          <ActivePositions positions={activePositions} currentPrice={priceData?.data?.price} />
+
+          {/* Price Data Accordion */}
+          <Accordion
+            title="Datos de Precio"
+            icon="💰"
+            defaultExpanded={false}
+            className="websocket-accordion"
+            storageKey="price-data">
             <div className="websocket-data-box">
-              <h3>💰 Datos de Precio</h3>
               <div className="websocket-status">
                 <span>Estado: </span>
                 <span className={isConnected ? 'connected' : 'disconnected'}>
@@ -161,10 +187,16 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
                 </pre>
               </div>
             </div>
+          </Accordion>
 
-            {/* Candlestick Data Box */}
+          {/* Candlestick Data Accordion */}
+          <Accordion
+            title="Datos de Velas"
+            icon="📊"
+            defaultExpanded={false}
+            className="websocket-accordion"
+            storageKey="candle-data">
             <div className="websocket-data-box">
-              <h3>📊 Datos de Velas</h3>
               <div className="websocket-status">
                 <span>Estado: </span>
                 <span className={isConnected ? 'connected' : 'disconnected'}>
@@ -177,10 +209,7 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
                 </pre>
               </div>
             </div>
-          </div>
-
-          {/* Bot Signals */}
-          <BotSignals signals={botSignals} />
+          </Accordion>
 
           {/* Position History */}
           {positionHistory.length > 0 && botStatistics && (
@@ -191,13 +220,20 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
           <div className="chart-section">
             <div className="chart-container">
               <h3>📈 Gráfico de Velas</h3>
-              <TimeframeSelector
-                selectedTimeframe={selectedTimeframe}
-                onTimeframeChange={onTimeframeChange}
-              />
+              <Accordion
+                title="Seleccionar Timeframe"
+                icon="⏱️"
+                defaultExpanded={false}
+                className="timeframe-accordion"
+                storageKey="timeframe-selector">
+                <TimeframeSelector
+                  selectedTimeframe={selectedTimeframe}
+                  onTimeframeChange={onTimeframeChange}
+                />
+              </Accordion>
               <CandlestickChart
                 timeframe={selectedTimeframe}
-                symbol={candleData?.data?.symbol || 'ADAUSDT'}
+                symbol={candleData?.data?.symbol || 'DOGEUSDT'}
               />
             </div>
           </div>

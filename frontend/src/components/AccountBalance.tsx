@@ -7,14 +7,25 @@ interface AccountBalanceProps {
     total_pnl: number
     balance_change_pct: number
     is_profitable: boolean
+    usdt_balance: number
+    doge_balance: number
+    total_balance_usdt: number
   }
+  currentPrice?: number
 }
 
-const AccountBalance: React.FC<AccountBalanceProps> = ({ balance }) => {
+const AccountBalance: React.FC<AccountBalanceProps> = ({ balance, currentPrice }) => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount)
+  }
+
+  const formatDoge = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(amount)
@@ -54,6 +65,30 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({ balance }) => {
           <span className="balance-label">Saldo Actual:</span>
           <span className="balance-value current" style={{ color: getBalanceColor() }}>
             {formatCurrency(balance.current_balance)}
+          </span>
+        </div>
+
+        <div className="balance-row">
+          <span className="balance-label">USDT Disponible:</span>
+          <span className="balance-value usdt">{formatCurrency(balance.usdt_balance)}</span>
+        </div>
+
+        <div className="balance-row">
+          <span className="balance-label">DOGE Disponible:</span>
+          <span className="balance-value doge">{formatDoge(balance.doge_balance)} DOGE</span>
+        </div>
+
+        <div className="balance-row">
+          <span className="balance-label">1 USD = DOGE:</span>
+          <span className="balance-value doge-rate">
+            {currentPrice ? `${formatDoge(1 / currentPrice)} DOGE` : 'Calculando...'}
+          </span>
+        </div>
+
+        <div className="balance-row">
+          <span className="balance-label">Total en USDT:</span>
+          <span className="balance-value total-usdt">
+            {formatCurrency(balance.total_balance_usdt)}
           </span>
         </div>
 

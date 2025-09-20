@@ -77,42 +77,52 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
     title,
     stats,
     icon
-  }) => (
-    <div className="stat-card">
-      <div className="stat-header">
-        <span className="stat-icon">{icon}</span>
-        <span className="stat-title">{title}</span>
+  }) => {
+    // Valores por defecto para evitar errores de undefined
+    const safeStats = {
+      total_trades: stats?.total_trades || 0,
+      win_rate: stats?.win_rate || 0,
+      total_pnl_net: stats?.total_pnl_net || 0,
+      best_trade: stats?.best_trade || 0
+    }
+
+    return (
+      <div className="stat-card">
+        <div className="stat-header">
+          <span className="stat-icon">{icon}</span>
+          <span className="stat-title">{title}</span>
+        </div>
+        <div className="stat-content">
+          <div className="stat-row">
+            <span className="stat-label">Trades:</span>
+            <span className="stat-value">{safeStats.total_trades}</span>
+          </div>
+          <div className="stat-row">
+            <span className="stat-label">Win Rate:</span>
+            <span
+              className="stat-value"
+              style={{ color: safeStats.win_rate >= 50 ? '#26a69a' : '#ef5350' }}>
+              {safeStats.win_rate.toFixed(1)}%
+            </span>
+          </div>
+          <div className="stat-row">
+            <span className="stat-label">PnL Total:</span>
+            <span
+              className="stat-value"
+              style={{ color: safeStats.total_pnl_net >= 0 ? '#26a69a' : '#ef5350' }}>
+              ${safeStats.total_pnl_net.toFixed(4)}
+            </span>
+          </div>
+          <div className="stat-row">
+            <span className="stat-label">Mejor Trade:</span>
+            <span className="stat-value" style={{ color: '#26a69a' }}>
+              ${safeStats.best_trade.toFixed(4)}
+            </span>
+          </div>
+        </div>
       </div>
-      <div className="stat-content">
-        <div className="stat-row">
-          <span className="stat-label">Trades:</span>
-          <span className="stat-value">{stats.total_trades}</span>
-        </div>
-        <div className="stat-row">
-          <span className="stat-label">Win Rate:</span>
-          <span
-            className="stat-value"
-            style={{ color: stats.win_rate >= 50 ? '#26a69a' : '#ef5350' }}>
-            {stats.win_rate.toFixed(1)}%
-          </span>
-        </div>
-        <div className="stat-row">
-          <span className="stat-label">PnL Total:</span>
-          <span
-            className="stat-value"
-            style={{ color: stats.total_pnl_net >= 0 ? '#26a69a' : '#ef5350' }}>
-            ${stats.total_pnl_net.toFixed(4)}
-          </span>
-        </div>
-        <div className="stat-row">
-          <span className="stat-label">Mejor Trade:</span>
-          <span className="stat-value" style={{ color: '#26a69a' }}>
-            ${stats.best_trade.toFixed(4)}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <div className="position-history">

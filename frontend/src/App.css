@@ -1,57 +1,164 @@
+/* Binance-style color scheme */
+:root {
+  --binance-black: #0b0e11;
+  --binance-dark: #161a1e;
+  --binance-gray: #2b3139;
+  --binance-light-gray: #474d57;
+  --binance-yellow: #f0b90b;
+  --binance-yellow-light: #fcd535;
+  --binance-green: #02c076;
+  --binance-red: #f84960;
+  --binance-white: #eaecef;
+  --binance-text: #848e9c;
+}
+
 .App {
   text-align: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  width: 100%;
+  background: var(--binance-black);
+  color: var(--binance-white);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   font-size: 12px; /* Base font size reduced from ~16px */
   overflow-x: hidden; /* Prevent horizontal scroll */
+  position: relative;
 }
 
 .App-header {
-  padding: 1.5rem 0; /* Reduced from 2rem */
-  background: rgba(255, 255, 255, 0.1);
+  padding: 0;
+  background: transparent;
+  border-bottom: none;
+  display: block;
+  position: fixed;
+  top: 0;
+  z-index: 1000;
+  max-width: 1366px;
+  width: 100%;
+  box-sizing: border-box;
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.App-header h1 {
+.header-content {
+  width: 100%;
+  padding: 1rem 2rem;
+  background: var(--binance-dark);
+  border-bottom: 1px solid var(--binance-gray);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+/* Header Title Section */
+.header-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+}
+
+.header-title h1 {
   margin: 0;
   font-size: 1.9rem; /* Reduced from 2.5rem */
   font-weight: 700;
+  color: var(--binance-yellow);
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.App-header p {
-  margin: 0.4rem 0 0 0; /* Reduced from 0.5rem */
+.header-title p {
+  margin: 0.2rem 0 0 0; /* Reduced spacing */
   font-size: 0.85rem; /* Reduced from 1.1rem */
-  opacity: 0.9;
+  color: var(--binance-text);
+}
+
+/* Status Boxes */
+.status-boxes {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.status-box {
+  width: 80px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: transparent;
+}
+
+.green-box {
+  border: none;
+}
+
+.red-box {
+  border: 2px solid #ef4444;
+}
+
+/* Compact Health Button */
+.health-button-compact {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  text-align: center;
+}
+
+.health-button-compact:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.health-button-compact:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .App-main {
-  flex: 1;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   padding: 1.5rem; /* Reduced from 2rem */
-  max-width: 100vw; /* Prevent overflow */
+  padding-top: 6rem; /* Add top padding to account for fixed header */
+  width: 100%; /* Prevent overflow */
   box-sizing: border-box;
+  min-height: calc(100vh - 200px); /* Ensure minimum height */
+  margin-top: 0; /* Ensure no margin that could interfere with sticky */
 }
 
 .health-container {
-  max-width: 1200px;
+  max-width: 920px;
   width: 100%;
   box-sizing: border-box;
+  margin: 0 auto; /* Center the container */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .status-card {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--binance-dark);
   backdrop-filter: blur(10px);
   border-radius: 12px; /* Reduced from 16px */
   padding: 1.5rem; /* Reduced from 2rem */
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1); /* Reduced from 8px 32px */
   transition: all 0.3s ease;
   margin-bottom: 1.1rem; /* Reduced from 1.5rem */
@@ -137,15 +244,15 @@
 }
 
 .status-card.loading {
-  border-color: rgba(59, 130, 246, 0.5);
+  border-color: var(--binance-yellow);
 }
 
 .status-card.error {
-  border-color: rgba(239, 68, 68, 0.5);
+  border-color: var(--binance-red);
 }
 
 .status-card.success {
-  border-color: rgba(34, 197, 94, 0.5);
+  border-color: var(--binance-green);
 }
 
 /* WebSocket Data Boxes Container */
@@ -158,13 +265,335 @@
   box-sizing: border-box;
 }
 
+/* Accordion Styles */
+.accordion {
+  background: var(--binance-dark);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid var(--binance-gray);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.accordion-header:hover {
+  background: var(--binance-gray);
+}
+
+.accordion-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+}
+
+.accordion-icon {
+  font-size: 1.2rem;
+}
+
+.accordion-toggle {
+  font-size: 0.8rem;
+  color: var(--binance-yellow);
+  transition: transform 0.2s ease;
+}
+
+.accordion-content {
+  padding: 0 1rem 1rem 1rem;
+  border-top: 1px solid var(--binance-gray);
+}
+
+/* Accordion for websocket data boxes */
+.websocket-accordion {
+  margin-bottom: 1rem;
+}
+
+.websocket-accordion .accordion-content {
+  padding: 0;
+}
+
+.websocket-accordion .json-display {
+  margin-top: 0;
+}
+
+/* Accordion for health status */
+.health-accordion {
+  margin-bottom: 1rem;
+}
+
+.health-accordion .accordion-content {
+  padding: 0;
+}
+
+.health-accordion .status-card {
+  margin: 0;
+  border-radius: 0;
+  border: none;
+}
+
+/* Accordion for timeframe selector */
+.timeframe-accordion {
+  margin-bottom: 1rem;
+}
+
+.timeframe-accordion .accordion-content {
+  padding: 0;
+}
+
+/* Accordion for bot signals */
+.bot-signals-accordion {
+  margin-bottom: 1rem;
+}
+
+.bot-signals-accordion .accordion-content {
+  padding: 0;
+}
+
+.bot-signals-accordion .bot-signals {
+  margin: 0;
+  border-radius: 0;
+  border: none;
+}
+
+/* Limit bot signals to 3 positions with scroll */
+.bot-signals-accordion .signals-container {
+  max-height: 400px; /* Adjust based on 3 positions */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.bot-signals-accordion .signals-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bot-signals-accordion .signals-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bot-signals-accordion .signals-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.bot-signals-accordion .signals-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Toast Component */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  border-radius: 8px;
+  border: 1px solid;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slideInRight 0.3s ease-out;
+  max-width: 400px;
+  min-width: 300px;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  gap: 0.75rem;
+}
+
+.toast-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.toast-message {
+  flex: 1;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toast-close:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Active Positions Component */
+.active-positions {
+  background: var(--binance-dark);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid var(--binance-gray);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.active-positions h3 {
+  margin: 0 0 1rem 0;
+  color: var(--binance-yellow);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.positions-status {
+  text-align: center;
+  color: var(--binance-text);
+  padding: 1rem;
+}
+
+.positions-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--binance-gray);
+  border-radius: 8px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.summary-label {
+  font-size: 0.8rem;
+  color: var(--binance-text);
+}
+
+.summary-value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--binance-yellow);
+}
+
+.positions-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.position-card {
+  background: var(--binance-gray);
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid var(--binance-light-gray);
+}
+
+.position-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.bot-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bot-icon {
+  font-size: 1.2rem;
+}
+
+.bot-name {
+  font-weight: 600;
+  color: white;
+}
+
+.position-type {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.position-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.detail-label {
+  color: var(--binance-text);
+}
+
+.detail-value {
+  color: var(--binance-white);
+  font-weight: 500;
+}
+
+.pnl-value {
+  font-weight: 600;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .positions-summary {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .positions-list {
+    grid-template-columns: 1fr;
+  }
+
+  .position-details {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* WebSocket Data Box */
 .websocket-data-box {
-  background: #000000;
+  background: var(--binance-black);
   border-radius: 12px; /* Reduced from 16px */
   padding: 1.1rem; /* Reduced from 1.5rem */
   text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3); /* Reduced from 8px 32px */
   box-sizing: border-box;
   overflow: hidden;
@@ -174,7 +603,7 @@
   margin: 0 0 0.75rem 0; /* Reduced from 1rem */
   font-size: 1rem; /* Reduced from 1.3rem */
   font-weight: 600;
-  color: white;
+  color: var(--binance-yellow);
   text-align: center;
 }
 
@@ -227,7 +656,7 @@
   border-radius: 12px; /* Reduced from 16px */
   padding: 1.5rem; /* Reduced from 2rem */
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1); /* Reduced from 8px 32px */
   transition: all 0.3s ease;
   width: 100%;
@@ -282,7 +711,7 @@
   backdrop-filter: blur(10px);
   border-radius: 12px; /* Reduced from 16px */
   padding: 1.1rem; /* Reduced from 1.5rem */
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1); /* Reduced from 8px 32px */
   width: 100%;
   box-sizing: border-box;
@@ -336,25 +765,25 @@
 
 .App-footer {
   padding: 0.75rem; /* Reduced from 1rem */
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--binance-dark);
   backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid var(--binance-gray);
 }
 
 .App-footer p {
   margin: 0;
-  opacity: 0.8;
+  color: var(--binance-text);
   font-size: 0.7rem; /* Reduced from 0.9rem */
 }
 
 /* Timeframe Selector */
 .timeframe-selector {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--binance-dark);
   backdrop-filter: blur(10px);
   border-radius: 12px;
   padding: 1rem;
   margin-bottom: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
 }
 
@@ -389,7 +818,7 @@
 
 .timeframe-btn {
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   border-radius: 6px;
   color: #d1d4dc;
   padding: 0.5rem 0.3rem;
@@ -425,7 +854,7 @@
   border-radius: 12px;
   padding: 1rem;
   margin-bottom: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
 }
 
@@ -433,6 +862,126 @@
   margin: 0 0 1rem 0;
   color: #d1d4dc;
   font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Bot Control Component */
+.bot-control {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: var(--binance-gray);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.bot-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bot-icon {
+  font-size: 1.2rem;
+}
+
+.bot-name {
+  font-weight: 600;
+  color: var(--binance-white);
+  font-size: 0.9rem;
+}
+
+.bot-control-button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 80px;
+}
+
+.bot-control-button.active {
+  background: var(--binance-red);
+  color: white;
+}
+
+.bot-control-button.active:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.bot-control-button.inactive {
+  background: var(--binance-green);
+  color: white;
+}
+
+.bot-control-button.inactive:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.bot-control-button.loading {
+  background: var(--binance-gray);
+  color: var(--binance-text);
+  cursor: not-allowed;
+}
+
+.bot-control-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Bot Controls Container */
+.bot-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Dynamic Limits Info */
+.dynamic-limits-info {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--binance-gray);
+}
+
+.dynamic-limits-info h4 {
+  margin: 0 0 0.75rem 0;
+  color: var(--binance-yellow);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.limits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.limit-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.limit-label {
+  font-size: 0.75rem;
+  color: var(--binance-text);
+  font-weight: 500;
+}
+
+.limit-value {
+  font-size: 0.8rem;
+  color: var(--binance-yellow);
   font-weight: 600;
 }
 
@@ -756,7 +1305,7 @@
   backdrop-filter: blur(10px);
   border-radius: 12px;
   padding: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
 }
 
 .position-history h3 {
@@ -841,7 +1390,7 @@
 
 .filter-group select {
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   border-radius: 4px;
   color: white;
   padding: 0.25rem 0.5rem;
@@ -1022,7 +1571,7 @@
   backdrop-filter: blur(10px);
   border-radius: 12px;
   padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--binance-gray);
   margin-bottom: 1rem;
 }
 
@@ -1080,6 +1629,26 @@
 
 .balance-value.change {
   font-size: 0.8rem;
+}
+
+.balance-value.usdt {
+  color: #4caf50; /* Verde para USDT */
+  font-weight: 600;
+}
+
+.balance-value.doge {
+  color: #ff9800; /* Naranja para DOGE */
+  font-weight: 600;
+}
+
+.balance-value.doge-rate {
+  color: #9c27b0; /* Púrpura para tasa de conversión */
+  font-weight: 600;
+}
+
+.balance-value.total-usdt {
+  color: #2196f3; /* Azul para total */
+  font-weight: 600;
 }
 
 .balance-summary {

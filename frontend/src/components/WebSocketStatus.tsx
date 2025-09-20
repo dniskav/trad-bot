@@ -2,21 +2,7 @@ import React from 'react'
 import { useWebSocketContext } from '../contexts/WebSocketContext'
 
 const WebSocketStatus: React.FC = () => {
-  const { isConnected, isConnecting, error, reconnect } = useWebSocketContext()
-
-  const getStatusColor = () => {
-    if (isConnected) return '#4ade80' // green
-    if (isConnecting) return '#fbbf24' // yellow
-    if (error) return '#f87171' // red
-    return '#9ca3af' // gray
-  }
-
-  const getStatusText = () => {
-    if (isConnected) return 'Conectado'
-    if (isConnecting) return 'Conectando...'
-    if (error) return 'Error'
-    return 'Desconectado'
-  }
+  const { isConnected, isConnecting, error } = useWebSocketContext()
 
   const getStatusIcon = () => {
     if (isConnected) return '🟢'
@@ -25,60 +11,35 @@ const WebSocketStatus: React.FC = () => {
     return '⚪'
   }
 
+  const getBorderColor = () => {
+    if (isConnected) return '#10b981' // green
+    if (isConnecting) return '#f59e0b' // yellow
+    if (error) return '#ef4444' // red
+    return '#6b7280' // gray
+  }
+
   return (
     <div
       style={{
-        position: 'fixed',
-        top: '20px',
-        right: '20px',
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        backdropFilter: 'blur(10px)',
-        border: `2px solid ${getStatusColor()}`,
-        borderRadius: '12px',
-        padding: '12px 16px',
-        fontSize: '14px',
+        backgroundColor: 'transparent',
+        backdropFilter: 'none',
+        border: `2px solid ${getBorderColor()}`,
+        borderRadius: '4px',
+        padding: '0',
+        fontSize: '0.5rem',
         color: 'white',
         zIndex: 1000,
-        minWidth: '140px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+        minWidth: 'auto',
+        boxShadow: 'none',
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '3px'
       }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-        <span style={{ fontSize: '16px' }}>{getStatusIcon()}</span>
-        <span style={{ fontWeight: 'bold' }}>WebSocket</span>
-      </div>
-
-      <div
-        style={{
-          fontSize: '12px',
-          color: getStatusColor(),
-          fontWeight: '500'
-        }}>
-        {getStatusText()}
-      </div>
-
-      {error && (
-        <button
-          onClick={reconnect}
-          style={{
-            fontSize: '11px',
-            padding: '4px 8px',
-            backgroundColor: 'rgba(255, 255, 255, 0.2)',
-            color: 'white',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            marginTop: '6px',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'
-          }}>
-          🔄 Reconectar
-        </button>
-      )}
+      <span style={{ fontSize: '0.5rem' }}>{getStatusIcon()}</span>
+      <span style={{ fontSize: '0.4rem', fontWeight: 'bold' }}>WebSocket</span>
     </div>
   )
 }

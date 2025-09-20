@@ -1,0 +1,69 @@
+import React, { useState } from 'react'
+
+interface BotControlProps {
+  botType: 'conservative' | 'aggressive'
+  isActive: boolean
+  onToggle: (botType: string, newStatus: boolean) => void
+}
+
+const BotControl: React.FC<BotControlProps> = ({ botType, isActive, onToggle }) => {
+  const [loading, setLoading] = useState(false)
+
+  const handleToggle = async () => {
+    setLoading(true)
+    try {
+      const endpoint = isActive ? 'deactivate' : 'activate'
+      const response = await fetch(`http://localhost:8000/bot/${botType}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const result = await response.json()
+
+      if (result.status === 'success') {
+        onToggle(botType, !isActive)
+      } else {
+        console.error('Error:', result.message)
+      }
+    } catch (error) {
+      console.error('Error toggling bot:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getBotIcon = () => {
+    return botType === 'conservative' ? '🐌' : '⚡'
+  }
+
+  const getBotName = () => {
+    return botType === 'conservative' ? 'Conservador' : 'Agresivo'
+  }
+
+  const getButtonText = () => {
+    if (loading) return '...'
+    return isActive ? 'Desactivar' : 'Activar'
+  }
+
+  const getButtonClass = () => {
+    const baseClass = 'bot-control-button'
+    if (loading) return `${baseClass} loading`
+    return isActive ? `${baseClass} active` : `${baseClass} inactive`
+  }
+
+  return (
+    <div className="bot-control">
+      <div className="bot-info">
+        <span className="bot-icon">{getBotIcon()}</span>
+        <span className="bot-name">{getBotName()}</span>
+      </div>
+      <button className={getButtonClass()} onClick={handleToggle} disabled={loading}>
+        {getButtonText()}
+      </button>
+    </div>
+  )
+}
+
+export default BotControl
