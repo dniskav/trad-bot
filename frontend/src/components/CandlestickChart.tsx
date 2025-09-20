@@ -1,24 +1,33 @@
-import { ColorType, createChart } from 'lightweight-charts'
-import React, { useEffect, useRef } from 'react'
+import type { CandlestickData } from 'lightweight-charts'
+import { CandlestickSeries, ColorType, createChart } from 'lightweight-charts'
+import React, { useEffect, useRef, useState } from 'react'
+import { useWebSocketContext } from '../contexts/WebSocketContext'
 
 interface CandlestickChartProps {
   symbol?: string
   interval?: string
 }
 
-// Simple test data
-const testData = [
-  { time: 1640995200, open: 100, high: 105, low: 95, close: 102 },
-  { time: 1640995260, open: 102, high: 108, low: 100, close: 106 },
-  { time: 1640995320, open: 106, high: 110, low: 104, close: 108 },
-  { time: 1640995380, open: 108, high: 112, low: 106, close: 110 },
-  { time: 1640995440, open: 110, high: 115, low: 108, close: 113 },
-  { time: 1640995500, open: 113, high: 118, low: 111, close: 116 },
-  { time: 1640995560, open: 116, high: 120, low: 114, close: 118 },
-  { time: 1640995620, open: 118, high: 122, low: 116, close: 120 },
-  { time: 1640995680, open: 120, high: 125, low: 118, close: 123 },
-  { time: 1640995740, open: 123, high: 128, low: 121, close: 126 }
-]
+// Ultra-simple test data to avoid assertion errors
+const generateSimpleData = (): CandlestickData[] => {
+  const data: CandlestickData[] = []
+  const baseTime = Math.floor(Date.now() / 1000)
+
+  for (let i = 0; i < 20; i++) {
+    const time = baseTime - (20 - i) * 60 // 1 minute intervals
+    const basePrice = 50000 + i * 10 // Simple ascending trend
+
+    data.push({
+      time: time as any, // Type assertion for compatibility
+      open: basePrice,
+      high: basePrice + 50,
+      low: basePrice - 50,
+      close: basePrice + (Math.random() - 0.5) * 100
+    })
+  }
+
+  return data
+}
 
 const CandlestickChart: React.FC<CandlestickChartProps> = ({
   symbol = 'BTCUSDT',
@@ -26,17 +35,69 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
+  const seriesRef = useRef<any>(null)
+  const [candleData, setCandleData] = useState<CandlestickData[]>([])
+  const { lastMessage } = useWebSocketContext()
+
+  // Process WebSocket messages for candle data
+  useEffect(() => {
+    console.log('WebSocket message received:', lastMessage)
+    if (lastMessage) {
+      try {
+        // Check if lastMessage is already an object or a string
+        let message
+        if (typeof lastMessage === 'string') {
+          message = JSON.parse(lastMessage)
+        } else {
+          message = lastMessage
+        }
+
+        console.log('Parsed message:', message)
+        console.log('Message type:', message.type)
+        console.log('Message data:', message.data)
+        console.log('Data type:', typeof message.data)
+        console.log('Is data array?', Array.isArray(message.data))
+
+        if (message.type === 'candles' && message.data) {
+          console.log('Received candle data:', message.data)
+
+          // Check if data has candles array
+          const candlesArray = message.data.candles || message.data
+
+          if (Array.isArray(candlesArray)) {
+            // Convert server data to chart format
+            const formattedData: CandlestickData[] = candlesArray.map((candle: any) => ({
+              time: candle.time as any,
+              open: candle.open,
+              high: candle.high,
+              low: candle.low,
+              close: candle.close
+            }))
+
+            console.log('Formatted data:', formattedData)
+            setCandleData(formattedData)
+          } else {
+            console.log('Data is not an array, cannot map:', candlesArray)
+          }
+        } else {
+          console.log('Message type not candles or no data:', message.type, message.data)
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error)
+      }
+    }
+  }, [lastMessage])
 
   useEffect(() => {
     if (!chartContainerRef.current) return
 
-    console.log('Creating simple test chart...')
+    console.log('Creating ultra-simple chart...')
 
     try {
       // Get container width for responsive design
       const containerWidth = chartContainerRef.current.clientWidth
 
-      // Create simple chart
+      // Create chart with ABSOLUTE minimal options
       const chart = createChart(chartContainerRef.current, {
         width: containerWidth,
         height: 300,
@@ -46,23 +107,29 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         }
       })
 
-      console.log('Chart created, adding series...')
+      console.log('Chart created, adding candlestick series...')
 
-      // Add candlestick series
-      const candlestickSeries = (chart as any).addSeries('Candlestick', {
+      // Use the CORRECT v5 API method
+      const series = chart.addSeries(CandlestickSeries, {
         upColor: '#26a69a',
         downColor: '#ef5350'
       })
 
-      console.log('Series added, setting data...')
+      console.log('Series added, generating data...')
 
-      // Set test data
-      candlestickSeries.setData(testData)
+      // Use real data if available, otherwise use mock data
+      const data = candleData.length > 0 ? candleData : generateSimpleData()
 
-      console.log('Test data set, chart should be visible')
+      console.log('Data generated, setting data...')
 
-      // Store chart reference
+      // Set data
+      series.setData(data)
+
+      // Store references
       chartRef.current = chart
+      seriesRef.current = series
+
+      console.log('Chart setup completed successfully')
 
       // Handle resize
       const handleResize = () => {
@@ -74,6 +141,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
       window.addEventListener('resize', handleResize)
 
+      // Cleanup
       return () => {
         window.removeEventListener('resize', handleResize)
         if (chartRef.current) {
@@ -86,6 +154,14 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     }
   }, [])
 
+  // Update chart when new data arrives
+  useEffect(() => {
+    if (seriesRef.current && candleData.length > 0) {
+      console.log('Updating chart with new data:', candleData.length, 'candles')
+      seriesRef.current.setData(candleData)
+    }
+  }, [candleData])
+
   return (
     <div className="candlestick-chart">
       <div className="chart-header">
@@ -93,14 +169,14 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           {symbol} - {interval}
         </h3>
         <div className="chart-info">
-          <span>Test Data</span>
+          <span>{candleData.length > 0 ? 'Real Data' : 'Test Data'}</span>
           <span>•</span>
-          <span>{testData.length} candles</span>
+          <span>{candleData.length > 0 ? `${candleData.length} candles` : '20 candles'}</span>
         </div>
       </div>
       <div ref={chartContainerRef} className="chart-canvas-container" />
       <div className="chart-footer">
-        <small>Lightweight Charts - Test Data</small>
+        <small>Lightweight Charts - {candleData.length > 0 ? 'Real-time Data' : 'Test Data'}</small>
       </div>
     </div>
   )
