@@ -185,9 +185,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 # Get current market data with error handling
                 try:
-                    closes = get_closes(SYMBOL, INTERVAL, limit=100)
-                    current_price = closes[-1] if len(closes) > 0 else None
-                    signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
+                closes = get_closes(SYMBOL, INTERVAL, limit=100)
+                current_price = closes[-1] if len(closes) > 0 else None
+                signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
                 except Exception as e:
                     logger.warning(f"Error getting market data: {e}")
                     current_price = None
@@ -232,7 +232,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Only break if it's a critical error
                 if "Cannot call 'send' once a close message has been sent" in str(e):
                     logger.info("WebSocket connection closed by client")
-                    break
+                break
                 # For other errors, continue the loop
                 continue
                 

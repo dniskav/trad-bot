@@ -1,0 +1,198 @@
+{
+  "info": {
+    "_postman_id": "trading-bot-api-collection",
+    "name": "Trading Bot API",
+    "description": "Colección completa para probar la API del Trading Bot con SMA Cross Strategy\n\n⚠️ IMPORTANTE: Los WebSockets no funcionan en Postman. Usa herramientas especializadas como wscat, websocat, o el script test_websocket.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "trading-bot-api"
+  },
+  "item": [
+    {
+      "name": "Health & Status",
+      "item": [
+        {
+          "name": "Root Endpoint",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            },
+            "description": "Endpoint raíz que devuelve información básica del API"
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Verifica el estado de salud del servidor"
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints para verificar el estado del servidor"
+    },
+    {
+      "name": "Market Data",
+      "item": [
+        {
+          "name": "Get Klines (Default)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/klines",
+              "host": ["{{base_url}}"],
+              "path": ["klines"]
+            },
+            "description": "Obtiene datos de velas con parámetros por defecto (BTCUSDT, 1m, 100 candles)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Klines (Custom)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/klines?symbol={{symbol}}&interval={{interval}}&limit={{limit}}",
+              "host": ["{{base_url}}"],
+              "path": ["klines"],
+              "query": [
+                {
+                  "key": "symbol",
+                  "value": "{{symbol}}",
+                  "description": "Símbolo de trading (ej: BTCUSDT, ETHUSDT)"
+                },
+                {
+                  "key": "interval",
+                  "value": "{{interval}}",
+                  "description": "Intervalo de velas (1m, 5m, 15m, 1h, 4h, 1d)"
+                },
+                {
+                  "key": "limit",
+                  "value": "{{limit}}",
+                  "description": "Número de velas a retornar (máx 1000)"
+                }
+              ]
+            },
+            "description": "Obtiene datos de velas con parámetros personalizados"
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints para obtener datos de mercado y velas"
+    },
+    {
+      "name": "Trading Metrics",
+      "item": [
+        {
+          "name": "Get Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["metrics"]
+            },
+            "description": "Obtiene métricas de trading, historial de trades, precio actual y señal"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Position",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/position",
+              "host": ["{{base_url}}"],
+              "path": ["position"]
+            },
+            "description": "Obtiene la posición actual de trading"
+          },
+          "response": []
+        }
+      ],
+      "description": "Endpoints para métricas y estado de trading"
+    },
+    {
+      "name": "WebSocket (⚠️ No funciona en Postman)",
+      "item": [
+        {
+          "name": "WebSocket Connection - Usar herramientas especializadas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url_ws}}/ws",
+              "host": ["{{base_url_ws}}"],
+              "path": ["ws"]
+            },
+            "description": "⚠️ POSTMAN NO SOPORTA WEBSOCKETS\n\nPara probar WebSockets usa:\n1. wscat -c ws://localhost:8000/ws\n2. websocat ws://localhost:8000/ws\n3. python test_websocket.py\n4. Browser DevTools\n\nConexión WebSocket para datos en tiempo real (precio, señal, velas)"
+          },
+          "response": []
+        }
+      ],
+      "description": "⚠️ WebSockets no funcionan en Postman. Usa herramientas especializadas como wscat, websocat, o el script test_websocket.py"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "URL base del API HTTP"
+    },
+    {
+      "key": "base_url_ws",
+      "value": "ws://localhost:8000",
+      "type": "string",
+      "description": "URL base para WebSocket (⚠️ No funciona en Postman)"
+    },
+    {
+      "key": "symbol",
+      "value": "BTCUSDT",
+      "type": "string",
+      "description": "Símbolo de trading por defecto"
+    },
+    {
+      "key": "interval",
+      "value": "1m",
+      "type": "string",
+      "description": "Intervalo de velas por defecto"
+    },
+    {
+      "key": "limit",
+      "value": "100",
+      "type": "string",
+      "description": "Límite de velas por defecto"
+    }
+  ]
+}
