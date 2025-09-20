@@ -20,17 +20,28 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def clean_data_for_json(data):
-    """Convierte objetos datetime a string para serialización JSON"""
-    if isinstance(data, dict):
-        return {key: clean_data_for_json(value) for key, value in data.items()}
-    elif isinstance(data, list):
-        return [clean_data_for_json(item) for item in data]
-    elif isinstance(data, datetime):
-        return data.isoformat()
-    elif hasattr(data, 'isoformat'):  # Para otros objetos con isoformat
-        return data.isoformat()
-    else:
-        return data
+    """Convierte objetos datetime y otros tipos problemáticos a tipos JSON serializables"""
+    try:
+        if isinstance(data, dict):
+            return {key: clean_data_for_json(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [clean_data_for_json(item) for item in data]
+        elif isinstance(data, datetime):
+            return data.isoformat()
+        elif hasattr(data, 'isoformat'):  # Para otros objetos con isoformat
+            return data.isoformat()
+        elif isinstance(data, (bool, int, float, str, type(None))):
+            return data  # Los tipos básicos de Python son JSON serializables
+        elif hasattr(data, '__dict__'):  # Para objetos personalizados
+            logger.warning(f"⚠️ Objeto personalizado encontrado: {type(data)} - {data}")
+            return str(data)
+        else:
+            # Intentar convertir a string si no es serializable
+            logger.warning(f"⚠️ Tipo no reconocido: {type(data)} - {data}")
+            return str(data)
+    except Exception as e:
+        logger.error(f"❌ Error limpiando datos: {e} - Tipo: {type(data)} - Valor: {data}")
+        return str(data)
 
 # Initialize FastAPI app
 app = FastAPI(title="SMA Cross Trading Bot API", version="1.0.0")
