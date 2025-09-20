@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import './App.css'
+import AccountBalance from './components/AccountBalance'
+import BotSignals from './components/BotSignals'
 import CandlestickChart from './components/CandlestickChart'
+import PositionHistory from './components/PositionHistory'
 import TimeframeSelector from './components/TimeframeSelector'
 import WebSocketStatus from './components/WebSocketStatus'
 import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext'
@@ -26,6 +29,10 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
   // Separate price and candle data
   const [priceData, setPriceData] = useState<any>(null)
   const [candleData, setCandleData] = useState<any>(null)
+  const [botSignals, setBotSignals] = useState<any>(null)
+  const [positionHistory, setPositionHistory] = useState<any[]>([])
+  const [botStatistics, setBotStatistics] = useState<any>(null)
+  const [accountBalance, setAccountBalance] = useState<any>(null)
 
   // Update data based on message type
   React.useEffect(() => {
@@ -34,6 +41,35 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
         setPriceData(lastMessage)
       } else if (lastMessage.type === 'candles') {
         setCandleData(lastMessage)
+
+        // Extract bot signals if available
+        if (lastMessage.data && lastMessage.data.bot_signals) {
+          setBotSignals({
+            ...lastMessage.data.bot_signals,
+            symbol: lastMessage.data.symbol // Agregamos el símbolo
+          })
+
+          // Extract position history and statistics
+          if (lastMessage.data.bot_signals && lastMessage.data.bot_signals.positions) {
+            const positions = lastMessage.data.bot_signals.positions
+            console.log('🔍 Debug - positions data:', positions)
+
+            if (positions.history) {
+              console.log('📋 Setting position history:', positions.history.length, 'items')
+              setPositionHistory(positions.history)
+            }
+            if (positions.statistics) {
+              console.log('📊 Setting bot statistics:', positions.statistics)
+              setBotStatistics(positions.statistics)
+            }
+            if (positions.account_balance) {
+              console.log('💰 Setting account balance:', positions.account_balance)
+              setAccountBalance(positions.account_balance)
+            }
+          } else {
+            console.log('❌ No positions data found in:', lastMessage.data)
+          }
+        }
       }
     }
   }, [lastMessage])
@@ -106,6 +142,9 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
             </div>
           )}
 
+          {/* Account Balance */}
+          {accountBalance && <AccountBalance balance={accountBalance} />}
+
           {/* Price Data Box */}
           <div className="websocket-boxes-container">
             <div className="websocket-data-box">
@@ -140,6 +179,14 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
             </div>
           </div>
 
+          {/* Bot Signals */}
+          <BotSignals signals={botSignals} />
+
+          {/* Position History */}
+          {positionHistory.length > 0 && botStatistics && (
+            <PositionHistory history={positionHistory} statistics={botStatistics} />
+          )}
+
           {/* Chart Section */}
           <div className="chart-section">
             <div className="chart-container">
@@ -148,7 +195,10 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
                 selectedTimeframe={selectedTimeframe}
                 onTimeframeChange={onTimeframeChange}
               />
-              <CandlestickChart timeframe={selectedTimeframe} />
+              <CandlestickChart
+                timeframe={selectedTimeframe}
+                symbol={candleData?.data?.symbol || 'ADAUSDT'}
+              />
             </div>
           </div>
         </div>

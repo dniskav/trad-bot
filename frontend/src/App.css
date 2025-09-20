@@ -418,6 +418,138 @@
   border-color: #2bb3a6;
 }
 
+/* Bot Signals */
+.bot-signals {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+}
+
+.bot-signals h3 {
+  margin: 0 0 1rem 0;
+  color: #d1d4dc;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.bot-status {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.price-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.price-label {
+  color: #d1d4dc;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.price-value {
+  color: #26a69a;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.signals-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.signal-box {
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.signal-box:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.signal-box.conservative {
+  border-left: 3px solid #ffa726;
+}
+
+.signal-box.aggressive {
+  border-left: 3px solid #26a69a;
+}
+
+.signal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.signal-icon {
+  font-size: 1rem;
+}
+
+.signal-title {
+  color: #d1d4dc;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.signal-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.signal-description {
+  color: #999;
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.bot-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.info-label {
+  color: #999;
+  font-size: 0.7rem;
+  margin-bottom: 0.2rem;
+}
+
+.info-value {
+  color: #d1d4dc;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .App-header h1 {
@@ -503,5 +635,481 @@
 
   .chart-footer small {
     font-size: 0.5rem; /* Reduced from 0.6rem */
+  }
+}
+
+/* Trading Position Styles */
+.position-info {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  border-left: 3px solid #26a69a;
+}
+
+.position-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.position-type {
+  font-weight: bold;
+  color: #26a69a;
+  font-size: 0.7rem;
+}
+
+.entry-price,
+.current-price {
+  font-size: 0.6rem;
+  color: #ccc;
+}
+
+.pnl-display {
+  font-weight: bold;
+  font-size: 0.7rem;
+  text-align: center;
+  padding: 0.25rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+/* Position states */
+.position-info.buy {
+  border-left-color: #26a69a;
+}
+
+.position-info.sell {
+  border-left-color: #ef5350;
+}
+
+.position-info.hold {
+  border-left-color: #ffa726;
+}
+
+/* PnL Display Styles */
+.pnl-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+  font-size: 0.6rem;
+}
+
+.pnl-label {
+  color: #ccc;
+  font-weight: normal;
+}
+
+.pnl-value {
+  font-weight: bold;
+}
+
+.fees-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.55rem;
+}
+
+.fees-label {
+  color: #999;
+}
+
+.fees-value {
+  color: #ffa726;
+  font-weight: bold;
+}
+
+/* Stop Loss y Take Profit Styles */
+.stop-loss {
+  color: #ef5350;
+  font-size: 0.6rem;
+  font-weight: bold;
+}
+
+.take-profit {
+  color: #26a69a;
+  font-size: 0.6rem;
+  font-weight: bold;
+}
+
+/* Indicadores de proximidad */
+.position-info.near-stop-loss {
+  border-left-color: #ef5350 !important;
+  background: rgba(239, 83, 80, 0.1);
+}
+
+.position-info.near-take-profit {
+  border-left-color: #26a69a !important;
+  background: rgba(38, 166, 154, 0.1);
+}
+
+/* Position History Styles */
+.position-history {
+  margin-top: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.position-history h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: white;
+}
+
+/* Statistics Grid */
+.statistics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.stat-icon {
+  font-size: 1.2rem;
+}
+
+.stat-title {
+  font-weight: bold;
+  color: white;
+  font-size: 0.9rem;
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.stat-label {
+  color: #ccc;
+}
+
+.stat-value {
+  font-weight: bold;
+  color: white;
+}
+
+/* Filters */
+.history-filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  color: #ccc;
+  font-size: 0.8rem;
+}
+
+.filter-group select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* History List */
+.history-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.no-history {
+  text-align: center;
+  padding: 2rem;
+  color: #999;
+}
+
+.history-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.history-bot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bot-icon {
+  font-size: 1rem;
+}
+
+.bot-name {
+  font-weight: bold;
+  color: white;
+  text-transform: capitalize;
+  font-size: 0.9rem;
+}
+
+.history-type .position-type {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+.position-type.buy {
+  background: rgba(38, 166, 154, 0.2);
+  color: #26a69a;
+}
+
+.position-type.sell {
+  background: rgba(239, 83, 80, 0.2);
+  color: #ef5350;
+}
+
+.history-reason {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #ccc;
+}
+
+.reason-icon {
+  font-size: 0.9rem;
+}
+
+.history-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  font-size: 0.8rem;
+}
+
+.price-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.price-label {
+  color: #999;
+  font-size: 0.7rem;
+}
+
+.price-value {
+  color: white;
+  font-weight: bold;
+}
+
+.pnl-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pnl-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pnl-label {
+  color: #999;
+  font-size: 0.7rem;
+}
+
+.fees-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fees-label {
+  color: #999;
+  font-size: 0.7rem;
+}
+
+.fees-value {
+  color: #ffa726;
+  font-weight: bold;
+  font-size: 0.7rem;
+}
+
+.time-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.time-label {
+  color: #999;
+  font-size: 0.7rem;
+}
+
+.time-value {
+  color: white;
+  font-size: 0.7rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .history-details {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .history-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .statistics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Account Balance Styles */
+.account-balance {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 1rem;
+}
+
+.balance-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.balance-icon {
+  font-size: 1.2rem;
+}
+
+.balance-title {
+  font-weight: bold;
+  color: white;
+  font-size: 1rem;
+}
+
+.balance-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.balance-label {
+  color: #ccc;
+  font-weight: normal;
+}
+
+.balance-value {
+  font-weight: bold;
+}
+
+.balance-value.initial {
+  color: #ffa726;
+}
+
+.balance-value.current {
+  font-size: 0.9rem;
+}
+
+.balance-value.pnl {
+  font-size: 0.9rem;
+}
+
+.balance-value.change {
+  font-size: 0.8rem;
+}
+
+.balance-summary {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.5rem;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.summary-label {
+  color: #ccc;
+}
+
+.summary-value {
+  font-weight: bold;
+}
+
+/* Responsive para Account Balance */
+@media (max-width: 768px) {
+  .balance-content {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .balance-row {
+    font-size: 0.75rem;
   }
 }
