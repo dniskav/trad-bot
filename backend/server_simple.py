@@ -174,8 +174,22 @@ async def get_metrics():
         )
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default=INTERVAL)):
     await manager.connect(websocket)
+    
+    # Validate interval parameter
+    valid_intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
+    if interval not in valid_intervals:
+        await manager.send_personal_message(
+            json.dumps({
+                "type": "error",
+                "data": {"error": f"Invalid interval. Must be one of: {valid_intervals}"}
+            }),
+            websocket
+        )
+        await manager.disconnect(websocket)
+        return
+    
     try:
         # Send initial connection message
         await manager.send_personal_message(
@@ -189,12 +203,12 @@ async def websocket_endpoint(websocket: WebSocket):
         # Send initial data immediately
         try:
             # Get price data
-            closes = get_closes(SYMBOL, INTERVAL, limit=100)
+            closes = get_closes(SYMBOL, interval, limit=100)
             current_price = closes[-1] if len(closes) > 0 else None
             signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
             
             # Get candlestick data
-            raw_klines = get_klines(SYMBOL, INTERVAL, limit=50)
+            raw_klines = get_klines(SYMBOL, interval, limit=50)
             formatted_klines = []
             for kline in raw_klines:
                 if len(kline) >= 6:
@@ -228,7 +242,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     "data": {
                         "candles": formatted_klines,
                         "symbol": SYMBOL,
-                        "interval": INTERVAL,
+                        "interval": interval,
                         "timestamp": datetime.now().isoformat()
                     }
                 }),
@@ -248,12 +262,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     break
                 
                 # Get updated price data
-                closes = get_closes(SYMBOL, INTERVAL, limit=100)
+                closes = get_closes(SYMBOL, interval, limit=100)
                 current_price = closes[-1] if len(closes) > 0 else None
                 signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
                 
                 # Get updated candlestick data
-                raw_klines = get_klines(SYMBOL, INTERVAL, limit=50)
+                raw_klines = get_klines(SYMBOL, interval, limit=50)
                 formatted_klines = []
                 for kline in raw_klines:
                     if len(kline) >= 6:
@@ -287,7 +301,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "data": {
                             "candles": formatted_klines,
                             "symbol": SYMBOL,
-                            "interval": INTERVAL,
+                            "interval": interval,
                             "timestamp": datetime.now().isoformat()
                         }
                     }),
