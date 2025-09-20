@@ -347,6 +347,77 @@
   font-size: 0.7rem; /* Reduced from 0.9rem */
 }
 
+/* Timeframe Selector */
+.timeframe-selector {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+}
+
+.timeframe-header h4 {
+  margin: 0 0 0.8rem 0;
+  color: #d1d4dc;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.timeframe-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+  gap: 0.5rem;
+}
+
+/* Separadores visuales entre categorías */
+.timeframe-btn:nth-child(6) {
+  border-left: 2px solid rgba(255, 255, 255, 0.3);
+  padding-left: 0.7rem;
+}
+
+.timeframe-btn:nth-child(12) {
+  border-left: 2px solid rgba(255, 255, 255, 0.3);
+  padding-left: 0.7rem;
+}
+
+.timeframe-btn:nth-child(14) {
+  border-left: 2px solid rgba(255, 255, 255, 0.3);
+  padding-left: 0.7rem;
+}
+
+.timeframe-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #d1d4dc;
+  padding: 0.5rem 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.timeframe-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.timeframe-btn.active {
+  background: #26a69a;
+  border-color: #26a69a;
+  color: white;
+  box-shadow: 0 2px 8px rgba(38, 166, 154, 0.3);
+}
+
+.timeframe-btn.active:hover {
+  background: #2bb3a6;
+  border-color: #2bb3a6;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .App-header h1 {

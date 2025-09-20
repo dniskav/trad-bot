@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import './App.css'
 import CandlestickChart from './components/CandlestickChart'
+import TimeframeSelector from './components/TimeframeSelector'
 import WebSocketStatus from './components/WebSocketStatus'
 import { WebSocketProvider, useWebSocketContext } from './contexts/WebSocketContext'
 
@@ -10,7 +11,12 @@ interface HealthStatus {
   message: string
 }
 
-function AppContent() {
+interface AppContentProps {
+  selectedTimeframe: string
+  onTimeframeChange: (timeframe: string) => void
+}
+
+function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,7 +144,11 @@ function AppContent() {
           <div className="chart-section">
             <div className="chart-container">
               <h3>📈 Gráfico de Velas</h3>
-              <CandlestickChart />
+              <TimeframeSelector
+                selectedTimeframe={selectedTimeframe}
+                onTimeframeChange={onTimeframeChange}
+              />
+              <CandlestickChart timeframe={selectedTimeframe} />
             </div>
           </div>
         </div>
@@ -151,12 +161,18 @@ function AppContent() {
   )
 }
 
-function App() {
+function AppWithTimeframe() {
+  const [selectedTimeframe, setSelectedTimeframe] = useState('1m')
+
   return (
-    <WebSocketProvider>
-      <AppContent />
+    <WebSocketProvider timeframe={selectedTimeframe}>
+      <AppContent selectedTimeframe={selectedTimeframe} onTimeframeChange={setSelectedTimeframe} />
     </WebSocketProvider>
   )
+}
+
+function App() {
+  return <AppWithTimeframe />
 }
 
 export default App

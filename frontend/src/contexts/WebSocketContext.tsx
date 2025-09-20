@@ -21,11 +21,13 @@ export const useWebSocketContext = () => {
 interface WebSocketProviderProps {
   children: React.ReactNode
   url?: string
+  timeframe?: string
 }
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   children,
-  url = 'ws://localhost:8000/ws'
+  url = 'ws://localhost:8000/ws',
+  timeframe = '1m'
 }) => {
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
@@ -44,8 +46,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       setIsConnecting(true)
       setError(null)
 
-      console.log('🔌 Conectando a WebSocket:', url)
-      const ws = new WebSocket(url)
+      console.log('🔌 Conectando a WebSocket:', `${url}?interval=${timeframe}`)
+      const ws = new WebSocket(`${url}?interval=${timeframe}`)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -122,7 +124,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     return () => {
       disconnect()
     }
-  }, [url])
+  }, [url, timeframe])
 
   const value: WebSocketContextType = {
     isConnected,

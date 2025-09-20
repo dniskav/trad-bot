@@ -6,6 +6,7 @@ import { useWebSocketContext } from '../contexts/WebSocketContext'
 interface CandlestickChartProps {
   symbol?: string
   interval?: string
+  timeframe?: string
 }
 
 // Ultra-simple test data to avoid assertion errors
@@ -31,7 +32,7 @@ const generateSimpleData = (): CandlestickData[] => {
 
 const CandlestickChart: React.FC<CandlestickChartProps> = ({
   symbol = 'BTCUSDT',
-  interval = '1m'
+  timeframe = '1m'
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
@@ -67,7 +68,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           if (Array.isArray(candlesArray)) {
             // Convert server data to chart format
             const formattedData: CandlestickData[] = candlesArray.map((candle: any) => ({
-              time: candle.time as any,
+              time: (candle.time / 1000) as any, // Convert milliseconds to seconds
               open: candle.open,
               high: candle.high,
               low: candle.low,
@@ -97,13 +98,85 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       // Get container width for responsive design
       const containerWidth = chartContainerRef.current.clientWidth
 
-      // Create chart with ABSOLUTE minimal options
+      // Create chart with proper time formatting
       const chart = createChart(chartContainerRef.current, {
         width: containerWidth,
         height: 300,
         layout: {
           background: { type: ColorType.Solid, color: '#1e1e1e' },
           textColor: '#d1d4dc'
+        },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          borderColor: '#485c7b',
+          borderVisible: true,
+          tickMarkFormatter: (time: any) => {
+            const date = new Date(time * 1000) // Convert seconds to milliseconds
+
+            // Format based on timeframe
+            if (timeframe === '1m' || timeframe === '3m' || timeframe === '5m') {
+              return date.toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            } else if (timeframe === '15m' || timeframe === '30m') {
+              return date.toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            } else if (
+              timeframe === '1h' ||
+              timeframe === '2h' ||
+              timeframe === '4h' ||
+              timeframe === '6h' ||
+              timeframe === '8h' ||
+              timeframe === '12h'
+            ) {
+              return date.toLocaleDateString('es-ES', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit'
+              })
+            } else if (timeframe === '1d' || timeframe === '3d') {
+              return date.toLocaleDateString('es-ES', {
+                month: 'short',
+                day: 'numeric'
+              })
+            } else if (timeframe === '1w') {
+              return date.toLocaleDateString('es-ES', {
+                month: 'short',
+                day: 'numeric'
+              })
+            } else if (timeframe === '1M') {
+              return date.toLocaleDateString('es-ES', {
+                year: 'numeric',
+                month: 'short'
+              })
+            }
+
+            return date.toLocaleString('es-ES')
+          }
+        },
+        rightPriceScale: {
+          borderColor: '#485c7b',
+          borderVisible: true,
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.1
+          }
+        },
+        grid: {
+          horzLines: {
+            color: '#2a2e39',
+            style: 1,
+            visible: true
+          },
+          vertLines: {
+            color: '#2a2e39',
+            style: 1,
+            visible: true
+          }
         }
       })
 
@@ -152,7 +225,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     } catch (error) {
       console.error('Error creating chart:', error)
     }
-  }, [])
+  }, [timeframe])
 
   // Update chart when new data arrives
   useEffect(() => {
@@ -166,7 +239,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     <div className="candlestick-chart">
       <div className="chart-header">
         <h3>
-          {symbol} - {interval}
+          {symbol} - {timeframe}
         </h3>
         <div className="chart-info">
           <span>{candleData.length > 0 ? 'Real Data' : 'Test Data'}</span>
