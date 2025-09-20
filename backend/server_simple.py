@@ -11,10 +11,26 @@ import uvicorn
 # Import our existing modules
 from metrics_logger import MetricsLogger, Trade
 from sma_cross_bot import get_klines, get_closes, generate_signal, SYMBOL, INTERVAL
+from aggressive_scalping_bot import generate_signal as generate_aggressive_signal
+from trading_tracker import trading_tracker
+import random
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def clean_data_for_json(data):
+    """Convierte objetos datetime a string para serialización JSON"""
+    if isinstance(data, dict):
+        return {key: clean_data_for_json(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [clean_data_for_json(item) for item in data]
+    elif isinstance(data, datetime):
+        return data.isoformat()
+    elif hasattr(data, 'isoformat'):  # Para otros objetos con isoformat
+        return data.isoformat()
+    else:
+        return data
 
 # Initialize FastAPI app
 app = FastAPI(title="SMA Cross Trading Bot API", version="1.0.0")
@@ -69,6 +85,17 @@ class ConnectionManager:
             self.disconnect(connection)
 
 manager = ConnectionManager()
+
+# Función para generar señales de demostración
+def generate_demo_signals():
+    """Genera señales de demostración cuando no hay señales reales"""
+    signals = ['BUY', 'SELL', 'HOLD']
+    weights = [0.3, 0.3, 0.4]  # 30% BUY, 30% SELL, 40% HOLD
+    
+    conservative = random.choices(signals, weights=weights)[0]
+    aggressive = random.choices(signals, weights=weights)[0]
+    
+    return conservative, aggressive
 
 @app.get("/")
 async def root():
@@ -205,7 +232,27 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
             # Get price data
             closes = get_closes(SYMBOL, interval, limit=100)
             current_price = closes[-1] if len(closes) > 0 else None
-            signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
+            
+            # Get bot signals
+            conservative_signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
+            aggressive_signal = generate_aggressive_signal(closes) if len(closes) > 0 else "HOLD"
+            
+            # Si ambas señales están en HOLD, usar señales de demostración
+            if conservative_signal == "HOLD" and aggressive_signal == "HOLD":
+                demo_conservative, demo_aggressive = generate_demo_signals()
+                # Solo usar demo si al menos una es diferente a HOLD
+                if demo_conservative != "HOLD" or demo_aggressive != "HOLD":
+                    conservative_signal = demo_conservative
+                    aggressive_signal = demo_aggressive
+                    logger.info(f"🎭 Usando señales de demostración: {conservative_signal} / {aggressive_signal}")
+            
+            # Update trading tracker
+            trading_tracker.update_position('conservative', conservative_signal, current_price)
+            trading_tracker.update_position('aggressive', aggressive_signal, current_price)
+            
+            # Get position info and clean for JSON serialization
+            position_info = trading_tracker.get_all_positions()
+            position_info = clean_data_for_json(position_info)
             
             # Get candlestick data
             raw_klines = get_klines(SYMBOL, interval, limit=50)
@@ -228,7 +275,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                     "type": "price",
                     "data": {
                         "price": current_price,
-                        "signal": signal,
+                        "signal": conservative_signal,
                         "timestamp": datetime.now().isoformat()
                     }
                 }),
@@ -243,7 +290,13 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                         "candles": formatted_klines,
                         "symbol": SYMBOL,
                         "interval": interval,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().isoformat(),
+                        "bot_signals": {
+                            "conservative": conservative_signal,
+                            "aggressive": aggressive_signal,
+                            "current_price": current_price,
+                            "positions": position_info
+                        }
                     }
                 }),
                 websocket
@@ -264,7 +317,27 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 # Get updated price data
                 closes = get_closes(SYMBOL, interval, limit=100)
                 current_price = closes[-1] if len(closes) > 0 else None
-                signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
+                
+                # Get updated bot signals
+                conservative_signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
+                aggressive_signal = generate_aggressive_signal(closes) if len(closes) > 0 else "HOLD"
+                
+                # Si ambas señales están en HOLD, usar señales de demostración
+                if conservative_signal == "HOLD" and aggressive_signal == "HOLD":
+                    demo_conservative, demo_aggressive = generate_demo_signals()
+                    # Solo usar demo si al menos una es diferente a HOLD
+                    if demo_conservative != "HOLD" or demo_aggressive != "HOLD":
+                        conservative_signal = demo_conservative
+                        aggressive_signal = demo_aggressive
+                        logger.info(f"🎭 Usando señales de demostración: {conservative_signal} / {aggressive_signal}")
+                
+                # Update trading tracker
+                trading_tracker.update_position('conservative', conservative_signal, current_price)
+                trading_tracker.update_position('aggressive', aggressive_signal, current_price)
+                
+                # Get position info and clean for JSON serialization
+                position_info = trading_tracker.get_all_positions()
+                position_info = clean_data_for_json(position_info)
                 
                 # Get updated candlestick data
                 raw_klines = get_klines(SYMBOL, interval, limit=50)
@@ -287,7 +360,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                         "type": "price",
                         "data": {
                             "price": current_price,
-                            "signal": signal,
+                            "signal": conservative_signal,
                             "timestamp": datetime.now().isoformat()
                         }
                     }),
@@ -302,7 +375,13 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                             "candles": formatted_klines,
                             "symbol": SYMBOL,
                             "interval": interval,
-                            "timestamp": datetime.now().isoformat()
+                            "timestamp": datetime.now().isoformat(),
+                            "bot_signals": {
+                                "conservative": conservative_signal,
+                                "aggressive": aggressive_signal,
+                                "current_price": current_price,
+                                "positions": position_info
+                            }
                         }
                     }),
                     websocket

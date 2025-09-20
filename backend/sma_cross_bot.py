@@ -14,13 +14,13 @@ load_dotenv()
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
 
-SYMBOL = "BTCUSDT"
+SYMBOL = "ADAUSDT"  # Cardano - Mayor volatilidad (0.78%)
 INTERVAL = "1m"
 FAST_WINDOW = 5
 SLOW_WINDOW = 20
 CAPITAL = 1000
 RISK_PER_TRADE = 0.01
-THRESHOLD = 0.0  # cambia a e.g. 0.0005 para filtrar ruido
+THRESHOLD = -0.0005  # Más sensible para generar más señales
 
 SLEEP_SECONDS = 30
 
