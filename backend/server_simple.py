@@ -113,7 +113,7 @@ def map_order_to_history_format(order_record):
         'pnl': order_record.get('pnl', 0.0),
         'pnl_pct': order_record.get('pnl_percentage', 0.0),
         'pnl_net': pnl_net,
-        'pnl_net_pct': (pnl_net / (order_record.get('entry_price', 0.0) * order_record.get('quantity', 0.0))) * 100 if order_record.get('entry_price', 0.0) > 0 else 0.0,
+        'pnl_net_pct': (pnl_net / (order_record.get('entry_price', 0.0) * order_record.get('quantity', 0.0))) * 100 if order_record.get('entry_price', 0.0) > 0 and order_record.get('quantity', 0.0) > 0 else 0.0,
         'total_fees': fees_paid,
         'close_reason': 'Take Profit' if pnl_net > 0 else 'Stop Loss' if status == 'CLOSED' else 'En curso',
         'status': status,
@@ -149,7 +149,7 @@ def get_position_info_for_frontend(current_price=None):
                 # Calcular PnL si tenemos precio actual
                 pnl = 0.0
                 pnl_pct = 0.0
-                if current_price:
+                if current_price and entry_price > 0:
                     if position['side'] == 'BUY':
                         pnl = (current_price - entry_price) * quantity
                         pnl_pct = ((current_price - entry_price) / entry_price) * 100
@@ -190,7 +190,8 @@ def get_position_info_for_frontend(current_price=None):
         'last_signals': tracker_data.get('last_signals', {}),
         'history': formatted_history,
         'statistics': tracker_data.get('statistics', {}),
-        'account_balance': tracker_data.get('account_balance', {})
+        'account_balance': tracker_data.get('account_balance', {}),
+        'margin_info': real_trading_manager.get_margin_level() if real_trading_manager.leverage > 1 else None
     }
 
 # Initialize FastAPI app
@@ -494,6 +495,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
             # Actualizar balance actual desde Binance
             if trading_tracker and hasattr(trading_tracker, 'update_current_balance_from_binance'):
                 trading_tracker.update_current_balance_from_binance()
+                trading_tracker.save_history()
             
             # Get position info from RealTradingManager and sync with TradingTracker format
             position_info = get_position_info_for_frontend(current_price)
@@ -599,6 +601,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 # Actualizar balance actual desde Binance
                 if trading_tracker and hasattr(trading_tracker, 'update_current_balance_from_binance'):
                     trading_tracker.update_current_balance_from_binance()
+                    trading_tracker.save_history()
                 
                 # Ejecutar órdenes reales si el trading está habilitado
                 if real_trading_manager.is_trading_enabled():

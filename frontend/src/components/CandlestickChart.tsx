@@ -3,10 +3,20 @@ import { CandlestickSeries, ColorType, createChart } from 'lightweight-charts'
 import React, { useEffect, useRef, useState } from 'react'
 import { useWebSocketContext } from '../contexts/WebSocketContext'
 
+interface TradingSignal {
+  time: number
+  type: 'BUY' | 'SELL' | 'HOLD'
+  bot: 'conservative' | 'aggressive'
+  price: number
+  reason?: string
+  confidence?: number
+}
+
 interface CandlestickChartProps {
   symbol?: string
   interval?: string
   timeframe?: string
+  signals?: TradingSignal[]
 }
 
 // Ultra-simple test data to avoid assertion errors
@@ -32,7 +42,8 @@ const generateSimpleData = (): CandlestickData[] => {
 
 const CandlestickChart: React.FC<CandlestickChartProps> = ({
   symbol = 'BTCUSDT',
-  timeframe = '1m'
+  timeframe = '1m',
+  signals = []
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
@@ -198,6 +209,33 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       // Set data
       series.setData(data)
 
+      // Add signal markers
+      if (signals.length > 0) {
+        console.log('Adding signal markers:', signals)
+        const markers = signals.map((signal) => ({
+          time: signal.time as any,
+          position: signal.type === 'BUY' ? 'belowBar' : 'aboveBar',
+          color: signal.type === 'BUY' ? '#26a69a' : '#ef5350',
+          shape: signal.type === 'BUY' ? 'arrowUp' : 'arrowDown',
+          text: `${signal.bot.toUpperCase()} ${signal.type}`,
+          size: 1.5,
+          id: `${signal.bot}-${signal.type}-${signal.time}`,
+          title: `${signal.bot.toUpperCase()} ${signal.type} Signal`,
+          description: signal.reason || `${signal.type} signal from ${signal.bot} bot`
+        }))
+
+        // TODO: Implement markers when Lightweight Charts API is clarified
+        console.log('Markers to be added:', markers)
+        // try {
+        //   // Add markers one by one
+        //   markers.forEach(marker => {
+        //     series.setMarkers([marker])
+        //   })
+        // } catch (error) {
+        //   console.error('Error adding markers:', error)
+        // }
+      }
+
       // Store references
       chartRef.current = chart
       seriesRef.current = series
@@ -235,6 +273,39 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     }
   }, [candleData])
 
+  // Update signals when they change
+  useEffect(() => {
+    if (seriesRef.current && signals.length > 0) {
+      console.log('Updating chart with new signals:', signals.length, 'signals')
+
+      const markers = signals.map((signal) => ({
+        time: signal.time as any,
+        position: signal.type === 'BUY' ? 'belowBar' : 'aboveBar',
+        color: signal.type === 'BUY' ? '#26a69a' : '#ef5350',
+        shape: signal.type === 'BUY' ? 'arrowUp' : 'arrowDown',
+        text: `${signal.bot.toUpperCase()} ${signal.type}`,
+        size: 1.5,
+        id: `${signal.bot}-${signal.type}-${signal.time}`,
+        // Add more detailed information
+        title: `${signal.bot.toUpperCase()} ${signal.type} Signal`,
+        description: signal.reason || `${signal.type} signal from ${signal.bot} bot`
+      }))
+
+      // TODO: Implement markers when Lightweight Charts API is clarified
+      console.log('Markers to be updated:', markers)
+      // try {
+      //   // Clear existing markers first
+      //   seriesRef.current.setMarkers([])
+      //   // Add markers one by one
+      //   markers.forEach(marker => {
+      //     seriesRef.current.setMarkers([marker])
+      //   })
+      // } catch (error) {
+      //   console.error('Error updating markers:', error)
+      // }
+    }
+  }, [signals])
+
   return (
     <div className="candlestick-chart">
       <div className="chart-header">
@@ -245,11 +316,52 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           <span>{candleData.length > 0 ? 'Real Data' : 'Test Data'}</span>
           <span>•</span>
           <span>{candleData.length > 0 ? `${candleData.length} candles` : '20 candles'}</span>
+          {signals.length > 0 && (
+            <>
+              <span>•</span>
+              <span>{signals.length} signals</span>
+            </>
+          )}
         </div>
+        {signals.length > 0 && (
+          <div className="chart-legend">
+            <div className="legend-item">
+              <div className="legend-marker buy"></div>
+              <span>BUY Signal</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-marker sell"></div>
+              <span>SELL Signal</span>
+            </div>
+          </div>
+        )}
       </div>
-      <div ref={chartContainerRef} className="chart-canvas-container" />
+      <div className="chart-container">
+        <div ref={chartContainerRef} className="chart-canvas-container" />
+        {/* Signal Overlay */}
+        {signals.length > 0 && (
+          <div className="signal-overlay">
+            {signals.map((signal, index) => (
+              <div
+                key={`${signal.bot}-${signal.type}-${signal.time}-${index}`}
+                className={`signal-marker ${signal.type.toLowerCase()} ${signal.bot}`}
+                title={`${signal.bot.toUpperCase()} ${signal.type} - ${
+                  signal.reason || 'Trading Signal'
+                }`}>
+                <div className="signal-icon">{signal.type === 'BUY' ? '▲' : '▼'}</div>
+                <div className="signal-label">{signal.bot === 'conservative' ? 'C' : 'A'}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="chart-footer">
         <small>Lightweight Charts - {candleData.length > 0 ? 'Real-time Data' : 'Test Data'}</small>
+        {signals.length > 0 && (
+          <div className="signal-info">
+            <small>💡 Hover over signals for details</small>
+          </div>
+        )}
       </div>
     </div>
   )

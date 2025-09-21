@@ -5,6 +5,7 @@ import AccountBalance from './components/AccountBalance'
 import ActivePositions from './components/ActivePositions'
 import BotSignals from './components/BotSignals'
 import CandlestickChart from './components/CandlestickChart'
+import MarginInfo from './components/MarginInfo'
 import PositionHistory from './components/PositionHistory'
 import TimeframeSelector from './components/TimeframeSelector'
 import Toast from './components/Toast'
@@ -33,6 +34,47 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
   const [botStatistics, setBotStatistics] = useState<any>(null)
   const [accountBalance, setAccountBalance] = useState<any>(null)
   const [activePositions, setActivePositions] = useState<any>(null)
+  const [marginInfo, setMarginInfo] = useState<any>(null)
+
+  // Convert bot signals to chart format
+  const convertSignalsToChartFormat = (botSignals: any): any[] => {
+    if (!botSignals) return []
+
+    const signals: any[] = []
+    const currentTime = Math.floor(Date.now() / 1000) // Current time in seconds
+
+    // Process conservative bot signals
+    if (botSignals.conservative) {
+      const conservative = botSignals.conservative
+      if (conservative.signal && conservative.signal !== 'HOLD') {
+        signals.push({
+          time: currentTime,
+          type: conservative.signal,
+          bot: 'conservative',
+          price: conservative.price || 0,
+          reason: conservative.reason || 'SMA Cross Signal',
+          confidence: conservative.confidence || 0.5
+        })
+      }
+    }
+
+    // Process aggressive bot signals
+    if (botSignals.aggressive) {
+      const aggressive = botSignals.aggressive
+      if (aggressive.signal && aggressive.signal !== 'HOLD') {
+        signals.push({
+          time: currentTime,
+          type: aggressive.signal,
+          bot: 'aggressive',
+          price: aggressive.price || 0,
+          reason: aggressive.reason || 'Scalping Signal',
+          confidence: aggressive.confidence || 0.5
+        })
+      }
+    }
+
+    return signals
+  }
 
   // Update data based on message type
   React.useEffect(() => {
@@ -69,6 +111,10 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
             if (positions.active_positions) {
               console.log('📊 Setting active positions:', positions.active_positions)
               setActivePositions(positions.active_positions)
+            }
+            if (positions.margin_info) {
+              console.log('📊 Setting margin info:', positions.margin_info)
+              setMarginInfo(positions.margin_info)
             }
           } else {
             console.log('❌ No positions data found in:', lastMessage.data)
@@ -154,6 +200,18 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
             <AccountBalance balance={accountBalance} currentPrice={priceData?.data?.price} />
           )}
 
+          {/* Margin Info Accordion */}
+          {marginInfo && (
+            <Accordion
+              title="Información de Margen"
+              icon="📊"
+              defaultExpanded={false}
+              className="margin-info-accordion"
+              storageKey="margin-info">
+              <MarginInfo marginInfo={marginInfo} />
+            </Accordion>
+          )}
+
           {/* Bot Signals Accordion */}
           <Accordion
             title="Señales de Trading"
@@ -234,6 +292,7 @@ function AppContent({ selectedTimeframe, onTimeframeChange }: AppContentProps) {
               <CandlestickChart
                 timeframe={selectedTimeframe}
                 symbol={candleData?.data?.symbol || 'DOGEUSDT'}
+                signals={convertSignalsToChartFormat(botSignals)}
               />
             </div>
           </div>

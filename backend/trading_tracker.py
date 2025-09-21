@@ -61,38 +61,173 @@ class TradingTracker:
             'demo': {'stop_loss': 0.010, 'take_profit': 0.020}           # 1.0% SL, 2.0% TP
         }
     
-    def _calculate_initial_balance_from_binance(self, binance_client):
-        """Calcula el balance inicial desde Binance (USDT + DOGE convertido a USDT)"""
+    def _get_balance_from_binance(self, binance_client, detailed_logging=False):
+        """Función común para obtener balance desde Binance (inicial o actual)"""
         if not binance_client:
-            logger.warning("⚠️ Cliente de Binance no disponible, usando balance por defecto: $10.00")
+            if detailed_logging:
+                logger.warning("⚠️ Cliente de Binance no disponible, usando balance por defecto: $10.00")
             return 10.0
         
         try:
-            # Obtener balance de la cuenta
-            account_info = binance_client.get_account()
-            balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
+            # Verificar si estamos usando margin trading
+            leverage = int(os.getenv('LEVERAGE', '1'))
             
-            usdt_balance = balances.get('USDT', 0.0)
-            doge_balance = balances.get('DOGE', 0.0)
+            logger.info(f"🔍 DEBUG: Leverage detectado: {leverage} (detailed_logging: {detailed_logging})")
             
-            # Obtener precio actual de DOGE para convertir a USDT
-            ticker = binance_client.get_symbol_ticker(symbol='DOGEUSDT')
-            doge_price = float(ticker['price'])
+            if leverage > 1:
+                # Usar cuenta de margen
+                margin_account = binance_client.get_margin_account()
+                
+                logger.info(f"🔍 DEBUG: Margin account keys: {list(margin_account.keys())}")
+                logger.info(f"🔍 DEBUG: UserAssets: {margin_account.get('userAssets', [])}")
+                
+                # Obtener balances de la cuenta de margen
+                usdt_balance = 0.0
+                doge_balance = 0.0
+                
+                # Buscar balances en la cuenta de margen
+                for asset in margin_account.get('userAssets', []):
+                    if asset['asset'] == 'USDT':
+                        usdt_balance = float(asset['free']) + float(asset['locked'])
+                        logger.info(f"🔍 DEBUG: USDT encontrado - free: {asset['free']}, locked: {asset['locked']}")
+                    elif asset['asset'] == 'DOGE':
+                        doge_balance = float(asset['free']) + float(asset['locked'])
+                        logger.info(f"🔍 DEBUG: DOGE encontrado - free: {asset['free']}, locked: {asset['locked']}")
+                
+                # Obtener precio actual de DOGE para convertir a USDT
+                ticker = binance_client.get_symbol_ticker(symbol='DOGEUSDT')
+                doge_price = float(ticker['price'])
+                
+                # Calcular balance total en USDT
+                total_balance = usdt_balance + (doge_balance * doge_price)
+                
+                logger.info(f"🔍 DEBUG: Balance calculado - USDT: ${usdt_balance:.2f}, DOGE: {doge_balance:.2f}, Total: ${total_balance:.2f}")
+                
+                if detailed_logging:
+                    logger.info(f"💰 Balance calculado desde Binance (Margin):")
+                    logger.info(f"   USDT: ${usdt_balance:.2f}")
+                    logger.info(f"   DOGE: {doge_balance:.2f} (${doge_balance * doge_price:.2f})")
+                    logger.info(f"   Total: ${total_balance:.2f}")
+                    logger.info(f"   Margin Level: {margin_account.get('marginLevel', 'N/A')}")
+                
+            else:
+                # Usar cuenta spot normal
+                account_info = binance_client.get_account()
+                balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
+                
+                usdt_balance = balances.get('USDT', 0.0)
+                doge_balance = balances.get('DOGE', 0.0)
+                
+                # Obtener precio actual de DOGE para convertir a USDT
+                ticker = binance_client.get_symbol_ticker(symbol='DOGEUSDT')
+                doge_price = float(ticker['price'])
+                
+                # Calcular balance total en USDT
+                total_balance = usdt_balance + (doge_balance * doge_price)
+                
+                if detailed_logging:
+                    logger.info(f"💰 Balance calculado desde Binance (Spot):")
+                    logger.info(f"   USDT: ${usdt_balance:.2f}")
+                    logger.info(f"   DOGE: {doge_balance:.2f} (${doge_balance * doge_price:.2f})")
+                    logger.info(f"   Total: ${total_balance:.2f}")
             
-            # Calcular balance total en USDT
-            total_balance = usdt_balance + (doge_balance * doge_price)
-            
-            logger.info(f"💰 Balance inicial calculado desde Binance:")
-            logger.info(f"   USDT: ${usdt_balance:.2f}")
-            logger.info(f"   DOGE: {doge_balance:.2f} (${doge_balance * doge_price:.2f})")
-            logger.info(f"   Total: ${total_balance:.2f}")
-            
+            logger.info(f"🔍 DEBUG: Función _get_balance_from_binance devolviendo: ${total_balance:.2f}")
             return total_balance
             
         except Exception as e:
             logger.error(f"❌ Error calculando balance desde Binance: {e}")
-            logger.warning("⚠️ Usando balance por defecto: $10.00")
             return 10.0
+    
+    def _calculate_initial_balance_from_binance(self, binance_client):
+        """Calcula el balance inicial desde Binance (USDT + DOGE convertido a USDT)"""
+        return self._get_balance_from_binance(binance_client, detailed_logging=True)
+    
+    def _calculate_current_balance_from_binance(self, binance_client):
+        """Calcula el balance actual desde Binance - usa la misma lógica que la función inicial"""
+        logger.info("🔍 DEBUG: Llamando _calculate_current_balance_from_binance()")
+        
+        if not binance_client:
+            return self.current_balance
+        
+        try:
+            # Verificar si estamos usando margin trading
+            leverage = int(os.getenv('LEVERAGE', '1'))
+            
+            logger.info(f"🔍 DEBUG: Leverage detectado: {leverage}")
+            
+            if leverage > 1:
+                # Usar cuenta de margen
+                margin_account = binance_client.get_margin_account()
+                
+                logger.info(f"🔍 DEBUG: Margin account keys: {list(margin_account.keys())}")
+                logger.info(f"🔍 DEBUG: UserAssets: {margin_account.get('userAssets', [])}")
+                
+                # Obtener balances de la cuenta de margen
+                usdt_balance = 0.0
+                doge_balance = 0.0
+                
+                # Buscar balances en la cuenta de margen
+                for asset in margin_account.get('userAssets', []):
+                    if asset['asset'] == 'USDT':
+                        usdt_balance = float(asset['free']) + float(asset['locked'])
+                        logger.info(f"🔍 DEBUG: USDT encontrado - free: {asset['free']}, locked: {asset['locked']}")
+                    elif asset['asset'] == 'DOGE':
+                        doge_balance = float(asset['free']) + float(asset['locked'])
+                        logger.info(f"🔍 DEBUG: DOGE encontrado - free: {asset['free']}, locked: {asset['locked']}")
+                
+                # Obtener precio actual de DOGE para convertir a USDT
+                ticker = binance_client.get_symbol_ticker(symbol='DOGEUSDT')
+                doge_price = float(ticker['price'])
+                
+                # Calcular balance total en USDT
+                total_balance = usdt_balance + (doge_balance * doge_price)
+                
+                logger.info(f"🔍 DEBUG: Balance calculado (current) - USDT: ${usdt_balance:.2f}, DOGE: {doge_balance:.2f}, Total: ${total_balance:.2f}")
+                
+            else:
+                # Usar cuenta spot normal
+                account_info = binance_client.get_account()
+                balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
+                
+                usdt_balance = balances.get('USDT', 0.0)
+                doge_balance = balances.get('DOGE', 0.0)
+                
+                # Obtener precio actual de DOGE para convertir a USDT
+                ticker = binance_client.get_symbol_ticker(symbol='DOGEUSDT')
+                doge_price = float(ticker['price'])
+                
+                # Calcular balance total en USDT
+                total_balance = usdt_balance + (doge_balance * doge_price)
+            
+            logger.info(f"🔍 DEBUG: _calculate_current_balance_from_binance() devolviendo: ${total_balance:.2f}")
+            return total_balance
+            
+        except Exception as e:
+            logger.error(f"❌ Error calculando balance actual desde Binance: {e}")
+            return self.current_balance
+    
+    def update_current_balance_from_binance(self):
+        """Actualiza el balance actual desde Binance y calcula el PnL"""
+        if not self.binance_client:
+            return
+        
+        try:
+            # Calcular balance actual desde Binance
+            new_balance = self._calculate_current_balance_from_binance(self.binance_client)
+            
+            logger.info(f"🔍 DEBUG: Balance calculado desde Binance: ${new_balance:.2f}")
+            logger.info(f"🔍 DEBUG: Balance anterior: ${self.current_balance:.2f}")
+            
+            # Actualizar balance actual
+            self.current_balance = new_balance
+            
+            # Calcular PnL total basado en la diferencia con el balance inicial
+            self.total_pnl = self.current_balance - self.initial_balance
+            
+            logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f} (PnL: ${self.total_pnl:.4f})")
+            
+        except Exception as e:
+            logger.error(f"❌ Error actualizando balance desde Binance: {e}")
     
     def load_history(self):
         """Carga el historial de posiciones desde archivo"""
@@ -116,7 +251,7 @@ class TradingTracker:
                     
                     # Siempre calcular balance actual desde Binance para mantener sincronización
                     if self.binance_client:
-                        current_balance_from_binance = self._calculate_initial_balance_from_binance(self.binance_client)
+                        current_balance_from_binance = self._calculate_current_balance_from_binance(self.binance_client)
                         self.current_balance = current_balance_from_binance
                         logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f}")
                     
@@ -327,7 +462,11 @@ class TradingTracker:
     
     def get_account_balance(self) -> Dict[str, Any]:
         """Obtiene información del saldo de la cuenta"""
-        balance_change_pct = ((self.current_balance - self.initial_balance) / self.initial_balance) * 100
+        # Proteger contra división por cero
+        if self.initial_balance > 0:
+            balance_change_pct = ((self.current_balance - self.initial_balance) / self.initial_balance) * 100
+        else:
+            balance_change_pct = 0.0
         
         # Obtener balances específicos de Binance si está disponible
         usdt_balance = 0.0
@@ -335,12 +474,31 @@ class TradingTracker:
         
         if hasattr(self, 'binance_client') and self.binance_client:
             try:
-                account_info = self.binance_client.get_account()
-                balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
-                usdt_balance = balances.get('USDT', 0.0)
-                doge_balance = balances.get('DOGE', 0.0)
+                # Verificar si estamos usando margin trading
+                leverage = int(os.getenv('LEVERAGE', '1'))
+                
+                if leverage > 1:
+                    # Usar cuenta de margen
+                    margin_account = self.binance_client.get_margin_account()
+                    
+                    # Buscar balances en la cuenta de margen
+                    for asset in margin_account.get('userAssets', []):
+                        if asset['asset'] == 'USDT':
+                            usdt_balance = float(asset['free']) + float(asset['locked'])
+                        elif asset['asset'] == 'DOGE':
+                            doge_balance = float(asset['free']) + float(asset['locked'])
+                else:
+                    # Usar cuenta spot normal
+                    account_info = self.binance_client.get_account()
+                    balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
+                    usdt_balance = balances.get('USDT', 0.0)
+                    doge_balance = balances.get('DOGE', 0.0)
+                    
             except Exception as e:
                 logger.warning(f"⚠️ No se pudo obtener balance de Binance: {e}")
+        
+        # Obtener precio actual de DOGE
+        doge_price = self._get_current_doge_price()
         
         return {
             'initial_balance': self.initial_balance,
@@ -350,7 +508,8 @@ class TradingTracker:
             'is_profitable': self.current_balance > self.initial_balance,
             'usdt_balance': usdt_balance,
             'doge_balance': doge_balance,
-            'total_balance_usdt': usdt_balance + (doge_balance * self._get_current_doge_price())
+            'total_balance_usdt': usdt_balance + (doge_balance * doge_price),
+            'doge_price': doge_price
         }
     
     def _get_current_doge_price(self) -> float:
@@ -644,19 +803,8 @@ class TradingTracker:
             return
         
         try:
-            # Obtener balance de la cuenta
-            account_info = self.binance_client.get_account()
-            balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
-            
-            usdt_balance = balances.get('USDT', 0.0)
-            doge_balance = balances.get('DOGE', 0.0)
-            
-            # Obtener precio actual de DOGE para convertir a USDT
-            ticker = self.binance_client.get_symbol_ticker(symbol='DOGEUSDT')
-            doge_price = float(ticker['price'])
-            
-            # Calcular balance total en USDT
-            new_balance = usdt_balance + (doge_balance * doge_price)
+            # Usar la función común para obtener balance
+            new_balance = self._calculate_current_balance_from_binance(self.binance_client)
             
             # Actualizar balance actual
             self.current_balance = new_balance
@@ -667,9 +815,6 @@ class TradingTracker:
             logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f} (PnL: ${self.total_pnl:.4f})")
             
             return {
-                'usdt_balance': usdt_balance,
-                'doge_balance': doge_balance,
-                'doge_price': doge_price,
                 'total_balance': new_balance,
                 'total_pnl': self.total_pnl
             }

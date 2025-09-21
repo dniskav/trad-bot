@@ -32,6 +32,10 @@ class RealTradingManager:
         self.enable_trading = os.getenv('ENABLE_TRADING', 'false').lower() == 'true'
         self.max_concurrent_positions_per_bot = int(os.getenv('MAX_CONCURRENT_POSITIONS_PER_BOT', '5'))
         
+        # Configuración de apalancamiento
+        self.leverage = int(os.getenv('LEVERAGE', '3'))  # Apalancamiento 3x por defecto
+        self.margin_type = os.getenv('MARGIN_TYPE', 'CROSSED')  # Cross Margin por defecto
+        
         # Inicializar cliente de Binance
         self.client = None
         if self.trading_mode == 'real' and self.api_key and self.secret_key:
@@ -40,6 +44,12 @@ class RealTradingManager:
                 # Verificar conexión
                 self.client.ping()
                 logger.info("✅ Conexión a Binance establecida")
+                logger.info(f"🔧 Modo de trading: {self.trading_mode}")
+                logger.info(f"💰 Tamaño máximo por posición: ${self.max_position_size}")
+                logger.info(f"📉 Pérdida máxima diaria: ${self.max_daily_loss}")
+                logger.info(f"🔒 Trading habilitado: {self.enable_trading}")
+                logger.info(f"⚡ Apalancamiento: {self.leverage}x")
+                logger.info(f"🔄 Tipo de margen: {self.margin_type}")
             except Exception as e:
                 logger.error(f"❌ Error conectando a Binance: {e}")
                 self.client = None
@@ -365,14 +375,31 @@ class RealTradingManager:
     def check_balance_availability(self, signal: str, bot_type: str, current_price: float) -> Dict[str, Any]:
         """Verifica si hay balance suficiente para la operación solicitada"""
         
-        # Obtener balance actual
-        account_info = self.client.get_account()
-        balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
-        
-        usdt_balance = balances.get('USDT', 0.0)
-        doge_balance = balances.get('DOGE', 0.0)
-        
-        logger.info(f"💰 Balance disponible: {usdt_balance:.2f} USDT, {doge_balance:.2f} DOGE")
+        # Obtener balance actual - usar cuenta margin si el apalancamiento está habilitado
+        if self.leverage > 1:
+            # Usar cuenta de margen
+            margin_account = self.client.get_margin_account()
+            
+            # Buscar balances en la cuenta de margen
+            usdt_balance = 0.0
+            doge_balance = 0.0
+            
+            for asset in margin_account.get('userAssets', []):
+                if asset['asset'] == 'USDT':
+                    usdt_balance = float(asset['free']) + float(asset['locked'])
+                elif asset['asset'] == 'DOGE':
+                    doge_balance = float(asset['free']) + float(asset['locked'])
+            
+            logger.info(f"💰 Balance disponible (Margin): {usdt_balance:.2f} USDT, {doge_balance:.2f} DOGE")
+        else:
+            # Usar cuenta spot normal
+            account_info = self.client.get_account()
+            balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
+            
+            usdt_balance = balances.get('USDT', 0.0)
+            doge_balance = balances.get('DOGE', 0.0)
+            
+            logger.info(f"💰 Balance disponible (Spot): {usdt_balance:.2f} USDT, {doge_balance:.2f} DOGE")
         
         if signal == 'BUY':
             # Calcular cantidad necesaria en USDT
@@ -406,7 +433,7 @@ class RealTradingManager:
                     'available_usdt': required_usdt,
                     'required_usdt': required_usdt
                 }
-                
+            
         else:  # SELL
             # Calcular cantidad necesaria en DOGE (ajustado para rentabilidad)
             max_doge_value = self.max_position_size / current_price
@@ -583,6 +610,15 @@ class RealTradingManager:
                     'reasons': risk_check['reasons']
                 }
             
+            # Verificar margin level si usamos apalancamiento
+            if self.trading_mode == 'real' and self.leverage > 1:
+                if not self.check_margin_safety():
+                    logger.warning("⚠️ Trade bloqueado: Margin level muy bajo")
+                    return {
+                        'success': False,
+                        'error': 'Margin level muy bajo para operar con apalancamiento'
+                }
+            
             # Obtener información del símbolo para validar cantidad
             symbol_info = self.client.get_symbol_info(symbol)
             lot_size_filter = next(
@@ -639,20 +675,31 @@ class RealTradingManager:
                     
                     logger.info(f"📊 Ajustando cantidad para cumplir NOTIONAL mínimo: {quantity} {symbol}")
             
-            # Colocar orden
-            order = self.client.create_order(
-                symbol=symbol,
-                side=side,
-                type=order_type,
-                quantity=quantity
-            )
-            
-            logger.info(f"✅ Orden ejecutada: {side} {quantity} {symbol}")
-            logger.info(f"   Order ID: {order['orderId']}")
-            logger.info(f"   Precio: ${order.get('fills', [{}])[0].get('price', 'N/A')}")
-            
-            # Actualizar tracking
-            self.daily_trades += 1
+            # Colocar orden con apalancamiento (Margin Trading)
+            if self.trading_mode == 'real' and self.leverage > 1:
+                # Usar órdenes de margen con apalancamiento
+                order = self.client.create_margin_order(
+                    symbol=symbol,
+                    side=side,
+                    type=order_type,
+                    quantity=quantity,
+                    sideEffectType='MARGIN_BUY' if side == 'BUY' else 'MARGIN_SELL'
+                )
+                logger.info(f"⚡ Orden de margen ejecutada ({self.leverage}x): {side} {quantity} {symbol}")
+            else:
+                # Usar órdenes normales (sin apalancamiento)
+                order = self.client.create_order(
+                    symbol=symbol,
+                    side=side,
+                    type=order_type,
+                    quantity=quantity
+                )
+                logger.info(f"✅ Orden ejecutada: {side} {quantity} {symbol}")
+                logger.info(f"   Order ID: {order['orderId']}")
+                logger.info(f"   Precio: ${order.get('fills', [{}])[0].get('price', 'N/A')}")
+                
+                # Actualizar tracking
+                self.daily_trades += 1
             
             return {
                 'success': True,
@@ -822,7 +869,72 @@ class RealTradingManager:
             }
         }
     
+    def get_margin_level(self) -> Dict[str, Any]:
+        """Obtiene información detallada del margen"""
+        if not self.client:
+            return {'success': False, 'error': 'Cliente no inicializado'}
+        
+        try:
+            margin_account = self.client.get_margin_account()
+            margin_level = float(margin_account.get('marginLevel', 0))
+            
+            # Calcular fondos disponibles para trading
+            usdt_balance = 0.0
+            doge_balance = 0.0
+            
+            for asset in margin_account.get('userAssets', []):
+                if asset['asset'] == 'USDT':
+                    usdt_balance = float(asset['free']) + float(asset['locked'])
+                elif asset['asset'] == 'DOGE':
+                    doge_balance = float(asset['free']) + float(asset['locked'])
+            
+            # Obtener precio actual de DOGE
+            ticker = self.client.get_symbol_ticker(symbol='DOGEUSDT')
+            doge_price = float(ticker['price'])
+            
+            # Calcular fondos totales disponibles
+            total_available_usdt = usdt_balance + (doge_balance * doge_price)
+            
+            # Con apalancamiento, los fondos disponibles para trading son mayores
+            leverage = self.leverage
+            trading_power = total_available_usdt * leverage
+            
+            return {
+                'success': True,
+                'margin_level': margin_level,
+                'leverage': leverage,
+                'margin_type': self.margin_type,
+                'total_net_asset': margin_account.get('totalNetAssetOfBtc', 0),
+                'total_liability': margin_account.get('totalLiabilityOfBtc', 0),
+                'account_equity': margin_account.get('totalNetAssetOfBtc', 0),
+                'usdt_balance': usdt_balance,
+                'doge_balance': doge_balance,
+                'doge_price': doge_price,
+                'total_available_usdt': total_available_usdt,
+                'trading_power_usdt': trading_power,
+                'margin_ratio': 1.0 / leverage if leverage > 0 else 0,
+                'is_safe': margin_level > 2.0  # Consideramos seguro si margin level > 2.0
+            }
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo margin level: {e}")
+            return {'success': False, 'error': str(e)}
+    
+    def check_margin_safety(self) -> bool:
+        """Verifica si el margin level es seguro (mayor a 2.0)"""
+        margin_info = self.get_margin_level()
+        if not margin_info['success']:
+            return False
+        
+        margin_level = margin_info['margin_level']
+        is_safe = margin_level > 2.0
+        
+        if not is_safe:
+            logger.warning(f"⚠️ Margin level bajo: {margin_level:.2f} (límite seguro: 2.0)")
+        
+        return is_safe
+    
     def get_current_price(self, symbol: str) -> Optional[float]:
+        """Obtiene el precio actual de un símbolo"""
         try:
             if not self.client:
                 return None
