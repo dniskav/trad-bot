@@ -7,6 +7,7 @@ import signal
 from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.websockets import WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -18,6 +19,8 @@ from aggressive_scalping_bot import generate_signal as generate_aggressive_signa
 from trading_tracker import initialize_tracker
 from real_trading_manager import real_trading_manager
 from trading_capacity import filter_signal_by_capacity
+from bot_registry import bot_registry
+from bot_interface import MarketData, SignalType
 import random
 import numpy as np
 
@@ -50,6 +53,16 @@ bot_processes = {
     'conservative': None,
     'aggressive': None
 }
+
+# Global variables to track bot start times
+bot_start_times = {
+    'conservative': None,
+    'aggressive': None
+}
+
+# Inicializar el sistema de bots plug-and-play
+logger.info("🔌 Inicializando sistema de bots plug-and-play...")
+logger.info(f"📊 Bots registrados: {list(bot_registry.get_all_bots().keys())}")
 
 def cleanup_duplicate_bots():
     """Limpia procesos duplicados de bots al inicio del servidor"""
@@ -138,7 +151,7 @@ def get_bot_process_info():
                             'pid': pid,
                             'memory_mb': round(process.memory_info().rss / 1024 / 1024, 1),
                             'cpu_percent': round(process.cpu_percent(), 1),
-                            'create_time': process.create_time()
+                            'create_time': bot_start_times[bot_type].isoformat() if bot_start_times[bot_type] else None
                         }
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         process_info[bot_type] = {
@@ -158,6 +171,7 @@ def get_bot_process_info():
                         'create_time': None
                     }
                     bot_processes[bot_type] = None
+                    bot_start_times[bot_type] = None
             except:
                 process_info[bot_type] = {
                     'active': False,
@@ -230,6 +244,7 @@ def start_bot(bot_type: str):
         )
         
         bot_processes[bot_type] = process
+        bot_start_times[bot_type] = datetime.now()
         logger.info(f"🚀 Bot {bot_type} iniciado con PID {process.pid}")
         return True, f"Bot {bot_type} iniciado correctamente"
         
@@ -259,6 +274,7 @@ def stop_bot(bot_type: str):
         
         logger.info(f"🛑 Bot {bot_type} detenido")
         bot_processes[bot_type] = None
+        bot_start_times[bot_type] = None
         return True, f"Bot {bot_type} detenido correctamente"
         
     except Exception as e:
@@ -424,12 +440,14 @@ def map_order_to_history_format(order_record):
         'close_reason': 'Take Profit' if pnl_net > 0 else 'Stop Loss' if status == 'CLOSED' else 'En curso',
         'status': status,
         'is_closed': status not in ['OPEN', 'UPDATED'],  # Campo para identificar si está cerrada
-        'duration_minutes': order_record.get('duration_minutes', 0)
+        'duration_minutes': order_record.get('duration_minutes', 0),
+        'is_synthetic': order_record.get('is_synthetic', False),  # Flag para posiciones sintéticas
+        'is_plugin_bot': order_record.get('is_plugin_bot', False)  # Flag para bots plug-and-play
     }
 
 def get_position_info_for_frontend(current_price=None):
     """
-    Obtiene información de posiciones del RealTradingManager y la formatea para el frontend
+    Obtiene información de posiciones del RealTradingManager y bots plug-and-play, formateada para el frontend
     """
     # Obtener posiciones del RealTradingManager
     real_positions = real_trading_manager.active_positions
@@ -440,6 +458,7 @@ def get_position_info_for_frontend(current_price=None):
     # Formatear posiciones para el frontend - formato compatible con ActivePositions
     formatted_positions = {}
     
+    # Procesar bots legacy (conservative, aggressive)
     for bot_type in ['conservative', 'aggressive']:
         bot_positions = real_positions.get(bot_type, {})
         
@@ -476,10 +495,62 @@ def get_position_info_for_frontend(current_price=None):
                     'pnl_pct': pnl_pct,
                     'pnl_net': pnl,
                     'pnl_net_pct': pnl_pct,
-                    'timestamp': position['entry_time']
+                    'timestamp': position['entry_time'],
+                    'is_synthetic': False,  # Flag para posiciones reales
+                    'is_plugin_bot': False  # Flag para bots legacy
                 }
             
             formatted_positions[bot_type] = formatted_bot_positions
+    
+    # Procesar bots plug-and-play (posiciones sintéticas)
+    all_bots = bot_registry.get_all_bots()
+    for bot_name, bot in all_bots.items():
+        # Saltar bots legacy
+        if bot_name in ['conservative', 'aggressive']:
+            continue
+            
+        # Solo procesar bots activos con posiciones sintéticas
+        if bot.is_active and bot.config.synthetic_mode and bot.synthetic_positions:
+            formatted_bot_positions = {}
+            
+            for position in bot.synthetic_positions:
+                if position['status'] == 'open':
+                    entry_price = position['entry_price']
+                    quantity = position['quantity']
+                    position_id = position['id']
+                    
+                    # Calcular PnL si tenemos precio actual
+                    pnl = 0.0
+                    pnl_pct = 0.0
+                    if current_price and entry_price > 0:
+                        if position['signal_type'] == 'BUY':
+                            pnl = (current_price - entry_price) * quantity
+                            pnl_pct = ((current_price - entry_price) / entry_price) * 100
+                        else:  # SELL
+                            pnl = (entry_price - current_price) * quantity
+                            pnl_pct = ((entry_price - current_price) / entry_price) * 100
+                    
+                    formatted_bot_positions[position_id] = {
+                        'id': position_id,
+                        'bot_type': bot_name,
+                        'type': position['signal_type'],
+                        'entry_price': entry_price,
+                        'quantity': quantity,
+                        'entry_time': position['timestamp'],
+                        'current_price': current_price or entry_price,
+                        'pnl': pnl,
+                        'pnl_pct': pnl_pct,
+                        'pnl_net': pnl,
+                        'pnl_net_pct': pnl_pct,
+                        'timestamp': position['timestamp'],
+                        'is_synthetic': True,  # Flag para posiciones sintéticas
+                        'is_plugin_bot': True,  # Flag para bots plug-and-play
+                        'stop_loss': position.get('stop_loss'),
+                        'take_profit': position.get('take_profit')
+                    }
+            
+            if formatted_bot_positions:
+                formatted_positions[bot_name] = formatted_bot_positions
     
     # Convertir historial de órdenes al formato esperado por el frontend
     formatted_history = []
@@ -490,10 +561,7 @@ def get_position_info_for_frontend(current_price=None):
     
     # Combinar con datos del tracker
     return {
-        'active_positions': {
-            'conservative': formatted_positions.get('conservative', {}),
-            'aggressive': formatted_positions.get('aggressive', {})
-        },
+        'active_positions': formatted_positions,  # Incluir todas las posiciones (legacy + plug-and-play)
         'last_signals': tracker_data.get('last_signals', {}),
         'history': formatted_history,
         'statistics': tracker_data.get('statistics', {}),
@@ -507,7 +575,7 @@ app = FastAPI(title="SMA Cross Trading Bot API", version="1.0.0")
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
+    allow_origins=["*"],  # Permitir todos los orígenes para desarrollo
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -535,9 +603,17 @@ class ConnectionManager:
     async def send_personal_message(self, message: str, websocket: WebSocket):
         try:
             if websocket in self.active_connections:
-                await websocket.send_text(message)
+                # Verificar el estado del WebSocket antes de enviar
+                if websocket.client_state == WebSocketState.CONNECTED:
+                    await websocket.send_text(message)
+                else:
+                    logger.warning(f"WebSocket no está conectado, estado: {websocket.client_state}")
+                    self.disconnect(websocket)
         except Exception as e:
             logger.error(f"Error sending message: {e}")
+            logger.error(f"WebSocket state: {websocket.client_state}")
+            logger.error(f"Message length: {len(message)}")
+            # Desconectar si hay error
             self.disconnect(websocket)
 
     async def broadcast(self, message: str):
@@ -815,6 +891,28 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
             
             position_info = clean_data_for_json(position_info)
             
+            # Send account balance information
+            if trading_tracker:
+                account_balance = trading_tracker.get_account_balance()
+                await manager.send_personal_message(
+                    json.dumps({
+                        "type": "account_balance",
+                        "data": account_balance
+                    }),
+                    websocket
+                )
+                
+                # Send margin info if using leverage
+                if real_trading_manager.leverage > 1:
+                    margin_info = real_trading_manager.get_margin_level()
+                    await manager.send_personal_message(
+                        json.dumps({
+                            "type": "margin_info",
+                            "data": margin_info
+                        }),
+                        websocket
+                    )
+            
             # Get candlestick data
             raw_klines = get_klines(SYMBOL, interval, limit=500)
             formatted_klines = []
@@ -987,6 +1085,28 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 
                 position_info = clean_data_for_json(position_info)
                 
+                # Send account balance information
+                if trading_tracker:
+                    account_balance = trading_tracker.get_account_balance()
+                    await manager.send_personal_message(
+                        json.dumps({
+                            "type": "account_balance",
+                            "data": account_balance
+                        }),
+                        websocket
+                    )
+                    
+                    # Send margin info if using leverage
+                    if real_trading_manager.leverage > 1:
+                        margin_info = real_trading_manager.get_margin_level()
+                        await manager.send_personal_message(
+                            json.dumps({
+                                "type": "margin_info",
+                                "data": margin_info
+                            }),
+                            websocket
+                        )
+                
                 # Get updated candlestick data
                 raw_klines = get_klines(SYMBOL, interval, limit=500)
                 formatted_klines = []
@@ -1066,6 +1186,28 @@ async def get_position():
         "entry_price": None,
         "timestamp": datetime.now().isoformat()
     }
+
+@app.get("/position-info")
+async def get_position_info():
+    """Obtiene información completa de posiciones (reales y sintéticas)"""
+    try:
+        # Obtener precio actual
+        current_price = None
+        try:
+            current_price = real_trading_manager.get_current_price('DOGEUSDT')
+        except:
+            pass
+        
+        # Obtener información de posiciones
+        position_info = get_position_info_for_frontend(current_price)
+        
+        return {
+            "status": "success",
+            "data": position_info
+        }
+    except Exception as e:
+        logger.error(f"Error getting position info: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/bot/{bot_type}/activate")
 async def activate_bot(bot_type: str):
@@ -1183,21 +1325,48 @@ async def get_order_status(order_id: str):
 
 @app.get("/bot/status")
 async def get_bot_status():
-    """Obtiene el estado de todos los bots"""
+    """Obtiene el estado de todos los bots (legacy + plug-and-play)"""
     try:
-        # Get real process status
+        # Get real process status for legacy bots
         process_status = get_bot_process_status()
         
         # Update the bot status with real process information
         real_trading_manager.bot_status.update(process_status)
         
-        status = real_trading_manager.get_trading_status()
+        # Get legacy bot status
+        legacy_status = real_trading_manager.get_trading_status()
+        
+        # Get plug-and-play bot status
+        plugin_bots = bot_registry.get_all_bots()
+        plugin_status = {}
+        for name, bot in plugin_bots.items():
+            plugin_status[name] = {
+                "is_active": bot.is_active,
+                "description": bot.config.description,
+                "version": bot.config.version,
+                "author": bot.config.author,
+                "risk_level": bot.config.risk_level,
+                "positions_count": len(bot.positions),
+                "last_signal": bot.last_signal.__dict__ if bot.last_signal else None
+            }
+        
         return {
             "status": "success", 
             "data": {
-                "bot_status": status.get("bot_status", {}),
-                "active_positions": status.get("active_positions", {}),
-                "dynamic_limits": status.get("dynamic_limits", {})
+                "legacy_bots": {
+                    "bot_status": legacy_status.get("bot_status", {}),
+                    "active_positions": legacy_status.get("active_positions", {}),
+                    "dynamic_limits": legacy_status.get("dynamic_limits", {})
+                },
+                "plugin_bots": {
+                    "total_bots": len(plugin_bots),
+                    "active_bots": len(bot_registry.get_active_bots()),
+                    "bots": plugin_status
+                },
+                "summary": {
+                    "total_bots": len(plugin_bots) + 2,  # +2 for legacy bots
+                    "active_bots": len(bot_registry.get_active_bots()) + sum(1 for v in legacy_status.get("bot_status", {}).values() if v)
+                }
             }
         }
     except Exception as e:
@@ -1255,6 +1424,306 @@ async def get_dynamic_limits():
         }
     except Exception as e:
         logger.error(f"Error getting dynamic limits: {e}")
+        return {"status": "error", "message": str(e)}
+
+# ==================== ENDPOINTS PARA SISTEMA PLUG-AND-PLAY ====================
+
+@app.get("/api/bots")
+async def get_all_bots():
+    """Obtiene información de todos los bots disponibles"""
+    try:
+        all_bots = bot_registry.get_all_bots()
+        bot_info = {}
+        
+        for name, bot in all_bots.items():
+            bot_info[name] = bot.get_status()
+        
+        return {
+            "status": "success",
+            "data": {
+                "total_bots": len(all_bots),
+                "active_bots": len(bot_registry.get_active_bots()),
+                "bots": bot_info
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting all bots: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/bots/process-info")
+async def get_plugin_bots_process_info():
+    """Obtiene información de procesos de todos los bots plug-and-play"""
+    try:
+        all_bots = bot_registry.get_all_bots()
+        process_info = {}
+        
+        for name, bot in all_bots.items():
+            # Verificar si es un bot legacy (tiene proceso real) o plug-and-play
+            is_legacy_bot = name in ['conservative', 'aggressive']
+            
+            if is_legacy_bot:
+                # Para bots legacy, obtener información real del proceso
+                try:
+                    if bot_processes[name] and bot_processes[name].poll() is None:
+                        # Proceso real activo - obtener información real con psutil
+                        try:
+                            import psutil
+                            process = psutil.Process(bot_processes[name].pid)
+                            memory_info = process.memory_info()
+                            cpu_percent = process.cpu_percent()
+                            create_time = process.create_time()
+                            
+                            process_info[name] = {
+                                "active": True,
+                                "pid": str(bot_processes[name].pid),
+                                "memory_mb": round(memory_info.rss / 1024 / 1024, 2),
+                                "cpu_percent": round(cpu_percent, 2),
+                                "create_time": bot_start_times[name].isoformat() if bot_start_times[name] else None,
+                                "type": "legacy_process"
+                            }
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            # Proceso ya no existe o no se puede acceder
+                            process_info[name] = {
+                                "active": False,
+                                "pid": None,
+                                "memory_mb": 0,
+                                "cpu_percent": 0.0,
+                                "create_time": None,
+                                "type": "legacy_process"
+                            }
+                    else:
+                        # Proceso no activo
+                        process_info[name] = {
+                            "active": False,
+                            "pid": None,
+                            "memory_mb": 0,
+                            "cpu_percent": 0.0,
+                            "create_time": None,
+                            "type": "legacy_process"
+                        }
+                except Exception as e:
+                    logger.error(f"Error getting process info for {name}: {e}")
+                    process_info[name] = {
+                        "active": False,
+                        "pid": None,
+                        "memory_mb": 0,
+                        "cpu_percent": 0.0,
+                        "create_time": None,
+                        "type": "legacy_process"
+                    }
+            else:
+                # Para bots plug-and-play, obtener información real del proceso del servidor
+                try:
+                    import psutil
+                    current_process = psutil.Process()
+                    
+                    # Obtener información real del proceso del servidor
+                    memory_info = current_process.memory_info()
+                    cpu_percent = current_process.cpu_percent()
+                    create_time = current_process.create_time()
+                    
+                    process_info[name] = {
+                        "active": bot.is_active,
+                        "pid": str(current_process.pid),  # PID real del servidor
+                        "memory_mb": round(memory_info.rss / 1024 / 1024, 2),  # Memoria real en MB
+                        "cpu_percent": round(cpu_percent, 2),  # CPU real del servidor
+                        "create_time": datetime.fromtimestamp(create_time).isoformat(),
+                        "type": "in_memory_object"
+                    }
+                except Exception as e:
+                    logger.error(f"Error getting real process info for {name}: {e}")
+                    process_info[name] = {
+                        "active": bot.is_active,
+                        "pid": None,
+                        "memory_mb": 0,
+                        "cpu_percent": 0.0,
+                        "create_time": None,
+                        "type": "in_memory_object"
+                    }
+        
+        return {
+            "status": "success",
+            "data": process_info
+        }
+    except Exception as e:
+        logger.error(f"Error getting plugin bots process info: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/bots/{bot_name}")
+async def get_bot_info(bot_name: str):
+    """Obtiene información detallada de un bot específico"""
+    try:
+        bot = bot_registry.get_bot(bot_name)
+        if not bot:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": f"Bot '{bot_name}' no encontrado"}
+            )
+        
+        return {
+            "status": "success",
+            "data": bot.get_status()
+        }
+    except Exception as e:
+        logger.error(f"Error getting bot info for {bot_name}: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/bots/{bot_name}/start")
+async def start_plugin_bot(bot_name: str):
+    """Inicia un bot del sistema plug-and-play"""
+    try:
+        success = bot_registry.start_bot(bot_name)
+        if success:
+            return {
+                "status": "success",
+                "message": f"Bot '{bot_name}' iniciado correctamente"
+            }
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": f"Error iniciando bot '{bot_name}'"}
+            )
+    except Exception as e:
+        logger.error(f"Error starting bot {bot_name}: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/bots/{bot_name}/stop")
+async def stop_plugin_bot(bot_name: str):
+    """Detiene un bot del sistema plug-and-play"""
+    try:
+        success = bot_registry.stop_bot(bot_name)
+        if success:
+            return {
+                "status": "success",
+                "message": f"Bot '{bot_name}' detenido correctamente"
+            }
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": f"Error deteniendo bot '{bot_name}'"}
+            )
+    except Exception as e:
+        logger.error(f"Error stopping bot {bot_name}: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/bots/{bot_name}/signals")
+async def get_bot_signals(bot_name: str):
+    """Obtiene las últimas señales de un bot específico"""
+    try:
+        bot = bot_registry.get_bot(bot_name)
+        if not bot:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": f"Bot '{bot_name}' no encontrado"}
+            )
+        
+        # Obtener datos de mercado actuales
+        closes_array = get_closes(SYMBOL, INTERVAL, limit=100)
+        if not closes_array.size:
+            return {"status": "error", "message": "No se pudieron obtener datos de mercado"}
+        
+        # Convertir numpy array a lista de Python
+        closes = closes_array.tolist()
+        
+        # Crear MarketData
+        market_data = MarketData(
+            symbol=SYMBOL,
+            interval=INTERVAL,
+            closes=closes,
+            highs=closes,  # Simplificado para demo
+            lows=closes,   # Simplificado para demo
+            volumes=[1000000] * len(closes),  # Simplificado para demo
+            timestamps=list(range(len(closes))),
+            current_price=closes[-1]
+        )
+        
+        # Generar señal
+        signal = bot.analyze_market(market_data)
+        
+        # Si el bot está en modo synthetic y genera una señal de trading, abrir posición sintética
+        synthetic_position = None
+        if bot.config.synthetic_mode and signal.signal_type.value in ['BUY', 'SELL']:
+            synthetic_position = bot.open_synthetic_position(signal, market_data.current_price)
+        
+        # Verificar posiciones sintéticas existentes para SL/TP
+        closed_positions = []
+        if bot.config.synthetic_mode:
+            closed_positions = bot.check_synthetic_positions(market_data.current_price)
+        
+        return {
+            "status": "success",
+            "data": {
+                "bot_name": bot_name,
+                "signal": signal.__dict__,
+                "synthetic_position": synthetic_position,
+                "closed_positions": closed_positions,
+                "synthetic_balance": bot.synthetic_balance if bot.config.synthetic_mode else None,
+                "market_data": {
+                    "current_price": market_data.current_price,
+                    "data_points": len(market_data.closes)
+                }
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting signals for bot {bot_name}: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/bots/{bot_name}/metrics")
+async def get_bot_metrics(bot_name: str):
+    """Obtiene métricas de rendimiento de un bot específico"""
+    try:
+        bot = bot_registry.get_bot(bot_name)
+        if not bot:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": f"Bot '{bot_name}' no encontrado"}
+            )
+        
+        metrics = bot.get_performance_metrics()
+        
+        return {
+            "status": "success",
+            "data": {
+                "bot_name": bot_name,
+                "metrics": metrics
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting metrics for bot {bot_name}: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/bots/{bot_name}/synthetic")
+async def toggle_synthetic_mode(bot_name: str, request: dict):
+    """Activa/desactiva el modo synthetic de un bot"""
+    try:
+        bot = bot_registry.get_bot(bot_name)
+        if not bot:
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "message": f"Bot '{bot_name}' no encontrado"}
+            )
+        
+        synthetic_mode = request.get('synthetic_mode', False)
+        bot.config.synthetic_mode = synthetic_mode
+        
+        if synthetic_mode:
+            # Resetear balance sintético al activar
+            bot.synthetic_balance = 1000.0
+            bot.synthetic_positions = []
+            logger.info(f"🧪 Modo synthetic activado para bot {bot_name}")
+        else:
+            logger.info(f"🔴 Modo synthetic desactivado para bot {bot_name}")
+        
+        return {
+            "status": "success",
+            "data": {
+                "bot_name": bot_name,
+                "synthetic_mode": synthetic_mode,
+                "synthetic_balance": bot.synthetic_balance if synthetic_mode else None
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error toggling synthetic mode for bot {bot_name}: {e}")
         return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
