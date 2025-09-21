@@ -17,8 +17,8 @@ interface BotSignalsProps {
 
 const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
   const [botStatus, setBotStatus] = useState({
-    conservative: true,
-    aggressive: true
+    conservative: false,
+    aggressive: false
   })
 
   const [dynamicLimits, setDynamicLimits] = useState({
@@ -31,6 +31,28 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     }
   })
 
+  const [accordionOpen, setAccordionOpen] = useState({
+    conservative: false,
+    aggressive: false
+  })
+
+  const [botProcessInfo, setBotProcessInfo] = useState({
+    conservative: {
+      active: false,
+      pid: null,
+      memory_mb: 0,
+      cpu_percent: 0,
+      create_time: null
+    },
+    aggressive: {
+      active: false,
+      pid: null,
+      memory_mb: 0,
+      cpu_percent: 0,
+      create_time: null
+    }
+  })
+
   // Fetch bot status and dynamic limits on component mount
   useEffect(() => {
     const fetchBotStatus = async () => {
@@ -38,6 +60,7 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
         const response = await fetch('http://localhost:8000/bot/status')
         const result = await response.json()
         if (result.status === 'success') {
+          // Use real process status from backend
           setBotStatus(result.data.bot_status)
           if (result.data.dynamic_limits) {
             setDynamicLimits(result.data.dynamic_limits)
@@ -48,7 +71,30 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
       }
     }
 
+    const fetchBotProcessInfo = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/bot/process-info')
+        const result = await response.json()
+        if (result.status === 'success') {
+          setBotProcessInfo(result.data)
+        }
+      } catch (error) {
+        console.error('Error fetching bot process info:', error)
+      }
+    }
+
+    // Fetch initial status
     fetchBotStatus()
+    fetchBotProcessInfo()
+
+    // Set up automatic polling every 3 seconds
+    const interval = setInterval(() => {
+      fetchBotStatus()
+      fetchBotProcessInfo()
+    }, 3000)
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval)
   }, [])
 
   const handleBotToggle = async (botType: string, newStatus: boolean) => {
@@ -67,6 +113,13 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     } catch (error) {
       console.error('Error refreshing dynamic limits:', error)
     }
+  }
+
+  const toggleAccordion = (botType: 'conservative' | 'aggressive') => {
+    setAccordionOpen((prev) => ({
+      ...prev,
+      [botType]: !prev[botType]
+    }))
   }
   if (!signals) {
     return (
@@ -197,7 +250,7 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
       <div className="bot-status">
         <div className="price-display">
           <span className="price-label">Precio Actual:</span>
-          <span className="price-value">${signals.current_price.toFixed(2)}</span>
+          <span className="price-value">${signals.current_price.toFixed(5)}</span>
         </div>
 
         <div className="signals-container">
@@ -209,8 +262,51 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
             <div className="signal-value" style={{ color: getSignalColor(signals.conservative) }}>
               {getSignalIcon(signals.conservative)} {signals.conservative}
             </div>
-            <div className="signal-description">SMA 5 vs 20, Threshold 0.0</div>
+            <div className="signal-description">SMA 8 vs 21, Threshold 0.0005</div>
             {getPositionInfo('conservative')}
+
+            {/* Info Box - Siempre mostrar, cambiar color según estado */}
+            <div
+              className={`bot-info-box ${
+                botProcessInfo.conservative.active ? 'active' : 'inactive'
+              }`}>
+              <div className="info-header" onClick={() => toggleAccordion('conservative')}>
+                ℹ️ Info {accordionOpen.conservative ? '▼' : '▶'}
+              </div>
+              {accordionOpen.conservative && (
+                <div className="info-content">
+                  <div className="info-item">
+                    <span className="info-label">Proceso:</span>
+                    <span
+                      className={`info-value ${
+                        botProcessInfo.conservative.active ? 'active' : 'inactive'
+                      }`}>
+                      {botProcessInfo.conservative.active
+                        ? `activo (PID: ${botProcessInfo.conservative.pid})`
+                        : 'inactivo'}
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">Memoria:</span>
+                    <span
+                      className={`info-value ${
+                        botProcessInfo.conservative.active ? 'active' : 'inactive'
+                      }`}>
+                      {botProcessInfo.conservative.memory_mb} MB
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">CPU:</span>
+                    <span
+                      className={`info-value ${
+                        botProcessInfo.conservative.active ? 'active' : 'inactive'
+                      }`}>
+                      {botProcessInfo.conservative.cpu_percent}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="signal-box aggressive">
@@ -221,8 +317,51 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
             <div className="signal-value" style={{ color: getSignalColor(signals.aggressive) }}>
               {getSignalIcon(signals.aggressive)} {signals.aggressive}
             </div>
-            <div className="signal-description">SMA 3 vs 8, Threshold 0.0001</div>
+            <div className="signal-description">SMA 5 vs 13, Threshold 0.0008</div>
             {getPositionInfo('aggressive')}
+
+            {/* Info Box - Siempre mostrar, cambiar color según estado */}
+            <div
+              className={`bot-info-box ${
+                botProcessInfo.aggressive.active ? 'active' : 'inactive'
+              }`}>
+              <div className="info-header" onClick={() => toggleAccordion('aggressive')}>
+                ℹ️ Info {accordionOpen.aggressive ? '▼' : '▶'}
+              </div>
+              {accordionOpen.aggressive && (
+                <div className="info-content">
+                  <div className="info-item">
+                    <span className="info-label">Proceso:</span>
+                    <span
+                      className={`info-value ${
+                        botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                      }`}>
+                      {botProcessInfo.aggressive.active
+                        ? `activo (PID: ${botProcessInfo.aggressive.pid})`
+                        : 'inactivo'}
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">Memoria:</span>
+                    <span
+                      className={`info-value ${
+                        botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                      }`}>
+                      {botProcessInfo.aggressive.memory_mb} MB
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">CPU:</span>
+                    <span
+                      className={`info-value ${
+                        botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                      }`}>
+                      {botProcessInfo.aggressive.cpu_percent}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

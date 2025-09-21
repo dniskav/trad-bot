@@ -22,7 +22,7 @@ interface ActivePositionsProps {
   currentPrice?: number
 }
 
-const ActivePositions: React.FC<ActivePositionsProps> = ({ positions, currentPrice }) => {
+const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
   if (!positions) {
     return (
       <div className="active-positions">
@@ -37,11 +37,11 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions, currentPri
   const getAllPositions = () => {
     const allPositions: (ActivePosition & { botType: 'conservative' | 'aggressive' })[] = []
 
-    Object.entries(positions.conservative || {}).forEach(([id, pos]) => {
+    Object.entries(positions.conservative || {}).forEach(([, pos]) => {
       allPositions.push({ ...pos, botType: 'conservative' })
     })
 
-    Object.entries(positions.aggressive || {}).forEach(([id, pos]) => {
+    Object.entries(positions.aggressive || {}).forEach(([, pos]) => {
       allPositions.push({ ...pos, botType: 'aggressive' })
     })
 
@@ -123,15 +123,15 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions, currentPri
               <div className="position-details">
                 <div className="detail-row">
                   <span className="detail-label">Entrada:</span>
-                  <span className="detail-value">${position.entry_price.toFixed(4)}</span>
+                  <span className="detail-value">${position.entry_price.toFixed(5)}</span>
                 </div>
                 <div className="detail-row">
                   <span className="detail-label">Actual:</span>
-                  <span className="detail-value">${position.current_price.toFixed(4)}</span>
+                  <span className="detail-value">${position.current_price.toFixed(5)}</span>
                 </div>
                 <div className="detail-row">
                   <span className="detail-label">Cantidad:</span>
-                  <span className="detail-value">{position.quantity.toFixed(2)} DOGE</span>
+                  <span className="detail-value">{position.quantity.toFixed(5)} DOGE</span>
                 </div>
                 <div className="detail-row">
                   <span className="detail-label">PnL:</span>

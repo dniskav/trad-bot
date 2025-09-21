@@ -13,8 +13,14 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
   const [selectedBot, setSelectedBot] = useState<'all' | 'conservative' | 'aggressive'>('all')
   const [sortBy, setSortBy] = useState<'date' | 'pnl'>('date')
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString || dateString === 'En curso') {
+      return 'En curso'
+    }
     const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return 'Fecha inválida'
+    }
     return date.toLocaleString('es-ES', {
       day: '2-digit',
       month: '2-digit',
@@ -31,7 +37,7 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
 
     return (
       <span style={{ color, fontWeight: 'bold' }}>
-        {sign}${pnl.toFixed(4)} ({sign}
+        {sign}${pnl.toFixed(5)} ({sign}
         {pnlPct.toFixed(2)}%)
       </span>
     )
@@ -63,13 +69,17 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
 
   const filteredHistory = history.filter(
     (pos) => selectedBot === 'all' || pos.bot_type === selectedBot
+    // Mostrar todas las posiciones, tanto cerradas como abiertas
   )
 
   const sortedHistory = [...filteredHistory].sort((a, b) => {
     if (sortBy === 'date') {
-      return new Date(b.exit_time).getTime() - new Date(a.exit_time).getTime()
+      // Para posiciones abiertas (sin exit_time), usar entry_time
+      const dateA = a.exit_time || a.close_time || a.entry_time
+      const dateB = b.exit_time || b.close_time || b.entry_time
+      return new Date(dateB).getTime() - new Date(dateA).getTime()
     } else {
-      return b.pnl_net - a.pnl_net
+      return (b.pnl_net || 0) - (a.pnl_net || 0)
     }
   })
 
@@ -110,13 +120,13 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
             <span
               className="stat-value"
               style={{ color: safeStats.total_pnl_net >= 0 ? '#26a69a' : '#ef5350' }}>
-              ${safeStats.total_pnl_net.toFixed(4)}
+              ${safeStats.total_pnl_net.toFixed(5)}
             </span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Mejor Trade:</span>
             <span className="stat-value" style={{ color: '#26a69a' }}>
-              ${safeStats.best_trade.toFixed(4)}
+              ${safeStats.best_trade.toFixed(5)}
             </span>
           </div>
         </div>
@@ -167,6 +177,12 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
                 <div className="history-bot">
                   <span className="bot-icon">{getBotIcon(position.bot_type)}</span>
                   <span className="bot-name">{position.bot_type || 'N/A'}</span>
+                  {/* Indicador de estado */}
+                  {(!position.is_closed ||
+                    position.status === 'UPDATED' ||
+                    position.status === 'OPEN') && (
+                    <span className="status-indicator open">🟢 En curso</span>
+                  )}
                 </div>
                 <div className="history-type">
                   <span className={`position-type ${position.type?.toLowerCase() || 'unknown'}`}>
@@ -182,9 +198,9 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
               <div className="history-details">
                 <div className="price-info">
                   <span className="price-label">Entrada:</span>
-                  <span className="price-value">${position.entry_price?.toFixed(4)}</span>
+                  <span className="price-value">${position.entry_price?.toFixed(5)}</span>
                   <span className="price-label">Salida:</span>
-                  <span className="price-value">${position.exit_price?.toFixed(4)}</span>
+                  <span className="price-value">${position.exit_price?.toFixed(5)}</span>
                 </div>
 
                 <div className="pnl-info">
@@ -199,14 +215,16 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
                   {position.total_fees && (
                     <div className="fees-item">
                       <span className="fees-label">Comisiones:</span>
-                      <span className="fees-value">${position.total_fees.toFixed(4)}</span>
+                      <span className="fees-value">${position.total_fees.toFixed(5)}</span>
                     </div>
                   )}
                 </div>
 
                 <div className="time-info">
                   <span className="time-label">Cerrado:</span>
-                  <span className="time-value">{formatDate(position.exit_time)}</span>
+                  <span className="time-value">
+                    {formatDate(position.close_time || position.exit_time)}
+                  </span>
                 </div>
               </div>
             </div>

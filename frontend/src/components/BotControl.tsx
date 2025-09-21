@@ -12,8 +12,8 @@ const BotControl: React.FC<BotControlProps> = ({ botType, isActive, onToggle }) 
   const handleToggle = async () => {
     setLoading(true)
     try {
-      const endpoint = isActive ? 'deactivate' : 'activate'
-      const response = await fetch(`http://localhost:8000/bot/${botType}/${endpoint}`, {
+      const action = isActive ? 'stop' : 'start'
+      const response = await fetch(`http://localhost:8000/api/bot-control/${botType}/${action}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -22,13 +22,16 @@ const BotControl: React.FC<BotControlProps> = ({ botType, isActive, onToggle }) 
 
       const result = await response.json()
 
-      if (result.status === 'success') {
+      if (result.success) {
         onToggle(botType, !isActive)
+        console.log(`✅ ${result.message}`)
       } else {
-        console.error('Error:', result.message)
+        console.error('❌ Error:', result.error)
+        alert(`Error: ${result.error}`)
       }
     } catch (error) {
-      console.error('Error toggling bot:', error)
+      console.error('❌ Error toggling bot:', error)
+      alert(`Error de conexión: ${error}`)
     } finally {
       setLoading(false)
     }

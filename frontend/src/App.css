@@ -745,11 +745,40 @@
 
 /* Chart Canvas Container (for the actual chart div) */
 .chart-canvas-container {
-  height: 300px; /* Fixed height for the chart canvas */
+  height: 500px; /* Fixed height for the chart canvas */
   border-radius: 6px; /* Reduced from 8px */
   overflow: hidden;
   background: #1e1e1e;
   width: 100%;
+  box-sizing: border-box;
+}
+
+/* Indicator Chart Containers */
+.indicator-chart-container {
+  margin-top: 20px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #1e1e1e;
+  box-sizing: border-box;
+}
+
+.indicator-header {
+  padding: 10px 15px;
+  background: #2a2a2a;
+  border-bottom: 1px solid #485c7b;
+}
+
+.indicator-header h4 {
+  margin: 0;
+  color: #d1d4dc;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.indicator-canvas-container {
+  width: 100%;
+  height: 200px;
+  background: #1e1e1e;
   box-sizing: border-box;
 }
 
@@ -1432,6 +1461,19 @@
   gap: 0.5rem;
 }
 
+.status-indicator {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.status-indicator.open {
+  background-color: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
 .bot-icon {
   font-size: 1rem;
 }
@@ -1917,4 +1959,86 @@
   margin-top: 4px;
   text-align: center;
   color: var(--text-secondary);
+}
+
+/* Bot Info Box - Acordeón con fuente 0.5rem */
+.bot-info-box {
+  margin-top: 8px;
+  border-radius: 4px;
+  background: transparent;
+  overflow: hidden;
+  font-size: 0.5rem;
+}
+
+.bot-info-box.active {
+  border: 1px solid #22c55e; /* Verde para activo */
+}
+
+.bot-info-box.inactive {
+  border: 1px solid #eab308; /* Amarillo para inactivo */
+}
+
+.info-header {
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 0.5rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bot-info-box.active .info-header {
+  color: #22c55e; /* Verde para activo */
+  border-bottom: 1px solid #22c55e;
+}
+
+.bot-info-box.inactive .info-header {
+  color: #eab308; /* Amarillo para inactivo */
+  border-bottom: 1px solid #eab308;
+}
+
+.bot-info-box.active .info-header:hover {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.bot-info-box.inactive .info-header:hover {
+  background: rgba(234, 179, 8, 0.1);
+}
+
+.info-content {
+  padding: 6px 8px;
+  background: transparent;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+  font-size: 0.5rem;
+  line-height: 1;
+}
+
+.info-item:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.info-value {
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+.info-value.active {
+  color: #22c55e; /* Verde para activo */
+}
+
+.info-value.inactive {
+  color: #eab308; /* Amarillo para inactivo */
 }
