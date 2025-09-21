@@ -9,9 +9,10 @@ import os
 from datetime import datetime
 from typing import Dict, Optional, Any
 import logging
+from colored_logger import get_colored_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Usar logger con colores
+logger = get_colored_logger(__name__)
 
 # Archivo para persistir el historial
 HISTORY_FILE = "logs/trading_history.json"
@@ -53,12 +54,13 @@ class TradingTracker:
         self.fee_rate = 0.00075  # 0.075% por trade con BNB
         self.total_fee_rate = 0.0015  # 0.15% total (compra + venta)
         
-        # Stop Loss y Take Profit ajustados para cubrir comisiones + ganancia
-        # Comisión total: 0.15% (BUY + SELL), ganancia mínima: 1.0%
+        # Stop Loss y Take Profit basados en recomendaciones de expertos para DOGE
+        # Comisión total: 0.15% (BUY + SELL), ganancia mínima: 0.5%
+        # DOGE: Alta volatilidad, soportes en $0.217, $0.210, $0.200
         self.stop_loss_config = {
-            'conservative': {'stop_loss': 0.012, 'take_profit': 0.025},  # SL 1.2%, TP 2.5% (cubre comisiones + ganancia)
-            'aggressive': {'stop_loss': 0.008, 'take_profit': 0.020},   # SL 0.8%, TP 2.0% (más conservador para cubrir comisiones)
-            'demo': {'stop_loss': 0.010, 'take_profit': 0.020}           # 1.0% SL, 2.0% TP
+            'conservative': {'stop_loss': 0.040, 'take_profit': 0.020},  # SL 4.0%, TP 2.0% (conservador para DOGE)
+            'aggressive': {'stop_loss': 0.035, 'take_profit': 0.018},   # SL 3.5%, TP 1.8% (moderado-agresivo)
+            'demo': {'stop_loss': 0.037, 'take_profit': 0.019}           # 3.7% SL, 1.9% TP
         }
     
     def _get_balance_from_binance(self, binance_client, detailed_logging=False):
@@ -72,14 +74,20 @@ class TradingTracker:
             # Verificar si estamos usando margin trading
             leverage = int(os.getenv('LEVERAGE', '1'))
             
-            logger.info(f"🔍 DEBUG: Leverage detectado: {leverage} (detailed_logging: {detailed_logging})")
+            if detailed_logging:
+                # logger.info(f"🔍 DEBUG: Leverage detectado: {leverage}")
+                pass
             
             if leverage > 1:
                 # Usar cuenta de margen
                 margin_account = binance_client.get_margin_account()
                 
-                logger.info(f"🔍 DEBUG: Margin account keys: {list(margin_account.keys())}")
-                logger.info(f"🔍 DEBUG: UserAssets: {margin_account.get('userAssets', [])}")
+                if detailed_logging:
+                    # logger.info(f"🔍 DEBUG: Margin account keys: {list(margin_account.keys())}")
+                    # Solo mostrar assets con balance > 0
+                    relevant_assets = [asset for asset in margin_account.get('userAssets', []) 
+                                     if float(asset.get('free', 0)) > 0 or float(asset.get('locked', 0)) > 0]
+                    # logger.info(f"🔍 DEBUG: UserAssets relevantes: {relevant_assets}")
                 
                 # Obtener balances de la cuenta de margen
                 usdt_balance = 0.0
@@ -89,10 +97,10 @@ class TradingTracker:
                 for asset in margin_account.get('userAssets', []):
                     if asset['asset'] == 'USDT':
                         usdt_balance = float(asset['free']) + float(asset['locked'])
-                        logger.info(f"🔍 DEBUG: USDT encontrado - free: {asset['free']}, locked: {asset['locked']}")
+                        # logger.info(f"🔍 DEBUG: USDT encontrado - free: {asset['free']}, locked: {asset['locked']}")
                     elif asset['asset'] == 'DOGE':
                         doge_balance = float(asset['free']) + float(asset['locked'])
-                        logger.info(f"🔍 DEBUG: DOGE encontrado - free: {asset['free']}, locked: {asset['locked']}")
+                        # logger.info(f"🔍 DEBUG: DOGE encontrado - free: {asset['free']}, locked: {asset['locked']}")
                 
                 # Obtener precio actual de DOGE para convertir a USDT
                 ticker = binance_client.get_symbol_ticker(symbol='DOGEUSDT')
@@ -101,7 +109,10 @@ class TradingTracker:
                 # Calcular balance total en USDT
                 total_balance = usdt_balance + (doge_balance * doge_price)
                 
-                logger.info(f"🔍 DEBUG: Balance calculado - USDT: ${usdt_balance:.2f}, DOGE: {doge_balance:.2f}, Total: ${total_balance:.2f}")
+                # Solo loggear si el balance cambió significativamente
+                if not hasattr(self, '_last_balance') or abs(total_balance - self._last_balance) > 0.01:
+                    # logger.info(f"🔍 DEBUG: Balance calculado - USDT: ${usdt_balance:.2f}, DOGE: {doge_balance:.2f}, Total: ${total_balance:.2f}")
+                    self._last_balance = total_balance
                 
                 if detailed_logging:
                     logger.info(f"💰 Balance calculado desde Binance (Margin):")
@@ -131,7 +142,7 @@ class TradingTracker:
                     logger.info(f"   DOGE: {doge_balance:.2f} (${doge_balance * doge_price:.2f})")
                     logger.info(f"   Total: ${total_balance:.2f}")
             
-            logger.info(f"🔍 DEBUG: Función _get_balance_from_binance devolviendo: ${total_balance:.2f}")
+            # logger.info(f"🔍 DEBUG: Función _get_balance_from_binance devolviendo: ${total_balance:.2f}")
             return total_balance
             
         except Exception as e:
@@ -144,7 +155,7 @@ class TradingTracker:
     
     def _calculate_current_balance_from_binance(self, binance_client):
         """Calcula el balance actual desde Binance - usa la misma lógica que la función inicial"""
-        logger.info("🔍 DEBUG: Llamando _calculate_current_balance_from_binance()")
+        # logger.info("🔍 DEBUG: Llamando _calculate_current_balance_from_binance()")
         
         if not binance_client:
             return self.current_balance
@@ -153,14 +164,9 @@ class TradingTracker:
             # Verificar si estamos usando margin trading
             leverage = int(os.getenv('LEVERAGE', '1'))
             
-            logger.info(f"🔍 DEBUG: Leverage detectado: {leverage}")
-            
             if leverage > 1:
                 # Usar cuenta de margen
                 margin_account = binance_client.get_margin_account()
-                
-                logger.info(f"🔍 DEBUG: Margin account keys: {list(margin_account.keys())}")
-                logger.info(f"🔍 DEBUG: UserAssets: {margin_account.get('userAssets', [])}")
                 
                 # Obtener balances de la cuenta de margen
                 usdt_balance = 0.0
@@ -170,10 +176,8 @@ class TradingTracker:
                 for asset in margin_account.get('userAssets', []):
                     if asset['asset'] == 'USDT':
                         usdt_balance = float(asset['free']) + float(asset['locked'])
-                        logger.info(f"🔍 DEBUG: USDT encontrado - free: {asset['free']}, locked: {asset['locked']}")
                     elif asset['asset'] == 'DOGE':
                         doge_balance = float(asset['free']) + float(asset['locked'])
-                        logger.info(f"🔍 DEBUG: DOGE encontrado - free: {asset['free']}, locked: {asset['locked']}")
                 
                 # Obtener precio actual de DOGE para convertir a USDT
                 ticker = binance_client.get_symbol_ticker(symbol='DOGEUSDT')
@@ -181,8 +185,6 @@ class TradingTracker:
                 
                 # Calcular balance total en USDT
                 total_balance = usdt_balance + (doge_balance * doge_price)
-                
-                logger.info(f"🔍 DEBUG: Balance calculado (current) - USDT: ${usdt_balance:.2f}, DOGE: {doge_balance:.2f}, Total: ${total_balance:.2f}")
                 
             else:
                 # Usar cuenta spot normal
@@ -199,7 +201,7 @@ class TradingTracker:
                 # Calcular balance total en USDT
                 total_balance = usdt_balance + (doge_balance * doge_price)
             
-            logger.info(f"🔍 DEBUG: _calculate_current_balance_from_binance() devolviendo: ${total_balance:.2f}")
+            # logger.info(f"🔍 DEBUG: _calculate_current_balance_from_binance() devolviendo: ${total_balance:.2f}")
             return total_balance
             
         except Exception as e:
@@ -215,8 +217,8 @@ class TradingTracker:
             # Calcular balance actual desde Binance
             new_balance = self._calculate_current_balance_from_binance(self.binance_client)
             
-            logger.info(f"🔍 DEBUG: Balance calculado desde Binance: ${new_balance:.2f}")
-            logger.info(f"🔍 DEBUG: Balance anterior: ${self.current_balance:.2f}")
+            # logger.info(f"🔍 DEBUG: Balance calculado desde Binance: ${new_balance:.2f}")
+            # logger.info(f"🔍 DEBUG: Balance anterior: ${self.current_balance:.2f}")
             
             # Actualizar balance actual
             self.current_balance = new_balance
@@ -224,7 +226,10 @@ class TradingTracker:
             # Calcular PnL total basado en la diferencia con el balance inicial
             self.total_pnl = self.current_balance - self.initial_balance
             
-            logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f} (PnL: ${self.total_pnl:.4f})")
+            # Solo loggear si el balance cambió significativamente
+            if not hasattr(self, '_last_balance_binance') or abs(self.current_balance - self._last_balance_binance) > 0.01:
+                logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f} (PnL: ${self.total_pnl:.4f})")
+                self._last_balance_binance = self.current_balance
             
         except Exception as e:
             logger.error(f"❌ Error actualizando balance desde Binance: {e}")
@@ -311,14 +316,29 @@ class TradingTracker:
             with open(HISTORY_FILE, 'w') as f:
                 json.dump(data, f, indent=2, default=str)
             
-            # Log detallado del guardado del historial
+            # Log detallado del guardado del historial solo si cambió
             if len(self.position_history) > 0:
                 last_trade = self.position_history[-1]
-                logger.info(f"💾 Historial guardado: {len(self.position_history)} posiciones")
-                logger.info(f"📈 Último trade: {last_trade['bot_type'].upper()} {last_trade['side']} - PnL: ${last_trade['net_pnl']:.4f}")
-                logger.info(f"💰 Balance actualizado: ${self.current_balance:.2f} (PnL total: ${self.total_pnl:.4f})")
+                
+                # Solo loggear si el historial cambió
+                if not hasattr(self, '_last_history_count') or self._last_history_count != len(self.position_history):
+                    logger.info(f"💾 Historial guardado: {len(self.position_history)} posiciones")
+                    self._last_history_count = len(self.position_history)
+                
+                # Solo loggear si el último trade cambió
+                if not hasattr(self, '_last_trade_id') or self._last_trade_id != last_trade.get('order_id'):
+                    logger.info(f"📈 Último trade: {last_trade['bot_type'].upper()} {last_trade['side']} - PnL: ${last_trade['net_pnl']:.4f}")
+                    self._last_trade_id = last_trade.get('order_id')
+                
+                # Solo loggear si el balance cambió significativamente
+                if not hasattr(self, '_last_balance_log') or abs(self.current_balance - self._last_balance_log) > 0.01:
+                    logger.info(f"💰 Balance actualizado: ${self.current_balance:.2f} (PnL total: ${self.total_pnl:.4f})")
+                    self._last_balance_log = self.current_balance
             else:
-                logger.info(f"💾 Historial guardado: {len(self.position_history)} posiciones")
+                # Solo loggear si el historial cambió
+                if not hasattr(self, '_last_history_count') or self._last_history_count != len(self.position_history):
+                    logger.info(f"💾 Historial guardado: {len(self.position_history)} posiciones")
+                    self._last_history_count = len(self.position_history)
         except Exception as e:
             logger.error(f"❌ Error guardando historial: {e}")
     
@@ -389,22 +409,22 @@ class TradingTracker:
             
             for position_id in positions_to_close:
                 position = self.positions[bot_type][position_id]
-                position['exit_price'] = current_price
-                position['exit_time'] = datetime.now()
-                position['current_price'] = current_price
-                
-                # Calcular comisión de salida
-                exit_fee = current_price * position['quantity'] * self.fee_rate
-                position['exit_fee'] = exit_fee
-                total_fees = position['entry_fee'] + exit_fee
-                
-                # Calcular PnL bruto
-                if position['signal_type'] == 'BUY':
-                    position['pnl'] = (current_price - position['entry_price']) * position['quantity']
-                    position['pnl_pct'] = ((current_price - position['entry_price']) / position['entry_price']) * 100
-                else:  # SELL
-                    position['pnl'] = (position['entry_price'] - current_price) * position['quantity']
-                    position['pnl_pct'] = ((position['entry_price'] - current_price) / position['entry_price']) * 100
+            position['exit_price'] = current_price
+            position['exit_time'] = datetime.now()
+            position['current_price'] = current_price
+            
+            # Calcular comisión de salida
+            exit_fee = current_price * position['quantity'] * self.fee_rate
+            position['exit_fee'] = exit_fee
+            total_fees = position['entry_fee'] + exit_fee
+            
+            # Calcular PnL bruto
+            if position['signal_type'] == 'BUY':
+                position['pnl'] = (current_price - position['entry_price']) * position['quantity']
+                position['pnl_pct'] = ((current_price - position['entry_price']) / position['entry_price']) * 100
+            else:  # SELL
+                position['pnl'] = (position['entry_price'] - current_price) * position['quantity']
+                position['pnl_pct'] = ((position['entry_price'] - current_price) / position['entry_price']) * 100
                 
                 # Calcular PnL neto
                 position['pnl_net'] = position['pnl'] - total_fees
@@ -790,8 +810,8 @@ class TradingTracker:
         return None
     
     def get_open_orders(self) -> list:
-        """Obtiene todas las órdenes abiertas"""
-        return [order for order in self.position_history if order['status'] == 'OPEN']
+        """Obtiene todas las órdenes abiertas (OPEN y UPDATED)"""
+        return [order for order in self.position_history if order['status'] in ['OPEN', 'UPDATED']]
     
     def get_closed_orders(self) -> list:
         """Obtiene todas las órdenes cerradas"""
@@ -812,7 +832,10 @@ class TradingTracker:
             # Calcular PnL total basado en la diferencia con el balance inicial
             self.total_pnl = self.current_balance - self.initial_balance
             
-            logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f} (PnL: ${self.total_pnl:.4f})")
+            # Solo loggear si el balance cambió significativamente
+            if not hasattr(self, '_last_balance_binance') or abs(self.current_balance - self._last_balance_binance) > 0.01:
+                logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f} (PnL: ${self.total_pnl:.4f})")
+                self._last_balance_binance = self.current_balance
             
             return {
                 'total_balance': new_balance,

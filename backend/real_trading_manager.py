@@ -11,11 +11,13 @@ from typing import Dict, Optional, Any
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 from dotenv import load_dotenv
+from colored_logger import get_colored_logger
 
 # Cargar variables de entorno
 load_dotenv('config_real_trading.env')
 
-logger = logging.getLogger(__name__)
+# Usar logger con colores
+logger = get_colored_logger(__name__)
 
 class RealTradingManager:
     """Gestor de trading real con validaciones de seguridad"""
@@ -140,7 +142,7 @@ class RealTradingManager:
                 if trading_tracker and order_id:
                     try:
                         # Obtener precio actual para calcular PnL final
-                        current_price = self.get_current_price()
+                        current_price = self.get_current_price('DOGEUSDT')
                         if current_price:
                             # Calcular comisiones estimadas
                             trade_value = current_price * position_data.get('quantity', 0)
@@ -169,6 +171,71 @@ class RealTradingManager:
                 
         except Exception as e:
             logger.error(f"❌ Error sincronizando con Binance: {e}")
+    
+    def sync_history_with_binance_orders(self, trading_tracker=None):
+        """Sincroniza el historial con las órdenes reales de Binance, cerrando órdenes que ya no existen"""
+        if not self.client or not trading_tracker:
+            logger.warning("⚠️ Cliente de Binance o TradingTracker no disponible para sincronización del historial")
+            return
+        
+        try:
+            # Obtener todas las órdenes abiertas de Binance
+            open_orders = self.client.get_open_orders(symbol='DOGEUSDT')
+            binance_order_ids = {str(order['orderId']) for order in open_orders}
+            
+            # Obtener órdenes abiertas del historial
+            history_open_orders = trading_tracker.get_open_orders()
+            orders_to_close = []
+            
+            for order in history_open_orders:
+                order_id = str(order.get('order_id', ''))
+                
+                if order_id and order_id not in binance_order_ids:
+                    # La orden ya no existe en Binance, debe cerrarse en el historial
+                    orders_to_close.append(order)
+                    logger.warning(f"⚠️ Orden {order_id} ya no existe en Binance, cerrando en historial")
+            
+            # Cerrar las órdenes que ya no existen en Binance
+            for order in orders_to_close:
+                order_id = str(order['order_id'])
+                position_id = order.get('position_id', '')
+                bot_type = order.get('bot_type', '')
+                
+                try:
+                    # Obtener precio actual para calcular PnL final
+                    current_price = self.get_current_price('DOGEUSDT')
+                    if current_price:
+                        # Calcular comisiones estimadas
+                        trade_value = current_price * order.get('quantity', 0)
+                        estimated_fees = trade_value * 0.001  # 0.1%
+                        
+                        # Cerrar la orden en el historial
+                        trading_tracker.close_order(
+                            order_id=order_id,
+                            close_price=current_price,
+                            fees_paid=estimated_fees
+                        )
+                        logger.info(f"🔒 Orden {order_id} cerrada en historial (no existe en Binance)")
+                        
+                        # Remover de posiciones activas si existe
+                        if position_id and bot_type and bot_type in self.active_positions:
+                            if position_id in self.active_positions[bot_type]:
+                                del self.active_positions[bot_type][position_id]
+                                logger.info(f"🗑️ Posición {position_id} removida de posiciones activas")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error cerrando orden {order_id} en historial: {e}")
+            
+            if orders_to_close:
+                logger.info(f"🔄 {len(orders_to_close)} órdenes del historial cerradas automáticamente")
+                # Sincronizar posiciones activas con el tracker después de cerrar órdenes
+                if trading_tracker:
+                    self.sync_active_positions_with_tracker(trading_tracker)
+            else:
+                logger.info("✅ Historial sincronizado con órdenes de Binance")
+                
+        except Exception as e:
+            logger.error(f"❌ Error sincronizando historial con Binance: {e}")
     
     def update_all_orders_status(self, trading_tracker=None):
         """Actualiza el estado de todas las órdenes abiertas con el precio actual"""
@@ -322,12 +389,15 @@ class RealTradingManager:
             checks['can_trade'] = False
             checks['reasons'].append(f"Límite de pérdida diaria alcanzado: ${self.daily_pnl:.2f}")
         
-        # Verificar tamaño de posición (con tolerancia de precisión)
+        # Verificar tamaño de posición (considerando apalancamiento)
+        leverage_multiplier = self.leverage if self.leverage > 1 else 1.0
+        max_position_size_with_leverage = self.max_position_size * leverage_multiplier
         position_tolerance = 0.001  # 0.1 centavos de tolerancia para errores de precisión
-        if trade_amount > self.max_position_size + position_tolerance:
+        
+        if trade_amount > max_position_size_with_leverage + position_tolerance:
             checks['can_trade'] = False
-            difference = trade_amount - self.max_position_size
-            checks['reasons'].append(f"Tamaño de posición excede límite: ${trade_amount:.6f} > ${self.max_position_size:.6f} (diferencia: ${difference:.6f})")
+            difference = trade_amount - max_position_size_with_leverage
+            checks['reasons'].append(f"Tamaño de posición excede límite: ${trade_amount:.6f} > ${max_position_size_with_leverage:.6f} (diferencia: ${difference:.6f})")
         
         # Verificar número de posiciones concurrentes con redistribución dinámica
         bot_positions = len(self.active_positions.get(bot_type, {}))
@@ -391,6 +461,7 @@ class RealTradingManager:
                     doge_balance = float(asset['free']) + float(asset['locked'])
             
             logger.info(f"💰 Balance disponible (Margin): {usdt_balance:.2f} USDT, {doge_balance:.2f} DOGE")
+            logger.info(f"⚡ Apalancamiento: {self.leverage}x - Poder de trading: ${usdt_balance * self.leverage:.2f} USDT")
         else:
             # Usar cuenta spot normal
             account_info = self.client.get_account()
@@ -402,11 +473,17 @@ class RealTradingManager:
             logger.info(f"💰 Balance disponible (Spot): {usdt_balance:.2f} USDT, {doge_balance:.2f} DOGE")
         
         if signal == 'BUY':
-            # Calcular cantidad necesaria en USDT
+            # Calcular cantidad necesaria en USDT (considerando apalancamiento)
+            leverage_multiplier = self.leverage if self.leverage > 1 else 1.0
+            
+            max_position_with_leverage = self.max_position_size * leverage_multiplier
+            
             if bot_type == 'conservative':
-                required_usdt = min(max(1.0, usdt_balance * 0.1), self.max_position_size)
+                base_usdt = min(max(1.0, usdt_balance * 0.1), self.max_position_size)
+                required_usdt = min(base_usdt * leverage_multiplier, max_position_with_leverage)
             else:  # aggressive
-                required_usdt = min(max(1.0, usdt_balance * 0.15), self.max_position_size)
+                base_usdt = min(max(1.0, usdt_balance * 0.15), self.max_position_size)
+                required_usdt = min(base_usdt * leverage_multiplier, max_position_with_leverage)
             
             # Verificar disponibilidad
             if usdt_balance < required_usdt:
@@ -433,15 +510,20 @@ class RealTradingManager:
                     'available_usdt': required_usdt,
                     'required_usdt': required_usdt
                 }
-            
+        
         else:  # SELL
-            # Calcular cantidad necesaria en DOGE (ajustado para rentabilidad)
-            max_doge_value = self.max_position_size / current_price
+            # Calcular cantidad necesaria en DOGE (considerando apalancamiento)
+            leverage_multiplier = self.leverage if self.leverage > 1 else 1.0
+            max_position_with_leverage = self.max_position_size * leverage_multiplier
+            max_doge_value = max_position_with_leverage / current_price
             min_doge_for_profit = 1.0  # Mínimo 1.0 DOGE para operaciones rentables
+            
             if bot_type == 'conservative':
-                required_doge = min(max(min_doge_for_profit, doge_balance * 0.1), max_doge_value)
+                base_doge = min(max(min_doge_for_profit, doge_balance * 0.1), max_doge_value)
+                required_doge = min(base_doge * leverage_multiplier, max_doge_value)
             else:  # aggressive
-                required_doge = min(max(min_doge_for_profit, doge_balance * 0.15), max_doge_value)
+                base_doge = min(max(min_doge_for_profit, doge_balance * 0.15), max_doge_value)
+                required_doge = min(base_doge * leverage_multiplier, max_doge_value)
             
             # Verificar disponibilidad
             if doge_balance < required_doge:
@@ -683,7 +765,7 @@ class RealTradingManager:
                     side=side,
                     type=order_type,
                     quantity=quantity,
-                    sideEffectType='MARGIN_BUY' if side == 'BUY' else 'MARGIN_SELL'
+                    sideEffectType='MARGIN_BUY' if side == 'BUY' else 'AUTO_REPAY'
                 )
                 logger.info(f"⚡ Orden de margen ejecutada ({self.leverage}x): {side} {quantity} {symbol}")
             else:

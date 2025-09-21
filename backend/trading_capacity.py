@@ -12,12 +12,29 @@ def get_trading_capacity():
     load_dotenv('config_real_trading.env')
     client = Client(os.getenv('BINANCE_API_KEY'), os.getenv('BINANCE_SECRET_KEY'))
     
-    # Obtener balance actual
-    account = client.get_account()
-    balances = {balance['asset']: float(balance['free']) for balance in account['balances']}
+    # Verificar si estamos usando margin trading
+    leverage = int(os.getenv('LEVERAGE', '1'))
     
-    usdt_balance = balances.get('USDT', 0.0)
-    doge_balance = balances.get('DOGE', 0.0)
+    if leverage > 1:
+        # Usar cuenta de margen
+        margin_account = client.get_margin_account()
+        
+        # Buscar balances en la cuenta de margen
+        usdt_balance = 0.0
+        doge_balance = 0.0
+        
+        for asset in margin_account.get('userAssets', []):
+            if asset['asset'] == 'USDT':
+                usdt_balance = float(asset['free']) + float(asset['locked'])
+            elif asset['asset'] == 'DOGE':
+                doge_balance = float(asset['free']) + float(asset['locked'])
+    else:
+        # Usar cuenta spot normal
+        account = client.get_account()
+        balances = {balance['asset']: float(balance['free']) for balance in account['balances']}
+        
+        usdt_balance = balances.get('USDT', 0.0)
+        doge_balance = balances.get('DOGE', 0.0)
     
     return {
         'can_buy': usdt_balance >= 1.0,  # Mínimo $1.00 USDT para BUY

@@ -1,6 +1,9 @@
 import asyncio
 import json
 import logging
+import subprocess
+import os
+import signal
 from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
@@ -16,6 +19,7 @@ from trading_tracker import initialize_tracker
 from real_trading_manager import real_trading_manager
 from trading_capacity import filter_signal_by_capacity
 import random
+import numpy as np
 
 # Inicializar el trading tracker con el cliente de Binance
 trading_tracker = initialize_tracker(real_trading_manager.client)
@@ -29,9 +33,162 @@ real_trading_manager.initialize_active_positions_from_tracker(trading_tracker)
 # Sincronizar posiciones activas con el estado real de Binance
 real_trading_manager.sync_with_binance_orders(trading_tracker)
 
+# Sincronizar historial con órdenes reales de Binance
+real_trading_manager.sync_history_with_binance_orders(trading_tracker)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Global variables to track bot processes
+bot_processes = {
+    'conservative': None,
+    'aggressive': None
+}
+
+def get_bot_process_status():
+    """Obtiene el estado actual de los procesos de los bots"""
+    status = {}
+    
+    for bot_type in ['conservative', 'aggressive']:
+        if bot_processes[bot_type] is not None:
+            try:
+                # Check if process is still running
+                poll_result = bot_processes[bot_type].poll()
+                if poll_result is None:
+                    status[bot_type] = True  # Process is running
+                else:
+                    status[bot_type] = False  # Process has terminated
+                    bot_processes[bot_type] = None
+            except:
+                status[bot_type] = False
+                bot_processes[bot_type] = None
+        else:
+            status[bot_type] = False
+    
+    return status
+
+def get_bot_process_info():
+    """Obtiene información detallada de los procesos de los bots"""
+    import psutil
+    
+    process_info = {}
+    
+    for bot_type in ['conservative', 'aggressive']:
+        if bot_processes[bot_type] is not None:
+            try:
+                # Check if process is still running
+                poll_result = bot_processes[bot_type].poll()
+                if poll_result is None:
+                    # Process is running, get detailed info
+                    pid = bot_processes[bot_type].pid
+                    try:
+                        process = psutil.Process(pid)
+                        process_info[bot_type] = {
+                            'active': True,
+                            'pid': pid,
+                            'memory_mb': round(process.memory_info().rss / 1024 / 1024, 1),
+                            'cpu_percent': round(process.cpu_percent(), 1),
+                            'create_time': process.create_time()
+                        }
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        process_info[bot_type] = {
+                            'active': False,
+                            'pid': None,
+                            'memory_mb': 0,
+                            'cpu_percent': 0,
+                            'create_time': None
+                        }
+                else:
+                    # Process has terminated
+                    process_info[bot_type] = {
+                        'active': False,
+                        'pid': None,
+                        'memory_mb': 0,
+                        'cpu_percent': 0,
+                        'create_time': None
+                    }
+                    bot_processes[bot_type] = None
+            except:
+                process_info[bot_type] = {
+                    'active': False,
+                    'pid': None,
+                    'memory_mb': 0,
+                    'cpu_percent': 0,
+                    'create_time': None
+                }
+        else:
+            process_info[bot_type] = {
+                'active': False,
+                'pid': None,
+                'memory_mb': 0,
+                'cpu_percent': 0,
+                'create_time': None
+            }
+    
+    return process_info
+
+def start_bot(bot_type: str):
+    """Inicia un bot específico"""
+    if bot_type not in ['conservative', 'aggressive']:
+        return False, f"Tipo de bot inválido: {bot_type}"
+    
+    # Check if bot is already running
+    if bot_processes[bot_type] is not None:
+        try:
+            if bot_processes[bot_type].poll() is None:
+                return False, f"Bot {bot_type} ya está ejecutándose"
+        except:
+            pass
+    
+    try:
+        # Determine which script to run
+        script_name = "sma_cross_bot.py" if bot_type == "conservative" else "aggressive_scalping_bot.py"
+        
+        # Start the bot process
+        process = subprocess.Popen(
+            ["python3", script_name],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            preexec_fn=os.setsid  # Create new process group
+        )
+        
+        bot_processes[bot_type] = process
+        logger.info(f"🚀 Bot {bot_type} iniciado con PID {process.pid}")
+        return True, f"Bot {bot_type} iniciado correctamente"
+        
+    except Exception as e:
+        logger.error(f"❌ Error iniciando bot {bot_type}: {e}")
+        return False, f"Error iniciando bot {bot_type}: {str(e)}"
+
+def stop_bot(bot_type: str):
+    """Detiene un bot específico"""
+    if bot_type not in ['conservative', 'aggressive']:
+        return False, f"Tipo de bot inválido: {bot_type}"
+    
+    if bot_processes[bot_type] is None:
+        return False, f"Bot {bot_type} no está ejecutándose"
+    
+    try:
+        # Terminate the process group
+        os.killpg(os.getpgid(bot_processes[bot_type].pid), signal.SIGTERM)
+        
+        # Wait a bit for graceful termination
+        try:
+            bot_processes[bot_type].wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            # Force kill if it doesn't terminate gracefully
+            os.killpg(os.getpgid(bot_processes[bot_type].pid), signal.SIGKILL)
+            bot_processes[bot_type].wait()
+        
+        logger.info(f"🛑 Bot {bot_type} detenido")
+        bot_processes[bot_type] = None
+        return True, f"Bot {bot_type} detenido correctamente"
+        
+    except Exception as e:
+        logger.error(f"❌ Error deteniendo bot {bot_type}: {e}")
+        return False, f"Error deteniendo bot {bot_type}: {str(e)}"
 
 def clean_data_for_json(data):
     """Convierte objetos datetime y otros tipos problemáticos a tipos JSON serializables"""
@@ -67,6 +224,80 @@ def clean_data_for_json(data):
         logger.error(f"❌ Error limpiando datos: {e} - Tipo: {type(data)} - Valor: {data}")
         return str(data)
 
+def calculate_technical_indicators(closes, klines_data):
+    """Calculate technical indicators for chart display"""
+    try:
+        # SMA parameters
+        FAST_WINDOW = 8
+        SLOW_WINDOW = 21
+        
+        # Calculate SMA
+        sma_fast = []
+        sma_slow = []
+        
+        for i in range(len(closes)):
+            if i >= FAST_WINDOW - 1:
+                sma_fast.append(np.mean(closes[i-FAST_WINDOW+1:i+1]))
+            else:
+                sma_fast.append(None)
+                
+            if i >= SLOW_WINDOW - 1:
+                sma_slow.append(np.mean(closes[i-SLOW_WINDOW+1:i+1]))
+            else:
+                sma_slow.append(None)
+        
+        # Calculate RSI
+        rsi_values = []
+        for i in range(len(closes)):
+            if i >= 14:
+                window_closes = closes[i-14:i+1]
+                deltas = np.diff(window_closes)
+                gains = np.where(deltas > 0, deltas, 0)
+                losses = np.where(deltas < 0, -deltas, 0)
+                
+                avg_gains = np.mean(gains)
+                avg_losses = np.mean(losses)
+                
+                if avg_losses == 0:
+                    rsi_values.append(100)
+                else:
+                    rs = avg_gains / avg_losses
+                    rsi = 100 - (100 / (1 + rs))
+                    rsi_values.append(rsi)
+            else:
+                rsi_values.append(None)
+        
+        # Extract volumes and timestamps
+        volumes = [kline['volume'] for kline in klines_data]
+        timestamps = [kline['time'] for kline in klines_data]
+        
+        # Filter out None values and align arrays
+        valid_indices = []
+        for i in range(len(closes)):
+            if (sma_fast[i] is not None and 
+                sma_slow[i] is not None and 
+                rsi_values[i] is not None):
+                valid_indices.append(i)
+        
+        # Return only valid data
+        return {
+            'sma_fast': [sma_fast[i] for i in valid_indices],
+            'sma_slow': [sma_slow[i] for i in valid_indices],
+            'rsi': [rsi_values[i] for i in valid_indices],
+            'volume': [volumes[i] for i in valid_indices],
+            'timestamps': [timestamps[i] for i in valid_indices]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculating technical indicators: {e}")
+        return {
+            'sma_fast': [],
+            'sma_slow': [],
+            'rsi': [],
+            'volume': [],
+            'timestamps': []
+        }
+
 def map_order_to_history_format(order_record):
     """Convierte un registro de orden al formato esperado por el frontend"""
     status = order_record.get('status', 'OPEN')
@@ -76,10 +307,10 @@ def map_order_to_history_format(order_record):
     if exit_price is None and status in ['OPEN', 'UPDATED']:
         exit_price = order_record.get('current_price')
     
-    # Para órdenes abiertas, mostrar "En curso" en lugar de fecha inválida
+    # Para órdenes abiertas, usar null para close_time (no mostrar fecha)
     close_time = order_record.get('close_time')
     if close_time is None and status in ['OPEN', 'UPDATED']:
-        close_time = "En curso"  # Texto claro en lugar de fecha inválida
+        close_time = None  # No mostrar fecha para posiciones abiertas
     
     # Calcular comisiones estimadas para órdenes abiertas
     fees_paid = order_record.get('fees_paid', 0.0)
@@ -117,6 +348,7 @@ def map_order_to_history_format(order_record):
         'total_fees': fees_paid,
         'close_reason': 'Take Profit' if pnl_net > 0 else 'Stop Loss' if status == 'CLOSED' else 'En curso',
         'status': status,
+        'is_closed': status not in ['OPEN', 'UPDATED'],  # Campo para identificar si está cerrada
         'duration_minutes': order_record.get('duration_minutes', 0)
     }
 
@@ -289,7 +521,7 @@ async def get_trading_status():
 async def get_klines_endpoint(
     symbol: str = Query(default=SYMBOL, description="Trading symbol"),
     interval: str = Query(default=INTERVAL, description="Candle interval"),
-    limit: int = Query(default=100, description="Number of candles to return")
+    limit: int = Query(default=500, description="Number of candles to return")
 ):
     """Get candlestick data for charting"""
     try:
@@ -356,7 +588,7 @@ async def get_metrics():
         
         # Get current market data
         try:
-            closes = get_closes(SYMBOL, INTERVAL, limit=100)
+            closes = get_closes(SYMBOL, INTERVAL, limit=500)
             current_price = closes[-1] if len(closes) > 0 else None
             signal = generate_signal(closes) if len(closes) > 0 else "HOLD"
         except Exception as e:
@@ -509,7 +741,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
             position_info = clean_data_for_json(position_info)
             
             # Get candlestick data
-            raw_klines = get_klines(SYMBOL, interval, limit=50)
+            raw_klines = get_klines(SYMBOL, interval, limit=500)
             formatted_klines = []
             for kline in raw_klines:
                 if len(kline) >= 6:
@@ -555,6 +787,17 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 }),
                 websocket
             )
+            
+            # Send initial technical indicators
+            if len(closes) > 0:
+                indicators_data = calculate_technical_indicators(closes, formatted_klines)
+                await manager.send_personal_message(
+                    json.dumps({
+                        "type": "indicators",
+                        "data": indicators_data
+                    }),
+                    websocket
+                )
         except Exception as e:
             logger.warning(f"Error sending initial data: {e}")
         
@@ -569,7 +812,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                     break
                 
                 # Get updated price data
-                closes = get_closes(SYMBOL, interval, limit=100)
+                closes = get_closes(SYMBOL, interval, limit=500)
                 current_price = closes[-1] if len(closes) > 0 else None
                 
                 # Get updated bot signals (solo para bots activos)
@@ -594,6 +837,9 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 
                 # Actualizar estado de todas las órdenes abiertas
                 real_trading_manager.update_all_orders_status(trading_tracker)
+                
+                # Sincronizar historial con órdenes reales de Binance (cada 10 segundos)
+                real_trading_manager.sync_history_with_binance_orders(trading_tracker)
                 
                 # Verificar y cerrar posiciones por take profit/stop loss
                 real_trading_manager.check_and_close_positions(trading_tracker, current_price)
@@ -667,7 +913,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 position_info = clean_data_for_json(position_info)
                 
                 # Get updated candlestick data
-                raw_klines = get_klines(SYMBOL, interval, limit=50)
+                raw_klines = get_klines(SYMBOL, interval, limit=500)
                 formatted_klines = []
                 for kline in raw_klines:
                     if len(kline) >= 6:
@@ -696,24 +942,35 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 
                 # Send updated candlestick data
                 await manager.send_personal_message(
-                    json.dumps({
-                        "type": "candles",
-                        "data": {
-                            "candles": formatted_klines,
-                            "symbol": SYMBOL,
-                            "interval": interval,
-                            "timestamp": datetime.now().isoformat(),
-                            "bot_signals": {
-                                "conservative": conservative_signal,
-                                "aggressive": aggressive_signal,
-                                "current_price": current_price,
-                                "positions": position_info
-                            }
+                json.dumps({
+                    "type": "candles",
+                    "data": {
+                        "candles": formatted_klines,
+                        "symbol": SYMBOL,
+                        "interval": interval,
+                        "timestamp": datetime.now().isoformat(),
+                        "bot_signals": {
+                            "conservative": conservative_signal,
+                            "aggressive": aggressive_signal,
+                            "current_price": current_price,
+                            "positions": position_info
                         }
-                    }),
-                    websocket
-                )
-                
+                    }
+                }),
+                websocket
+            )
+            
+                # Send updated technical indicators
+                if len(closes) > 0:
+                    indicators_data = calculate_technical_indicators(closes, formatted_klines)
+                    await manager.send_personal_message(
+                        json.dumps({
+                            "type": "indicators",
+                            "data": indicators_data
+                        }),
+                        websocket
+                    )
+                    
             except Exception as e:
                 logger.error(f"Error in WebSocket loop: {e}")
                 break
@@ -853,6 +1110,12 @@ async def get_order_status(order_id: str):
 async def get_bot_status():
     """Obtiene el estado de todos los bots"""
     try:
+        # Get real process status
+        process_status = get_bot_process_status()
+        
+        # Update the bot status with real process information
+        real_trading_manager.bot_status.update(process_status)
+        
         status = real_trading_manager.get_trading_status()
         return {
             "status": "success", 
@@ -865,6 +1128,46 @@ async def get_bot_status():
     except Exception as e:
         logger.error(f"Error getting bot status: {e}")
         return {"status": "error", "message": str(e)}
+
+@app.get("/bot/process-info")
+async def get_bot_process_info_endpoint():
+    """Obtiene información detallada de los procesos de los bots"""
+    try:
+        process_info = get_bot_process_info()
+        return {
+            "status": "success",
+            "data": process_info
+        }
+    except Exception as e:
+        logger.error(f"Error getting bot process info: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/bot-control/{bot_type}/{action}")
+async def control_bot(bot_type: str, action: str):
+    """Controla el inicio/parada de los bots"""
+    if action not in ['start', 'stop']:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Acción inválida. Use 'start' o 'stop'"}
+        )
+    
+    if action == 'start':
+        success, message = start_bot(bot_type)
+    else:
+        success, message = stop_bot(bot_type)
+    
+    if success:
+        # Update bot status
+        real_trading_manager.bot_status[bot_type] = (action == 'start')
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "message": message}
+        )
+    else:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": message}
+        )
 
 @app.get("/bot/limits")
 async def get_dynamic_limits():

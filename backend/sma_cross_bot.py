@@ -9,20 +9,20 @@ import datetime
 from binance.um_futures import UMFutures  # Cliente oficial USDT-M Futures
 from metrics_logger import MetricsLogger, Trade
 
-# ------------------ CONFIG / PARÁMETROS ------------------
+# ------------------ CONFIG / PARÁMETROS OPTIMIZADOS ------------------
 load_dotenv()
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
 
 SYMBOL = "DOGEUSDT"  # Dogecoin - NOTIONAL mínimo $1.00
 INTERVAL = "1m"
-FAST_WINDOW = 5
-SLOW_WINDOW = 20
+FAST_WINDOW = 8      # Optimizado para DOGE (era 5)
+SLOW_WINDOW = 21     # Optimizado para DOGE (era 20)
 CAPITAL = 1000
 RISK_PER_TRADE = 0.005  # 0.5% - Más conservador para DOGE
-THRESHOLD = -0.0001  # Muy sensible para generar más señales
+THRESHOLD = 0.0005   # 0.05% - Menos sensible, más preciso (era -0.0001)
 
-SLEEP_SECONDS = 30
+SLEEP_SECONDS = 5    # Verificación ultra-rápida para scalping agresivo
 
 # Estado
 POSITION = None
@@ -36,21 +36,27 @@ if API_KEY is None or API_SECRET is None:
     logging.error("Faltan BINANCE_API_KEY / BINANCE_API_SECRET en .env. Salida.")
     exit(1)
 
-client = UMFutures(key=API_KEY, secret=API_SECRET, base_url="https://testnet.binancefuture.com")
+client = UMFutures(key=API_KEY, secret=API_SECRET)
 logger = MetricsLogger(filepath="logs/trades.csv")
 
 
 # ------------------ FUNCIONES AUX ------------------
-def get_klines(symbol, interval, limit=100):
+def get_klines(symbol, interval, limit=500):
     resp = client.klines(symbol=symbol, interval=interval, limit=limit)
     return resp  # Return full candlestick data
 
 
-def get_closes(symbol, interval, limit=100):
+def get_closes(symbol, interval, limit=500):
     """Get only closing prices for signal generation"""
     resp = client.klines(symbol=symbol, interval=interval, limit=limit)
     closes = [float(candle[4]) for candle in resp]
     return np.array(closes)
+
+def get_volumes(symbol, interval, limit=500):
+    """Get volume data for signal confirmation"""
+    resp = client.klines(symbol=symbol, interval=interval, limit=limit)
+    volumes = [float(candle[5]) for candle in resp]
+    return np.array(volumes)
 
 
 def compute_sma(series, window):
@@ -75,7 +81,38 @@ def align_smas(sma_fast, sma_slow):
     return sma_fast, sma_slow
 
 
-def generate_signal(closes):
+def calculate_rsi(prices, window=14):
+    """Calcula el RSI para filtrar señales"""
+    if len(prices) < window + 1:
+        return None
+    
+    deltas = np.diff(prices)
+    gains = np.where(deltas > 0, deltas, 0)
+    losses = np.where(deltas < 0, -deltas, 0)
+    
+    avg_gains = np.mean(gains[-window:])
+    avg_losses = np.mean(losses[-window:])
+    
+    if avg_losses == 0:
+        return 100
+    
+    rs = avg_gains / avg_losses
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+def calculate_volume_ma(volumes, window=20):
+    """Calcula la media móvil del volumen (VMA)"""
+    if len(volumes) < window:
+        return None
+    return np.mean(volumes[-window:])
+
+def is_volume_confirmed(current_volume, avg_volume, threshold=1.2):
+    """Verifica si el volumen actual confirma la señal"""
+    if avg_volume is None or avg_volume == 0:
+        return True  # Si no hay datos de volumen, permitir la señal
+    return current_volume > (avg_volume * threshold)
+
+def generate_signal(closes, volumes=None):
     sma_fast = compute_sma(closes, FAST_WINDOW)
     sma_slow = compute_sma(closes, SLOW_WINDOW)
 
@@ -89,15 +126,27 @@ def generate_signal(closes):
     prev_fast, curr_fast = sma_fast[-2], sma_fast[-1]
     prev_slow, curr_slow = sma_slow[-2], sma_slow[-1]
 
-    # Normalizamos diferencias relativas para aplicar threshold si se desea
+    # Normalizamos diferencias relativas para aplicar threshold
     prev_diff = (prev_fast - prev_slow) / prev_slow if prev_slow != 0 else 0
     curr_diff = (curr_fast - curr_slow) / curr_slow if curr_slow != 0 else 0
 
-    # Cruce alcista con umbral
-    if prev_diff <= 0 and curr_diff > THRESHOLD:
+    # Calcular RSI para filtrar señales
+    rsi = calculate_rsi(closes)
+    if rsi is None:
+        return "HOLD"
+
+    # Calcular confirmación de volumen si está disponible
+    volume_confirmed = True
+    if volumes is not None and len(volumes) > 0:
+        current_volume = volumes[-1]
+        avg_volume = calculate_volume_ma(volumes, window=20)
+        volume_confirmed = is_volume_confirmed(current_volume, avg_volume, threshold=1.2)
+
+    # Cruce alcista con umbral, filtro RSI y confirmación de volumen
+    if prev_diff <= 0 and curr_diff > THRESHOLD and rsi < 70 and volume_confirmed:
         return "BUY"
-    # Cruce bajista
-    if prev_diff >= 0 and curr_diff < -THRESHOLD:
+    # Cruce bajista con umbral, filtro RSI y confirmación de volumen
+    if prev_diff >= 0 and curr_diff < -THRESHOLD and rsi > 30 and volume_confirmed:
         return "SELL"
     return "HOLD"
 
@@ -160,13 +209,31 @@ def main_loop(use_synthetic=False):
     
     while True:
         try:
-            closes = get_closes(SYMBOL, INTERVAL, limit=100)
-            signal = generate_signal(closes)
+            closes = get_closes(SYMBOL, INTERVAL, limit=500)
+            volumes = get_volumes(SYMBOL, INTERVAL, limit=500)
+            signal = generate_signal(closes, volumes)
             last_price = closes[-1]
             now = datetime.datetime.utcnow().isoformat()
 
-            debug_print(closes)
-            logging.info(f"Señal: {signal} | Precio: {last_price:.2f} | Posición: {POSITION}")
+            # Mostrar indicadores técnicos
+            sma_fast = compute_sma(closes, FAST_WINDOW)
+            sma_slow = compute_sma(closes, SLOW_WINDOW)
+            sma_fast, sma_slow = align_smas(sma_fast, sma_slow)
+            
+            if sma_fast is not None and sma_slow is not None:
+                rsi = calculate_rsi(closes)
+                strength = (sma_fast[-1] - sma_slow[-1]) / sma_slow[-1] if sma_slow[-1] != 0 else 0
+                
+                # Calcular datos de volumen
+                current_volume = volumes[-1] if len(volumes) > 0 else 0
+                avg_volume = calculate_volume_ma(volumes, window=20)
+                volume_ratio = current_volume / avg_volume if avg_volume and avg_volume > 0 else 1.0
+                
+                logging.info(f"📊 Indicadores: SMA Fast: {sma_fast[-1]:.5f} | SMA Slow: {sma_slow[-1]:.5f} | RSI: {rsi:.1f} | Fuerza: {strength:.4f}")
+                logging.info(f"📈 Volumen: Actual: {current_volume:.0f} | Promedio: {avg_volume:.0f} | Ratio: {volume_ratio:.2f}x")
+                logging.info(f"🎯 Señal: {signal} | Precio: ${last_price:.5f} | Posición: {POSITION}")
+            else:
+                logging.info(f"🎯 Señal: {signal} | Precio: ${last_price:.5f} | Posición: {POSITION}")
 
             if signal == "BUY" and POSITION != "LONG":
                 qty = position_size(last_price)
