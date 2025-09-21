@@ -1,16 +1,14 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { WebSocketContext } from '../contexts/WebSocketContext'
-import { useSocket } from '../hooks/useSocket'
+// import { useSocket } from '../hooks/useSocket'
 import Accordion from './Accordion'
 import AccountBalance from './AccountBalance'
 import ActivePositions from './ActivePositions'
-import BotControl from './BotControl'
 import BotSignals from './BotSignals'
 import CandlestickChart from './CandlestickChart'
 import MarginInfo from './MarginInfo'
 import PlugAndPlayBots from './PlugAndPlayBots'
 import PositionHistory from './PositionHistory'
-import TimeframeSelector from './TimeframeSelector'
 import Toast from './Toast'
 import WebSocketStatus from './WebSocketStatus'
 
@@ -23,7 +21,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
   // console.log('🚀 AppContent: Componente montado') // Comentado para reducir spam
 
   // Estados locales
-  const [botSignals, setBotSignals] = useState<any[]>([])
+  const [botSignals, setBotSignals] = useState<any>(null)
   const [positionHistory, setPositionHistory] = useState<any[]>([])
   const [activePositions, setActivePositions] = useState<any[]>([])
   const [currentPrice, setCurrentPrice] = useState<number>(0)
@@ -37,10 +35,10 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
   const [indicatorsData, setIndicatorsData] = useState<any>({})
 
   // Hook useSocket para enviar mensajes (reutiliza la instancia existente)
-  const socket = useSocket({
-    autoConnect: false // No auto-conectar aquí, ya está conectado en AppSetup
-    // No necesitamos onMessage aquí porque AppSetup ya maneja los mensajes
-  })
+  // const socket = useSocket({
+  //   autoConnect: false // No auto-conectar aquí, ya está conectado en AppSetup
+  //   // No necesitamos onMessage aquí porque AppSetup ya maneja los mensajes
+  // })
 
   // Contexto WebSocket (mantener para compatibilidad)
   const ctx = useContext(WebSocketContext)
@@ -82,6 +80,12 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
         console.log('📊 AppContent: Estructura de datos de velas desde contexto:', data.data)
         setCandlesData(data.data?.candles || [])
         console.log('📊 AppContent: setCandlesData llamado con:', data.data?.candles || [])
+
+        // Procesar bot_signals si están disponibles
+        if (data.data?.bot_signals) {
+          console.log('🤖 AppContent: Procesando bot_signals:', data.data.bot_signals)
+          setBotSignals(data.data.bot_signals)
+        }
       } else if (data.type === 'indicators') {
         // Datos de indicadores para el gráfico
         console.log(
@@ -97,23 +101,23 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     }
   }, [ctx?.lastMessage])
 
-  // Función para enviar mensajes usando el socket singleton
-  const sendMessage = (message: any) => {
-    if (socket.isConnected) {
-      // Enviar mensaje real a través del WebSocket
-      socket.send(JSON.stringify(message))
-      // console.log('📤 AppContent: Mensaje enviado a través del WebSocket:', message) // Comentado para reducir spam
+  // Función para enviar mensajes usando el socket singleton (mantenida para futuras funcionalidades)
+  // const sendMessage = (message: any) => {
+  //   if (socket.isConnected) {
+  //     // Enviar mensaje real a través del WebSocket
+  //     socket.send(JSON.stringify(message))
+  //     // console.log('📤 AppContent: Mensaje enviado a través del WebSocket:', message) // Comentado para reducir spam
 
-      // También actualizar el contexto para mantener compatibilidad
-      if (ctx) {
-        ctx.addMessage('sent', message)
-      }
-    } else {
-      // console.warn('⚠️ AppContent: No se puede enviar mensaje, WebSocket no conectado') // Comentado para reducir spam
-      setToastMessage('No se puede enviar mensaje: WebSocket no conectado')
-      setShowToast(true)
-    }
-  }
+  //     // También actualizar el contexto para mantener compatibilidad
+  //     if (ctx) {
+  //       ctx.addMessage('sent', message)
+  //     }
+  //   } else {
+  //     // console.warn('⚠️ AppContent: No se puede enviar mensaje, WebSocket no conectado') // Comentado para reducir spam
+  //     setToastMessage('No se puede enviar mensaje: WebSocket no conectado')
+  //     setShowToast(true)
+  //   }
+  // }
 
   // Función para cambiar timeframe
   const handleTimeframeChange = (newTimeframe: string) => {
@@ -156,23 +160,27 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
       <main className="app-main">
         {/* Saldo de Cuenta */}
         <Accordion title="Saldo de Cuenta" defaultExpanded={true} storageKey="account-balance">
-          <AccountBalance currentPrice={currentPrice} balance={accountBalance} />
+          <AccountBalance currentPrice={currentPrice} balance={accountBalance} symbol="DOGEUSDT" />
         </Accordion>
 
         {/* Señales de Trading */}
         <Accordion title="Señales de Trading" defaultExpanded={true} storageKey="trading-signals">
           <BotSignals
-            signals={{
-              conservative: 'N/A',
-              aggressive: 'N/A',
-              current_price: currentPrice,
-              symbol: 'DOGEUSDT',
-              positions: {
-                conservative: {},
-                aggressive: {},
-                last_signals: botSignals
-              }
-            }}
+            signals={
+              botSignals
+                ? {
+                    conservative: botSignals.conservative || 'N/A',
+                    aggressive: botSignals.aggressive || 'N/A',
+                    current_price: botSignals.current_price || currentPrice,
+                    symbol: 'DOGEUSDT',
+                    positions: botSignals.positions || {
+                      conservative: {},
+                      aggressive: {},
+                      last_signals: botSignals
+                    }
+                  }
+                : null
+            }
           />
         </Accordion>
 
@@ -184,25 +192,9 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
           <ActivePositions positions={activePositions as any} />
         </Accordion>
 
-        {/* Control de Bots */}
-        <Accordion title="Control de Bots" defaultExpanded={true} storageKey="bot-control">
-          <BotControl botType="conservative" isActive={false} onToggle={() => {}} />
-        </Accordion>
-
         {/* Información de Margen */}
         <Accordion title="Información de Margen" defaultExpanded={false} storageKey="margin-info">
           <MarginInfo marginInfo={marginInfo} />
-        </Accordion>
-
-        {/* Selector de Timeframe */}
-        <Accordion
-          title="Selector de Timeframe"
-          defaultExpanded={false}
-          storageKey="timeframe-selector">
-          <TimeframeSelector
-            selectedTimeframe={timeframe}
-            onTimeframeChange={handleTimeframeChange}
-          />
         </Accordion>
 
         {/* Gráfico de Velas */}
@@ -213,6 +205,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
             signals={botSignals}
             candlesData={candlesData}
             indicatorsData={indicatorsData}
+            onTimeframeChange={handleTimeframeChange}
           />
         </Accordion>
 

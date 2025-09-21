@@ -1255,7 +1255,7 @@
 
 .entry-price,
 .current-price {
-  font-size: 0.6rem;
+  font-size: 0.75rem;
   color: #ccc;
 }
 
@@ -1747,6 +1747,59 @@
   border-radius: 0;
   padding: 0;
   margin-bottom: 0;
+}
+
+/* Bot Toggle Buttons dentro de las cajas */
+.bot-toggle-container {
+  margin: 10px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.bot-toggle-button {
+  padding: 6px 12px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 60px;
+  justify-content: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bot-toggle-button.active {
+  background-color: var(--binance-red);
+  border-color: var(--binance-red);
+  color: white;
+}
+
+.bot-toggle-button.active:hover {
+  background-color: #e63946;
+  border-color: #e63946;
+}
+
+.bot-toggle-button.inactive {
+  background-color: var(--binance-green);
+  border-color: var(--binance-green);
+  color: white;
+}
+
+.bot-toggle-button.inactive:hover {
+  background-color: #00b366;
+  border-color: #00b366;
+}
+
+.bot-toggle-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--binance-gray);
+  border-color: var(--binance-gray);
 }
 
 .margin-info h3 {
@@ -2400,15 +2453,224 @@
 .info-content {
   padding: 6px 8px;
   background: transparent;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  font-size: 0.75rem;
+  line-height: 1;
 }
 
 .info-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 3px;
-  font-size: 0.5rem;
+  margin-bottom: 0;
+  font-size: 0.75rem;
   line-height: 1;
+}
+
+.info-item .info-label,
+.info-item .info-value {
+  font-size: 0.75rem;
+}
+
+/* Balance Cards Container */
+.balance-cards-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Balance Card */
+.balance-card {
+  background: var(--binance-dark);
+  border: 1px solid var(--binance-gray);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.balance-card:hover {
+  border-color: var(--binance-light-gray);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Card Header */
+.card-header {
+  background: var(--binance-gray);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--binance-light-gray);
+}
+
+.card-icon {
+  font-size: 14px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--binance-white);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Card Content */
+.card-content {
+  padding: 8px 12px;
+}
+
+.card-content .balance-row {
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+}
+
+.card-content .balance-row:last-child {
+  margin-bottom: 0;
+}
+
+/* Bot Cards */
+.bot-card {
+  background: var(--binance-dark);
+  border: 1px solid var(--binance-gray);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  margin-bottom: 12px;
+}
+
+.bot-card:hover {
+  border-color: var(--binance-light-gray);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Bot Card Header */
+.bot-card-header {
+  background: var(--binance-gray);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--binance-light-gray);
+}
+
+.bot-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bot-header-right {
+  display: flex;
+  align-items: center;
+}
+
+/* Bot Card Content */
+.bot-card-content {
+  padding: 1rem;
+}
+
+.bot-card-content .signal-value {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.bot-card-content .signal-description {
+  font-size: 12px;
+  color: var(--binance-text);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+/* Margin Cards Container */
+.margin-cards-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Margin Card */
+.margin-card {
+  background: var(--binance-dark);
+  border: 1px solid var(--binance-gray);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.margin-card:hover {
+  border-color: var(--binance-light-gray);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.margin-card.highlight {
+  border-color: var(--binance-yellow);
+}
+
+.margin-card.highlight:hover {
+  border-color: var(--binance-yellow-light);
+  box-shadow: 0 2px 8px rgba(240, 185, 11, 0.2);
+}
+
+/* Margin Card Content */
+.margin-card .card-content {
+  padding: 1rem;
+}
+
+.margin-card .margin-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+}
+
+.margin-card .margin-item:last-child {
+  margin-bottom: 0;
+}
+
+.margin-card .margin-label {
+  color: var(--binance-text);
+  font-weight: 500;
+}
+
+.margin-card .margin-value {
+  color: var(--binance-white);
+  font-weight: 600;
+}
+
+.margin-card .margin-value.leverage {
+  color: var(--binance-yellow);
+}
+
+.margin-card .margin-value.trading-power {
+  color: var(--binance-green);
+  font-size: 1rem;
+}
+
+.margin-card .margin-note {
+  font-size: 0.7rem;
+  color: var(--binance-text);
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(240, 185, 11, 0.1);
+  border-radius: 4px;
+  border-left: 3px solid var(--binance-yellow);
+}
+
+.margin-card .margin-warning {
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  text-align: center;
 }
 
 .info-item:last-child {

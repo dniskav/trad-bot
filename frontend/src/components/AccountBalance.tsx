@@ -12,9 +12,14 @@ interface AccountBalanceProps {
     total_balance_usdt: number
   }
   currentPrice?: number
+  symbol?: string
 }
 
-const AccountBalance: React.FC<AccountBalanceProps> = ({ balance, currentPrice }) => {
+const AccountBalance: React.FC<AccountBalanceProps> = ({
+  balance,
+  currentPrice,
+  symbol = 'DOGEUSDT'
+}) => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -74,64 +79,89 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({ balance, currentPrice }
         <span className="balance-title">Saldo de Cuenta</span>
       </div>
 
-      <div className="balance-content">
-        <div className="balance-row">
-          <span className="balance-label">Saldo Inicial:</span>
-          <span className="balance-value initial">{formatCurrency(balance.initial_balance)}</span>
+      <div className="balance-cards-container">
+        {/* Card 1: Balance Principal */}
+        <div className="balance-card">
+          <div className="card-header">
+            <span className="card-icon">💰</span>
+            <span className="card-title">Balance</span>
+          </div>
+          <div className="card-content">
+            <div className="balance-row">
+              <span className="balance-label">Saldo Inicial:</span>
+              <span className="balance-value initial">
+                {formatCurrency(balance.initial_balance)}
+              </span>
+            </div>
+
+            <div className="balance-row">
+              <span className="balance-label">Saldo Actual:</span>
+              <span className="balance-value current" style={{ color: getBalanceColor() }}>
+                {formatCurrency(balance.current_balance)}
+              </span>
+            </div>
+
+            <div className="balance-row">
+              <span className="balance-label">USDT Disponible:</span>
+              <span className="balance-value usdt">{formatCurrency(balance.usdt_balance)}</span>
+            </div>
+
+            <div className="balance-row">
+              <span className="balance-label">DOGE Disponible:</span>
+              <span className="balance-value doge">{formatDoge(balance.doge_balance)} DOGE</span>
+            </div>
+
+            <div className="balance-row">
+              <span className="balance-label">Total en USDT:</span>
+              <span className="balance-value total-usdt">
+                {formatCurrency(balance.total_balance_usdt)}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="balance-row">
-          <span className="balance-label">Saldo Actual:</span>
-          <span className="balance-value current" style={{ color: getBalanceColor() }}>
-            {formatCurrency(balance.current_balance)}
-          </span>
-        </div>
+        {/* Card 2: Precios y PnL */}
+        <div className="balance-card">
+          <div className="card-header">
+            <span className="card-icon">📊</span>
+            <span className="card-title">Precios & PnL</span>
+          </div>
+          <div className="card-content">
+            <div className="balance-row">
+              <span className="balance-label">Precio Actual ({symbol}):</span>
+              <span className="balance-value current-price">
+                {currentPrice ? `$${currentPrice.toFixed(5)}` : 'Calculando...'}
+              </span>
+            </div>
 
-        <div className="balance-row">
-          <span className="balance-label">USDT Disponible:</span>
-          <span className="balance-value usdt">{formatCurrency(balance.usdt_balance)}</span>
-        </div>
+            <div className="balance-row">
+              <span className="balance-label">1 USD = DOGE:</span>
+              <span className="balance-value doge-rate">
+                {currentPrice ? `${formatDoge(1 / currentPrice)} DOGE` : 'Calculando...'}
+              </span>
+            </div>
 
-        <div className="balance-row">
-          <span className="balance-label">DOGE Disponible:</span>
-          <span className="balance-value doge">{formatDoge(balance.doge_balance)} DOGE</span>
-        </div>
+            <div className="balance-row">
+              <span className="balance-label">PnL Total:</span>
+              <span className="balance-value pnl" style={{ color: getBalanceColor() }}>
+                {formatCurrency(balance.total_pnl)}
+              </span>
+            </div>
 
-        <div className="balance-row">
-          <span className="balance-label">1 USD = DOGE:</span>
-          <span className="balance-value doge-rate">
-            {currentPrice ? `${formatDoge(1 / currentPrice)} DOGE` : 'Calculando...'}
-          </span>
-        </div>
+            <div className="balance-row">
+              <span className="balance-label">Cambio:</span>
+              <span className="balance-value change" style={{ color: getBalanceColor() }}>
+                {formatPercentage(balance.balance_change_pct)}
+              </span>
+            </div>
 
-        <div className="balance-row">
-          <span className="balance-label">Total en USDT:</span>
-          <span className="balance-value total-usdt">
-            {formatCurrency(balance.total_balance_usdt)}
-          </span>
-        </div>
-
-        <div className="balance-row">
-          <span className="balance-label">PnL Total:</span>
-          <span className="balance-value pnl" style={{ color: getBalanceColor() }}>
-            {formatCurrency(balance.total_pnl)}
-          </span>
-        </div>
-
-        <div className="balance-row">
-          <span className="balance-label">Cambio:</span>
-          <span className="balance-value change" style={{ color: getBalanceColor() }}>
-            {formatPercentage(balance.balance_change_pct)}
-          </span>
-        </div>
-      </div>
-
-      <div className="balance-summary">
-        <div className="summary-item">
-          <span className="summary-label">Estado:</span>
-          <span className="summary-value" style={{ color: getBalanceColor() }}>
-            {balance.is_profitable ? '🟢 Rentable' : '🔴 En Pérdida'}
-          </span>
+            <div className="balance-row">
+              <span className="balance-label">Estado:</span>
+              <span className="balance-value status" style={{ color: getBalanceColor() }}>
+                {balance.is_profitable ? '🟢 Rentable' : '🔴 En Pérdida'}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import BotControl from './BotControl'
 
 interface BotSignalsProps {
   signals: {
@@ -16,37 +15,11 @@ interface BotSignalsProps {
 }
 
 const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
+  // TODOS LOS HOOKS DEBEN IR AL INICIO - ANTES DE CUALQUIER RETURN CONDICIONAL
   const [botStatus, setBotStatus] = useState({
     conservative: false,
     aggressive: false
   })
-
-  // Si no hay signals, mostrar loading
-  if (!signals) {
-    return (
-      <div className="bot-signals">
-        <div className="bot-signals-header">
-          <h3>Señales de Trading</h3>
-        </div>
-        <div className="bot-status">
-          <div className="price-display">
-            <span className="price-label">Precio Actual:</span>
-            <span className="price-value">Cargando...</span>
-          </div>
-          <div className="signals-container">
-            <div className="signal-box conservative">
-              <span className="signal-label">Conservador:</span>
-              <span className="signal-value">Cargando...</span>
-            </div>
-            <div className="signal-box aggressive">
-              <span className="signal-label">Agresivo:</span>
-              <span className="signal-value">Cargando...</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   const [dynamicLimits, setDynamicLimits] = useState({
     total_max_positions: 10,
@@ -130,30 +103,58 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     return () => clearInterval(interval)
   }, [])
 
-  const handleBotToggle = async (botType: string, newStatus: boolean) => {
-    setBotStatus((prev) => ({
-      ...prev,
-      [botType]: newStatus
-    }))
+  // Actualizar tiempo de ejecución cada segundo
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Forzar re-render para actualizar el tiempo de ejecución
+      setBotProcessInfo((prev) => ({ ...prev }))
+    }, 1000)
 
-    // Refresh dynamic limits after bot status change
+    return () => clearInterval(interval)
+  }, [])
+
+  // Return condicional después de todos los hooks
+  if (!signals) {
+    return (
+      <div className="bot-signals">
+        <h3>🤖 Trading Bot Signals</h3>
+        <div className="bot-status">
+          <p>Esperando datos del bot...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const handleBotToggleDirect = async (botType: string) => {
     try {
-      const response = await fetch('/bot/status')
+      const action = botStatus[botType as keyof typeof botStatus] ? 'stop' : 'start'
+      const response = await fetch(`/api/bot-control/${botType}/${action}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
       const result = await response.json()
-      if (
-        result.status === 'success' &&
-        result.data.legacy_bots &&
-        result.data.legacy_bots.dynamic_limits
-      ) {
-        setDynamicLimits(result.data.legacy_bots.dynamic_limits)
+
+      if (result.success) {
+        setBotStatus((prev) => ({
+          ...prev,
+          [botType]: !prev[botType as keyof typeof prev]
+        }))
+        console.log(`✅ ${result.message}`)
+      } else {
+        console.error('❌ Error:', result.error)
+        alert(`Error: ${result.error}`)
       }
     } catch (error) {
-      console.error('Error refreshing dynamic limits:', error)
+      console.error('❌ Error toggling bot:', error)
+      alert(`Error de conexión: ${error}`)
     }
   }
 
   const toggleAccordion = (botType: 'conservative' | 'aggressive') => {
-    setAccordionOpen((prev) => {
+    setAccordionOpen((prev: Record<string, boolean>) => {
       const newState = {
         ...prev,
         [botType]: !prev[botType]
@@ -164,16 +165,6 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
       }
       return newState
     })
-  }
-  if (!signals) {
-    return (
-      <div className="bot-signals">
-        <h3>🤖 Trading Bot Signals</h3>
-        <div className="bot-status">
-          <p>Esperando datos del bot...</p>
-        </div>
-      </div>
-    )
   }
 
   const getSignalColor = (signal: string) => {
@@ -199,6 +190,47 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
         return '⏸️'
       default:
         return '❓'
+    }
+  }
+
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return 'N/A'
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleString('es-ES', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'America/Santiago'
+      })
+    } catch (error) {
+      return 'N/A'
+    }
+  }
+
+  const calculateUptime = (dateString: string | null) => {
+    if (!dateString) return 'N/A'
+    try {
+      const startTime = new Date(dateString).getTime()
+      const currentTime = Date.now()
+      const uptimeMs = currentTime - startTime
+
+      const hours = Math.floor(uptimeMs / (1000 * 60 * 60))
+      const minutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((uptimeMs % (1000 * 60)) / 1000)
+
+      if (hours > 0) {
+        return `${hours}h ${minutes}m ${seconds}s`
+      } else if (minutes > 0) {
+        return `${minutes}m ${seconds}s`
+      } else {
+        return `${seconds}s`
+      }
+    } catch (error) {
+      return 'N/A'
     }
   }
 
@@ -277,136 +309,179 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     <div className="bot-signals">
       <h3>🤖 Trading Bot Signals</h3>
 
-      {/* Bot Controls */}
-      <div className="bot-controls">
-        <BotControl
-          botType="conservative"
-          isActive={botStatus.conservative}
-          onToggle={handleBotToggle}
-        />
-        <BotControl
-          botType="aggressive"
-          isActive={botStatus.aggressive}
-          onToggle={handleBotToggle}
-        />
-      </div>
-
       <div className="bot-status">
-        <div className="price-display">
-          <span className="price-label">Precio Actual:</span>
-          <span className="price-value">
-            ${signals.current_price ? signals.current_price.toFixed(5) : '0.00000'}
-          </span>
-        </div>
-
         <div className="signals-container">
-          <div className="signal-box conservative">
-            <div className="signal-header">
-              <span className="signal-icon">🐌</span>
-              <span className="signal-title">Conservador</span>
-            </div>
-            <div className="signal-value" style={{ color: getSignalColor(signals.conservative) }}>
-              {getSignalIcon(signals.conservative)} {signals.conservative}
-            </div>
-            <div className="signal-description">SMA 8 vs 21, Threshold 0.0005</div>
-            {getPositionInfo('conservative')}
-
-            {/* Info Box - Siempre mostrar, cambiar color según estado */}
-            <div
-              className={`bot-info-box ${
-                botProcessInfo.conservative.active ? 'active' : 'inactive'
-              }`}>
-              <div className="info-header" onClick={() => toggleAccordion('conservative')}>
-                ℹ️ Info {accordionOpen.conservative ? '▼' : '▶'}
+          {/* Bot Conservative Card */}
+          <div className="bot-card conservative">
+            <div className="bot-card-header">
+              <div className="bot-header-left">
+                <span className="signal-icon">🐌</span>
+                <span className="signal-title">Conservador</span>
               </div>
-              {accordionOpen.conservative && (
-                <div className="info-content">
-                  <div className="info-item">
-                    <span className="info-label">Proceso:</span>
-                    <span
-                      className={`info-value ${
-                        botProcessInfo.conservative.active ? 'active' : 'inactive'
-                      }`}>
-                      {botProcessInfo.conservative.active
-                        ? `activo (PID: ${botProcessInfo.conservative.pid})`
-                        : 'inactivo'}
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-label">Memoria:</span>
-                    <span
-                      className={`info-value ${
-                        botProcessInfo.conservative.active ? 'active' : 'inactive'
-                      }`}>
-                      {botProcessInfo.conservative.memory_mb} MB
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-label">CPU:</span>
-                    <span
-                      className={`info-value ${
-                        botProcessInfo.conservative.active ? 'active' : 'inactive'
-                      }`}>
-                      {botProcessInfo.conservative.cpu_percent}%
-                    </span>
-                  </div>
+              <div className="bot-header-right">
+                <button
+                  className={`bot-toggle-button ${botStatus.conservative ? 'active' : 'inactive'}`}
+                  onClick={() => handleBotToggleDirect('conservative')}
+                  title={botStatus.conservative ? 'Desactivar bot' : 'Activar bot'}>
+                  {botStatus.conservative ? 'OFF' : 'ON'}
+                </button>
+              </div>
+            </div>
+
+            <div className="bot-card-content">
+              <div className="signal-value" style={{ color: getSignalColor(signals.conservative) }}>
+                {getSignalIcon(signals.conservative)} {signals.conservative}
+              </div>
+              <div className="signal-description">SMA 8 vs 21, Threshold 0.0005</div>
+              {getPositionInfo('conservative')}
+
+              {/* Info Box - Siempre mostrar, cambiar color según estado */}
+              <div
+                className={`bot-info-box ${
+                  botProcessInfo.conservative.active ? 'active' : 'inactive'
+                }`}>
+                <div className="info-header" onClick={() => toggleAccordion('conservative')}>
+                  ℹ️ Info {accordionOpen.conservative ? '▼' : '▶'}
                 </div>
-              )}
+                {accordionOpen.conservative && (
+                  <div className="info-content">
+                    <div className="info-item">
+                      <span className="info-label">Proceso:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.conservative.active ? 'active' : 'inactive'
+                        }`}>
+                        {botProcessInfo.conservative.active
+                          ? `activo (PID: ${botProcessInfo.conservative.pid})`
+                          : 'inactivo'}
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">Memoria:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.conservative.active ? 'active' : 'inactive'
+                        }`}>
+                        {botProcessInfo.conservative.memory_mb} MB
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">CPU:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.conservative.active ? 'active' : 'inactive'
+                        }`}>
+                        {botProcessInfo.conservative.cpu_percent}%
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">Inicio:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.conservative.active ? 'active' : 'inactive'
+                        }`}>
+                        {formatDateTime(botProcessInfo.conservative.create_time)}
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">Tiempo ejecución:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.conservative.active ? 'active' : 'inactive'
+                        }`}>
+                        {calculateUptime(botProcessInfo.conservative.create_time)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="signal-box aggressive">
-            <div className="signal-header">
-              <span className="signal-icon">⚡</span>
-              <span className="signal-title">Agresivo</span>
-            </div>
-            <div className="signal-value" style={{ color: getSignalColor(signals.aggressive) }}>
-              {getSignalIcon(signals.aggressive)} {signals.aggressive}
-            </div>
-            <div className="signal-description">SMA 5 vs 13, Threshold 0.0008</div>
-            {getPositionInfo('aggressive')}
-
-            {/* Info Box - Siempre mostrar, cambiar color según estado */}
-            <div
-              className={`bot-info-box ${
-                botProcessInfo.aggressive.active ? 'active' : 'inactive'
-              }`}>
-              <div className="info-header" onClick={() => toggleAccordion('aggressive')}>
-                ℹ️ Info {accordionOpen.aggressive ? '▼' : '▶'}
+          {/* Bot Aggressive Card */}
+          <div className="bot-card aggressive">
+            <div className="bot-card-header">
+              <div className="bot-header-left">
+                <span className="signal-icon">⚡</span>
+                <span className="signal-title">Agresivo</span>
               </div>
-              {accordionOpen.aggressive && (
-                <div className="info-content">
-                  <div className="info-item">
-                    <span className="info-label">Proceso:</span>
-                    <span
-                      className={`info-value ${
-                        botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                      }`}>
-                      {botProcessInfo.aggressive.active
-                        ? `activo (PID: ${botProcessInfo.aggressive.pid})`
-                        : 'inactivo'}
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-label">Memoria:</span>
-                    <span
-                      className={`info-value ${
-                        botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                      }`}>
-                      {botProcessInfo.aggressive.memory_mb} MB
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-label">CPU:</span>
-                    <span
-                      className={`info-value ${
-                        botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                      }`}>
-                      {botProcessInfo.aggressive.cpu_percent}%
-                    </span>
-                  </div>
+              <div className="bot-header-right">
+                <button
+                  className={`bot-toggle-button ${botStatus.aggressive ? 'active' : 'inactive'}`}
+                  onClick={() => handleBotToggleDirect('aggressive')}
+                  title={botStatus.aggressive ? 'Desactivar bot' : 'Activar bot'}>
+                  {botStatus.aggressive ? 'OFF' : 'ON'}
+                </button>
+              </div>
+            </div>
+
+            <div className="bot-card-content">
+              <div className="signal-value" style={{ color: getSignalColor(signals.aggressive) }}>
+                {getSignalIcon(signals.aggressive)} {signals.aggressive}
+              </div>
+              <div className="signal-description">SMA 5 vs 13, Threshold 0.0008</div>
+              {getPositionInfo('aggressive')}
+
+              {/* Info Box - Siempre mostrar, cambiar color según estado */}
+              <div
+                className={`bot-info-box ${
+                  botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                }`}>
+                <div className="info-header" onClick={() => toggleAccordion('aggressive')}>
+                  ℹ️ Info {accordionOpen.aggressive ? '▼' : '▶'}
                 </div>
-              )}
+                {accordionOpen.aggressive && (
+                  <div className="info-content">
+                    <div className="info-item">
+                      <span className="info-label">Proceso:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                        }`}>
+                        {botProcessInfo.aggressive.active
+                          ? `activo (PID: ${botProcessInfo.aggressive.pid})`
+                          : 'inactivo'}
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">Memoria:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                        }`}>
+                        {botProcessInfo.aggressive.memory_mb} MB
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">CPU:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                        }`}>
+                        {botProcessInfo.aggressive.cpu_percent}%
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">Inicio:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                        }`}>
+                        {formatDateTime(botProcessInfo.aggressive.create_time)}
+                      </span>
+                    </div>
+                    <div className="info-item">
+                      <span className="info-label">Tiempo ejecución:</span>
+                      <span
+                        className={`info-value ${
+                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
+                        }`}>
+                        {calculateUptime(botProcessInfo.aggressive.create_time)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

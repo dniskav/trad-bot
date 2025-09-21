@@ -32,7 +32,33 @@ interface CandlestickChartProps {
   signals?: TradingSignal[]
   candlesData?: any[]
   indicatorsData?: any
+  onTimeframeChange?: (timeframe: string) => void
 }
+
+const TIMEFRAMES = [
+  // Minutos (intervalo mínimo de Binance)
+  { value: '1m', label: '1m', category: 'Minutos' },
+  { value: '3m', label: '3m', category: 'Minutos' },
+  { value: '5m', label: '5m', category: 'Minutos' },
+  { value: '15m', label: '15m', category: 'Minutos' },
+  { value: '30m', label: '30m', category: 'Minutos' },
+
+  // Horas
+  { value: '1h', label: '1h', category: 'Horas' },
+  { value: '2h', label: '2h', category: 'Horas' },
+  { value: '4h', label: '4h', category: 'Horas' },
+  { value: '6h', label: '6h', category: 'Horas' },
+  { value: '8h', label: '8h', category: 'Horas' },
+  { value: '12h', label: '12h', category: 'Horas' },
+
+  // Días
+  { value: '1d', label: '1d', category: 'Días' },
+  { value: '3d', label: '3d', category: 'Días' },
+
+  // Semanas y Meses
+  { value: '1w', label: '1w', category: 'Semanas' },
+  { value: '1M', label: '1M', category: 'Meses' }
+]
 
 // Ultra-simple test data to avoid assertion errors
 const generateSimpleData = (): CandlestickData[] => {
@@ -60,7 +86,8 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   timeframe = '1m',
   signals = [],
   candlesData: propCandlesData = [],
-  indicatorsData: propIndicatorsData = null
+  indicatorsData: propIndicatorsData = null,
+  onTimeframeChange
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const rsiContainerRef = useRef<HTMLDivElement>(null)
@@ -536,40 +563,61 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
             </>
           )}
         </div>
-        <div className="chart-legend">
-          {indicators && (
-            <>
-              <div className="legend-item">
-                <div className="legend-marker" style={{ backgroundColor: '#ffff00' }}></div>
-                <span>SMA Fast (8)</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-marker" style={{ backgroundColor: '#ff00ff' }}></div>
-                <span>SMA Slow (21)</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-marker" style={{ backgroundColor: '#f39c12' }}></div>
-                <span>RSI</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-marker" style={{ backgroundColor: '#9b59b6' }}></div>
-                <span>Volumen</span>
-              </div>
-            </>
-          )}
-          {signals.length > 0 && (
-            <>
-              <div className="legend-item">
-                <div className="legend-marker buy"></div>
-                <span>BUY Signal</span>
-              </div>
-              <div className="legend-item">
-                <div className="legend-marker sell"></div>
-                <span>SELL Signal</span>
-              </div>
-            </>
-          )}
+      </div>
+
+      {/* Timeframe Selector */}
+      {onTimeframeChange && (
+        <div className="timeframe-selector">
+          <div className="timeframe-header">
+            <h4>Timeframe</h4>
+          </div>
+          <div className="timeframe-buttons">
+            {TIMEFRAMES.map((tf) => (
+              <button
+                key={tf.value}
+                className={`timeframe-btn ${timeframe === tf.value ? 'active' : ''}`}
+                onClick={() => onTimeframeChange(tf.value)}
+                title={`${tf.label} - ${tf.category}${tf.value === '1m' ? ' (Mínimo)' : ''}`}>
+                {tf.label}
+              </button>
+            ))}
+          </div>
         </div>
+      )}
+
+      <div className="chart-legend">
+        {indicators && (
+          <>
+            <div className="legend-item">
+              <div className="legend-marker" style={{ backgroundColor: '#ffff00' }}></div>
+              <span>SMA Fast (8)</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-marker" style={{ backgroundColor: '#ff00ff' }}></div>
+              <span>SMA Slow (21)</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-marker" style={{ backgroundColor: '#f39c12' }}></div>
+              <span>RSI</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-marker" style={{ backgroundColor: '#9b59b6' }}></div>
+              <span>Volumen</span>
+            </div>
+          </>
+        )}
+        {signals.length > 0 && (
+          <>
+            <div className="legend-item">
+              <div className="legend-marker buy"></div>
+              <span>BUY Signal</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-marker sell"></div>
+              <span>SELL Signal</span>
+            </div>
+          </>
+        )}
       </div>
       <div className="chart-container">
         <div ref={chartContainerRef} className="chart-canvas-container" />
