@@ -37,15 +37,34 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({ balance, currentPrice }
   }
 
   const getBalanceColor = () => {
+    if (!balance) return '#ffa726' // Naranja por defecto
     if (balance.is_profitable) return '#26a69a' // Verde para ganancias
     if (balance.current_balance < balance.initial_balance) return '#ef5350' // Rojo para pérdidas
     return '#ffa726' // Naranja para neutral
   }
 
   const getBalanceIcon = () => {
+    if (!balance) return '📊' // Icono por defecto
     if (balance.is_profitable) return '📈'
     if (balance.current_balance < balance.initial_balance) return '📉'
     return '📊'
+  }
+
+  // Si no hay balance, mostrar loading
+  if (!balance) {
+    return (
+      <div className="account-balance">
+        <div className="balance-header">
+          <span className="balance-icon">📊</span>
+          <span className="balance-title">Saldo de Cuenta</span>
+        </div>
+        <div className="balance-content">
+          <div className="balance-row">
+            <span className="balance-label">Cargando...</span>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

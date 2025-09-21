@@ -21,6 +21,33 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     aggressive: false
   })
 
+  // Si no hay signals, mostrar loading
+  if (!signals) {
+    return (
+      <div className="bot-signals">
+        <div className="bot-signals-header">
+          <h3>Señales de Trading</h3>
+        </div>
+        <div className="bot-status">
+          <div className="price-display">
+            <span className="price-label">Precio Actual:</span>
+            <span className="price-value">Cargando...</span>
+          </div>
+          <div className="signals-container">
+            <div className="signal-box conservative">
+              <span className="signal-label">Conservador:</span>
+              <span className="signal-value">Cargando...</span>
+            </div>
+            <div className="signal-box aggressive">
+              <span className="signal-label">Agresivo:</span>
+              <span className="signal-value">Cargando...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const [dynamicLimits, setDynamicLimits] = useState({
     total_max_positions: 10,
     active_bots: 2,
@@ -31,9 +58,12 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     }
   })
 
-  const [accordionOpen, setAccordionOpen] = useState({
-    conservative: false,
-    aggressive: false
+  const [accordionOpen, setAccordionOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('bot-signals-accordion')
+      return saved ? JSON.parse(saved) : { conservative: false, aggressive: false }
+    }
+    return { conservative: false, aggressive: false }
   })
 
   const [botProcessInfo, setBotProcessInfo] = useState({
@@ -57,13 +87,16 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
   useEffect(() => {
     const fetchBotStatus = async () => {
       try {
-        const response = await fetch('http://localhost:8000/bot/status')
+        const response = await fetch('/bot/status')
         const result = await response.json()
         if (result.status === 'success') {
-          // Use real process status from backend
-          setBotStatus(result.data.bot_status)
-          if (result.data.dynamic_limits) {
-            setDynamicLimits(result.data.dynamic_limits)
+          // Use real process status from backend - new structure
+          const legacyBots = result.data.legacy_bots
+          if (legacyBots && legacyBots.bot_status) {
+            setBotStatus(legacyBots.bot_status)
+          }
+          if (legacyBots && legacyBots.dynamic_limits) {
+            setDynamicLimits(legacyBots.dynamic_limits)
           }
         }
       } catch (error) {
@@ -73,7 +106,7 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
 
     const fetchBotProcessInfo = async () => {
       try {
-        const response = await fetch('http://localhost:8000/bot/process-info')
+        const response = await fetch('/bot/process-info')
         const result = await response.json()
         if (result.status === 'success') {
           setBotProcessInfo(result.data)
@@ -105,10 +138,14 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
 
     // Refresh dynamic limits after bot status change
     try {
-      const response = await fetch('http://localhost:8000/bot/status')
+      const response = await fetch('/bot/status')
       const result = await response.json()
-      if (result.status === 'success' && result.data.dynamic_limits) {
-        setDynamicLimits(result.data.dynamic_limits)
+      if (
+        result.status === 'success' &&
+        result.data.legacy_bots &&
+        result.data.legacy_bots.dynamic_limits
+      ) {
+        setDynamicLimits(result.data.legacy_bots.dynamic_limits)
       }
     } catch (error) {
       console.error('Error refreshing dynamic limits:', error)
@@ -116,10 +153,17 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
   }
 
   const toggleAccordion = (botType: 'conservative' | 'aggressive') => {
-    setAccordionOpen((prev) => ({
-      ...prev,
-      [botType]: !prev[botType]
-    }))
+    setAccordionOpen((prev) => {
+      const newState = {
+        ...prev,
+        [botType]: !prev[botType]
+      }
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('bot-signals-accordion', JSON.stringify(newState))
+      }
+      return newState
+    })
   }
   if (!signals) {
     return (
@@ -250,7 +294,9 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
       <div className="bot-status">
         <div className="price-display">
           <span className="price-label">Precio Actual:</span>
-          <span className="price-value">${signals.current_price.toFixed(5)}</span>
+          <span className="price-value">
+            ${signals.current_price ? signals.current_price.toFixed(5) : '0.00000'}
+          </span>
         </div>
 
         <div className="signals-container">

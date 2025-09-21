@@ -13,7 +13,7 @@ const BotControl: React.FC<BotControlProps> = ({ botType, isActive, onToggle }) 
     setLoading(true)
     try {
       const action = isActive ? 'stop' : 'start'
-      const response = await fetch(`http://localhost:8000/api/bot-control/${botType}/${action}`, {
+      const response = await fetch(`/api/bot-control/${botType}/${action}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

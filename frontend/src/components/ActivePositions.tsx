@@ -2,7 +2,7 @@ import React from 'react'
 
 interface ActivePosition {
   id: string
-  bot_type: 'conservative' | 'aggressive'
+  bot_type: string
   type: 'BUY' | 'SELL'
   entry_price: number
   current_price: number
@@ -12,13 +12,12 @@ interface ActivePosition {
   stop_loss?: number
   take_profit?: number
   timestamp: string
+  is_synthetic?: boolean
+  is_plugin_bot?: boolean
 }
 
 interface ActivePositionsProps {
-  positions: {
-    conservative: Record<string, ActivePosition>
-    aggressive: Record<string, ActivePosition>
-  } | null
+  positions: Record<string, Record<string, ActivePosition>> | null
   currentPrice?: number
 }
 
@@ -35,14 +34,12 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
   }
 
   const getAllPositions = () => {
-    const allPositions: (ActivePosition & { botType: 'conservative' | 'aggressive' })[] = []
+    const allPositions: (ActivePosition & { botType: string })[] = []
 
-    Object.entries(positions.conservative || {}).forEach(([, pos]) => {
-      allPositions.push({ ...pos, botType: 'conservative' })
-    })
-
-    Object.entries(positions.aggressive || {}).forEach(([, pos]) => {
-      allPositions.push({ ...pos, botType: 'aggressive' })
+    Object.entries(positions).forEach(([botType, botPositions]) => {
+      Object.entries(botPositions).forEach(([, pos]) => {
+        allPositions.push({ ...pos, botType })
+      })
     })
 
     return allPositions
@@ -62,11 +59,25 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
   }
 
   const getBotIcon = (botType: string) => {
-    return botType === 'conservative' ? '🐌' : '⚡'
+    switch (botType) {
+      case 'conservative': return '🐌'
+      case 'aggressive': return '⚡'
+      case 'simplebot': return '🤖'
+      case 'rsibot': return '📊'
+      case 'macdbot': return '📈'
+      default: return '🔌'
+    }
   }
 
   const getBotName = (botType: string) => {
-    return botType === 'conservative' ? 'Conservador' : 'Agresivo'
+    switch (botType) {
+      case 'conservative': return 'Conservador'
+      case 'aggressive': return 'Agresivo'
+      case 'simplebot': return 'Simple Bot'
+      case 'rsibot': return 'RSI Bot'
+      case 'macdbot': return 'MACD Bot'
+      default: return botType
+    }
   }
 
   const getPositionColor = (type: string) => {
@@ -96,14 +107,16 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
             <span className="summary-value">{activePositions.length}</span>
           </div>
           <div className="summary-item">
-            <span className="summary-label">Conservadoras:</span>
+            <span className="summary-label">Reales:</span>
             <span className="summary-value">
-              {Object.keys(positions.conservative || {}).length}
+              {activePositions.filter(p => !p.is_synthetic).length}
             </span>
           </div>
           <div className="summary-item">
-            <span className="summary-label">Agresivas:</span>
-            <span className="summary-value">{Object.keys(positions.aggressive || {}).length}</span>
+            <span className="summary-label">Sintéticas:</span>
+            <span className="summary-value">
+              {activePositions.filter(p => p.is_synthetic).length}
+            </span>
           </div>
         </div>
 
@@ -114,6 +127,12 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
                 <div className="bot-info">
                   <span className="bot-icon">{getBotIcon(position.botType)}</span>
                   <span className="bot-name">{getBotName(position.botType)}</span>
+                  {position.is_synthetic && (
+                    <span className="synthetic-badge" title="Posición Sintética">🧪</span>
+                  )}
+                  {position.is_plugin_bot && (
+                    <span className="plugin-badge" title="Bot Plug-and-Play">🔌</span>
+                  )}
                 </div>
                 <div className="position-type" style={{ color: getPositionColor(position.type) }}>
                   {position.type}

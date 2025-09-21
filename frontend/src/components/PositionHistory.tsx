@@ -49,8 +49,14 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
         return '🐌'
       case 'aggressive':
         return '⚡'
-      default:
+      case 'rsibot':
+        return '📊'
+      case 'macdbot':
+        return '📈'
+      case 'simplebot':
         return '🤖'
+      default:
+        return '🔧'
     }
   }
 
@@ -177,6 +183,17 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
                 <div className="history-bot">
                   <span className="bot-icon">{getBotIcon(position.bot_type)}</span>
                   <span className="bot-name">{position.bot_type || 'N/A'}</span>
+                  {/* Flags para modo synthetic y plugin bot */}
+                  {position.is_synthetic && (
+                    <span className="synthetic-flag" title="Posición Synthetic">
+                      🧪
+                    </span>
+                  )}
+                  {position.is_plugin_bot && (
+                    <span className="plugin-flag" title="Bot Plug-and-Play">
+                      🔌
+                    </span>
+                  )}
                   {/* Indicador de estado */}
                   {(!position.is_closed ||
                     position.status === 'UPDATED' ||

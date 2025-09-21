@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 interface UseSocketOptions {
   url?: string
@@ -22,187 +22,271 @@ interface UseSocketReturn {
   reconnectAttempts: number
 }
 
-export const useSocket = (options: UseSocketOptions = {}): UseSocketReturn => {
-  const {
-    url = 'ws://localhost:3000/ws',
-    // autoConnect = true, // Deshabilitado temporalmente
-    reconnectInterval = 3000,
-    maxReconnectAttempts = 5,
-    onMessage,
-    onOpen,
-    onClose,
-    onError
-  } = options
+// Singleton para la instancia global del WebSocket
+class WebSocketSingleton {
+  private static instance: WebSocketSingleton
+  private ws: WebSocket | null = null
+  private isConnected: boolean = false
+  private isConnecting: boolean = false
+  private error: string | null = null
+  private lastMessage: any = null
+  private reconnectAttempts: number = 0
+  private url: string = 'ws://localhost:8000/ws'
+  private autoConnect: boolean = true
+  private reconnectInterval: number = 3000
+  private maxReconnectAttempts: number = 5
+  private reconnectTimeoutRef: number | null = null
+  private reconnectAttemptsRef: number = 0
+  private callbacks: {
+    onMessage?: (message: any) => void
+    onOpen?: () => void
+    onClose?: () => void
+    onError?: (error: Event) => void
+  } = {}
 
-  const [isConnected, setIsConnected] = useState(false)
-  const [isConnecting, setIsConnecting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [lastMessage, setLastMessage] = useState<any>(null)
-  const [reconnectAttempts, setReconnectAttempts] = useState(0)
+  private constructor() {}
 
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimeoutRef = useRef<number | null>(null)
-  const reconnectAttemptsRef = useRef(0)
+  static getInstance(): WebSocketSingleton {
+    if (!WebSocketSingleton.instance) {
+      WebSocketSingleton.instance = new WebSocketSingleton()
+    }
+    return WebSocketSingleton.instance
+  }
 
-  const connect = useCallback(() => {
-    if (isConnecting || isConnected) {
-      console.log('⚠️ useSocket: Ya conectando o conectado, saltando conexión')
+  // Configurar opciones (solo la primera vez)
+  configure(options: UseSocketOptions = {}) {
+    if (this.ws === null) {
+      // Solo configurar si no hay conexión existente
+      this.url = options.url || 'ws://localhost:8000/ws'
+      this.autoConnect = options.autoConnect !== false
+      this.reconnectInterval = options.reconnectInterval || 3000
+      this.maxReconnectAttempts = options.maxReconnectAttempts || 5
+
+      if (options.onMessage) this.callbacks.onMessage = options.onMessage
+      if (options.onOpen) this.callbacks.onOpen = options.onOpen
+      if (options.onClose) this.callbacks.onClose = options.onClose
+      if (options.onError) this.callbacks.onError = options.onError
+
+      console.log('🔧 WebSocketSingleton: Configurado con opciones:', options)
+    }
+  }
+
+  // Agregar callbacks adicionales
+  addCallbacks(callbacks: {
+    onMessage?: (message: any) => void
+    onOpen?: () => void
+    onClose?: () => void
+    onError?: (error: Event) => void
+  }) {
+    if (callbacks.onMessage) this.callbacks.onMessage = callbacks.onMessage
+    if (callbacks.onOpen) this.callbacks.onOpen = callbacks.onOpen
+    if (callbacks.onClose) this.callbacks.onClose = callbacks.onClose
+    if (callbacks.onError) this.callbacks.onError = callbacks.onError
+  }
+
+  connect() {
+    console.log('🔌 WebSocketSingleton: connect() llamado')
+
+    if (this.isConnecting || this.isConnected) {
+      console.log('⚠️ WebSocketSingleton: Ya conectando o conectado, saltando conexión')
       return
     }
 
-    // Verificar si el navegador soporta WebSocket
     if (!window.WebSocket) {
-      console.error('❌ useSocket: WebSocket no soportado por el navegador')
-      setError('WebSocket no soportado por el navegador')
+      console.error('❌ WebSocketSingleton: WebSocket no soportado por el navegador')
+      this.error = 'WebSocket no soportado por el navegador'
       return
     }
 
     try {
-      setIsConnecting(true)
-      setError(null)
+      this.isConnecting = true
+      this.error = null
 
-      console.log('🔌 useSocket: Conectando a:', url)
+      console.log('🔌 WebSocketSingleton: Conectando a:', this.url)
 
-      const ws = new WebSocket(url)
-      wsRef.current = ws
+      this.ws = new WebSocket(this.url)
 
-      console.log('🔌 useSocket: WebSocket creado, readyState:', ws.readyState)
+      this.ws.onopen = () => {
+        console.log('✅ WebSocketSingleton: WebSocket conectado')
+        this.isConnected = true
+        this.isConnecting = false
+        this.error = null
+        this.reconnectAttempts = 0
+        this.reconnectAttemptsRef = 0
 
-      ws.onopen = () => {
-        console.log('✅ useSocket: WebSocket conectado')
-        setIsConnected(true)
-        setIsConnecting(false)
-        setError(null)
-        setReconnectAttempts(0)
-        reconnectAttemptsRef.current = 0
-
-        if (onOpen) {
-          onOpen()
+        if (this.callbacks.onOpen) {
+          this.callbacks.onOpen()
         }
       }
 
-      ws.onmessage = (event) => {
+      this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data)
-          console.log('📨 useSocket: Mensaje recibido:', message)
-          setLastMessage(message)
+          console.log('📨 WebSocketSingleton: Mensaje recibido:', message)
+          this.lastMessage = message
 
-          if (onMessage) {
-            onMessage(message)
+          if (this.callbacks.onMessage) {
+            this.callbacks.onMessage(message)
           }
         } catch (err) {
-          console.error('❌ useSocket: Error parseando mensaje:', err)
+          console.error('❌ WebSocketSingleton: Error parseando mensaje:', err)
         }
       }
 
-      ws.onclose = (event) => {
-        console.log('🔌 useSocket: WebSocket desconectado:', event.code, event.reason)
-        setIsConnected(false)
-        setIsConnecting(false)
+      this.ws.onclose = (event) => {
+        console.log('🔌 WebSocketSingleton: WebSocket desconectado:', event.code, event.reason)
+        this.isConnected = false
+        this.isConnecting = false
 
-        if (onClose) {
-          onClose()
+        if (this.callbacks.onClose) {
+          this.callbacks.onClose()
         }
-
-        // Auto-reconnect deshabilitado temporalmente para evitar bucles
-        console.log('🔌 useSocket: WebSocket cerrado, sin reconexión automática')
-
-        // TODO: Implementar reconexión manual cuando sea necesario
-        // if (event.code !== 1000 && reconnectAttemptsRef.current < maxReconnectAttempts && !error) {
-        //   reconnectAttemptsRef.current++
-        //   setReconnectAttempts(reconnectAttemptsRef.current)
-        //   console.log(`🔄 useSocket: Intentando reconectar (${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`)
-        //   reconnectTimeoutRef.current = window.setTimeout(() => {
-        //     connect()
-        //   }, reconnectInterval)
-        // } else if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-        //   console.error('❌ useSocket: Máximo de intentos de reconexión alcanzado')
-        //   setError('Máximo de intentos de reconexión alcanzado')
-        // }
       }
 
-      ws.onerror = (event) => {
-        console.error('❌ useSocket: Error de WebSocket:', event)
-        console.error('❌ useSocket: readyState:', ws.readyState)
+      this.ws.onerror = (event) => {
+        console.error('❌ WebSocketSingleton: Error de WebSocket:', event)
 
-        // No establecer error si el WebSocket está en estado de verificación
-        if (ws.readyState === WebSocket.CONNECTING) {
-          console.log('⚠️ useSocket: En estado CONNECTING, no es un error real')
+        if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+          console.log('⚠️ WebSocketSingleton: En estado CONNECTING, no es un error real')
           return
         }
 
-        // Solo establecer error si el WebSocket está en estado OPEN o CLOSED
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CLOSED) {
-          console.log('⚠️ useSocket: Error real detectado')
-          setError(`Error de conexión WebSocket: ${event.type}`)
-          setIsConnecting(false)
+        if (
+          this.ws &&
+          (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CLOSED)
+        ) {
+          console.log('⚠️ WebSocketSingleton: Error real detectado')
+          this.error = `Error de conexión WebSocket: ${event.type}`
+          this.isConnecting = false
         }
 
-        if (onError) {
-          onError(event)
+        if (this.callbacks.onError) {
+          this.callbacks.onError(event)
         }
       }
     } catch (err) {
-      console.error('❌ useSocket: Error creando WebSocket:', err)
-      setError('Error creando conexión WebSocket')
-      setIsConnecting(false)
+      console.error('❌ WebSocketSingleton: Error creando WebSocket:', err)
+      this.error = 'Error creando conexión WebSocket'
+      this.isConnecting = false
     }
-  }, [
-    url,
-    isConnecting,
-    isConnected,
-    maxReconnectAttempts,
-    reconnectInterval,
-    onMessage,
-    onOpen,
-    onClose,
-    onError
-  ])
+  }
+
+  disconnect() {
+    console.log('🛑 WebSocketSingleton: disconnect() llamado')
+
+    if (this.reconnectTimeoutRef) {
+      clearTimeout(this.reconnectTimeoutRef)
+      this.reconnectTimeoutRef = null
+    }
+
+    if (this.ws) {
+      this.ws.close(1000, 'Desconexión intencional')
+      this.ws = null
+    }
+
+    this.isConnected = false
+    this.isConnecting = false
+    this.reconnectAttempts = 0
+    this.reconnectAttemptsRef = 0
+  }
+
+  send(message: string) {
+    console.log('📤 WebSocketSingleton: send() llamado')
+
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(message)
+      console.log('📤 WebSocketSingleton: Mensaje enviado:', message)
+    } else {
+      console.warn('⚠️ WebSocketSingleton: No se puede enviar mensaje, WebSocket no está abierto')
+    }
+  }
+
+  // Getters para el estado
+  getConnectionState() {
+    return {
+      isConnected: this.isConnected,
+      isConnecting: this.isConnecting,
+      error: this.error,
+      lastMessage: this.lastMessage,
+      reconnectAttempts: this.reconnectAttempts
+    }
+  }
+}
+
+export const useSocket = (options: UseSocketOptions = {}): UseSocketReturn => {
+  // Obtener la instancia singleton
+  const socketSingleton = WebSocketSingleton.getInstance()
+
+  // Estados locales para re-renderizar cuando cambie el estado del socket
+  const [connectionState, setConnectionState] = useState(socketSingleton.getConnectionState())
+
+  // Configurar el socket (solo la primera vez)
+  useEffect(() => {
+    socketSingleton.configure(options)
+  }, []) // Solo ejecutar una vez
+
+  // Agregar callbacks adicionales si se proporcionan
+  useEffect(() => {
+    if (options.onMessage || options.onOpen || options.onClose || options.onError) {
+      socketSingleton.addCallbacks({
+        onMessage: options.onMessage,
+        onOpen: options.onOpen,
+        onClose: options.onClose,
+        onError: options.onError
+      })
+    }
+  }, [options.onMessage, options.onOpen, options.onClose, options.onError])
+
+  // Auto-connect cuando el componente se monta (solo si autoConnect es true)
+  useEffect(() => {
+    if (options.autoConnect !== false) {
+      console.log('🔄 useSocket: Auto-conectando...')
+      socketSingleton.connect()
+    }
+  }, [options.autoConnect])
+
+  // Actualizar estado local cuando cambie el estado del socket
+  useEffect(() => {
+    const updateState = () => {
+      const newState = socketSingleton.getConnectionState()
+      setConnectionState((prevState) => {
+        // Solo actualizar si realmente cambió el estado
+        if (JSON.stringify(prevState) !== JSON.stringify(newState)) {
+          return newState
+        }
+        return prevState
+      })
+    }
+
+    // Crear un intervalo para verificar cambios de estado (menos frecuente)
+    const interval = setInterval(updateState, 1000) // Cambiado de 100ms a 1000ms
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Funciones que delegan al singleton
+  const connect = useCallback(() => {
+    socketSingleton.connect()
+    setConnectionState(socketSingleton.getConnectionState())
+  }, [])
 
   const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current)
-      reconnectTimeoutRef.current = null
-    }
-
-    if (wsRef.current) {
-      wsRef.current.close(1000, 'Desconexión intencional')
-      wsRef.current = null
-    }
-
-    setIsConnected(false)
-    setIsConnecting(false)
-    setReconnectAttempts(0)
-    reconnectAttemptsRef.current = 0
+    socketSingleton.disconnect()
+    setConnectionState(socketSingleton.getConnectionState())
   }, [])
 
   const send = useCallback((message: string) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(message)
-      console.log('📤 useSocket: Mensaje enviado:', message)
-    } else {
-      console.warn('⚠️ useSocket: No se puede enviar mensaje, WebSocket no está abierto')
-    }
+    socketSingleton.send(message)
   }, [])
-
-  // Auto-connect deshabilitado temporalmente para evitar bucles
-  // useEffect(() => {
-  //   if (autoConnect) {
-  //     connect()
-  //   }
-  //   return () => {
-  //     disconnect()
-  //   }
-  // }, [autoConnect])
 
   return {
     connect,
     disconnect,
     send,
-    isConnected,
-    isConnecting,
-    error,
-    lastMessage,
-    reconnectAttempts
+    isConnected: connectionState.isConnected,
+    isConnecting: connectionState.isConnecting,
+    error: connectionState.error,
+    lastMessage: connectionState.lastMessage,
+    reconnectAttempts: connectionState.reconnectAttempts
   }
 }

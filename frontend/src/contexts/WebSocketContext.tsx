@@ -1,14 +1,33 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+import React, { createContext, useContext, useState } from 'react'
+
+interface WebSocketMessage {
+  id: string
+  type: 'sent' | 'received'
+  message: any
+  timestamp: number
+}
 
 interface WebSocketContextType {
+  // Estado de conexión
   isConnected: boolean
   isConnecting: boolean
   error: string | null
-  lastMessage: any
-  reconnect: () => void
+
+  // Mensajes
+  messages: WebSocketMessage[]
+  lastMessage: WebSocketMessage | null
+
+  // Funciones para actualizar el estado
+  updateConnectionState: (state: {
+    isConnected?: boolean
+    isConnecting?: boolean
+    error?: string | null
+  }) => void
+  addMessage: (type: 'sent' | 'received', message: any) => void
+  clearMessages: () => void
 }
 
-const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined)
+export const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined)
 
 export const useWebSocketContext = () => {
   const context = useContext(WebSocketContext)
@@ -20,119 +39,69 @@ export const useWebSocketContext = () => {
 
 interface WebSocketProviderProps {
   children: React.ReactNode
-  url?: string
-  timeframe?: string
 }
 
-export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
-  children,
-  url = 'ws://localhost:8000/ws',
-  timeframe = '1m'
-}) => {
+export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
+  // console.log('🔌 WebSocketProvider: Componente montado') // Comentado para reducir spam
+
+  // Estado de conexión
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [lastMessage, setLastMessage] = useState<any>(null)
 
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimeoutRef = useRef<number | null>(null)
+  // Mensajes
+  const [messages, setMessages] = useState<WebSocketMessage[]>([])
+  const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
 
-  const connect = () => {
-    if (isConnecting || isConnected) {
-      return
-    }
-
-    try {
-      setIsConnecting(true)
-      setError(null)
-
-      console.log('🔌 Conectando a WebSocket:', `${url}?interval=${timeframe}`)
-      const ws = new WebSocket(`${url}?interval=${timeframe}`)
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        console.log('✅ WebSocket conectado')
-        setIsConnected(true)
-        setIsConnecting(false)
-        setError(null)
-      }
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data)
-          console.log('📨 Mensaje WebSocket recibido:', message)
-          setLastMessage(message)
-        } catch (err) {
-          console.error('❌ Error parseando mensaje WebSocket:', err)
-        }
-      }
-
-      ws.onclose = (event) => {
-        console.log('🔌 WebSocket desconectado:', event.code, event.reason)
-        setIsConnected(false)
-        setIsConnecting(false)
-
-        // Auto-reconnect after 3 seconds
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current)
-        }
-        reconnectTimeoutRef.current = window.setTimeout(() => {
-          connect()
-        }, 3000)
-      }
-
-      ws.onerror = (event) => {
-        console.error('❌ Error de WebSocket:', event)
-        setError('Error de conexión WebSocket')
-        setIsConnecting(false)
-      }
-    } catch (err) {
-      console.error('❌ Error creando WebSocket:', err)
-      setError('Error creando conexión WebSocket')
-      setIsConnecting(false)
-    }
+  // Función para actualizar el estado de conexión
+  const updateConnectionState = (state: {
+    isConnected?: boolean
+    isConnecting?: boolean
+    error?: string | null
+  }) => {
+    console.log('🔄 WebSocketContext: Actualizando estado de conexión:', state)
+    if (state.isConnected !== undefined) setIsConnected(state.isConnected)
+    if (state.isConnecting !== undefined) setIsConnecting(state.isConnecting)
+    if (state.error !== undefined) setError(state.error)
   }
 
-  const disconnect = () => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current)
-      reconnectTimeoutRef.current = null
+  // Función para agregar mensajes
+  const addMessage = (type: 'sent' | 'received', message: any) => {
+    const newMessage: WebSocketMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      message,
+      timestamp: Date.now()
     }
 
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
-    }
-
-    setIsConnected(false)
-    setIsConnecting(false)
+    console.log('📨 WebSocketContext: Agregando mensaje:', newMessage)
+    setMessages((prev) => [...prev, newMessage])
+    setLastMessage(newMessage)
   }
 
-  const reconnect = () => {
-    console.log('🔄 Reconectando WebSocket...')
-    disconnect()
-
-    // Small delay before reconnecting
-    setTimeout(() => {
-      connect()
-    }, 1000)
+  // Función para limpiar mensajes
+  const clearMessages = () => {
+    console.log('🗑️ WebSocketContext: Limpiando mensajes')
+    setMessages([])
+    setLastMessage(null)
   }
-
-  useEffect(() => {
-    connect()
-
-    return () => {
-      disconnect()
-    }
-  }, [url, timeframe])
 
   const value: WebSocketContextType = {
+    // Estado de conexión
     isConnected,
     isConnecting,
     error,
+
+    // Mensajes
+    messages,
     lastMessage,
-    reconnect
+
+    // Funciones
+    updateConnectionState,
+    addMessage,
+    clearMessages
   }
 
+  // console.log('🔌 WebSocketProvider: Renderizando con value:', value) // Comentado para reducir spam
   return <WebSocketContext.Provider value={value}>{children}</WebSocketContext.Provider>
 }

@@ -7,7 +7,6 @@ import {
   LineSeries
 } from 'lightweight-charts'
 import React, { useEffect, useRef, useState } from 'react'
-import { useWebSocketContext } from '../contexts/WebSocketContext'
 
 interface TradingSignal {
   time: number
@@ -31,6 +30,8 @@ interface CandlestickChartProps {
   interval?: string
   timeframe?: string
   signals?: TradingSignal[]
+  candlesData?: any[]
+  indicatorsData?: any
 }
 
 // Ultra-simple test data to avoid assertion errors
@@ -57,7 +58,9 @@ const generateSimpleData = (): CandlestickData[] => {
 const CandlestickChart: React.FC<CandlestickChartProps> = ({
   symbol = 'BTCUSDT',
   timeframe = '1m',
-  signals = []
+  signals = [],
+  candlesData: propCandlesData = [],
+  indicatorsData: propIndicatorsData = null
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const rsiContainerRef = useRef<HTMLDivElement>(null)
@@ -68,64 +71,32 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const smaSlowRef = useRef<any>(null)
   const [candleData, setCandleData] = useState<CandlestickData[]>([])
   const [indicators, setIndicators] = useState<TechnicalIndicators | null>(null)
-  const { lastMessage } = useWebSocketContext()
+  // const { lastMessage } = useWebSocketContext() // Ya no necesitamos el contexto
 
-  // Process WebSocket messages for candle data
+  // Process data from props instead of WebSocket context
   useEffect(() => {
-    console.log('WebSocket message received:', lastMessage)
-    if (lastMessage) {
-      try {
-        // Check if lastMessage is already an object or a string
-        let message
-        if (typeof lastMessage === 'string') {
-          message = JSON.parse(lastMessage)
-        } else {
-          message = lastMessage
-        }
+    if (propCandlesData && Array.isArray(propCandlesData) && propCandlesData.length > 0) {
+      // Convert server data to chart format
+      const formattedData: CandlestickData[] = propCandlesData.map((candle: any) => ({
+        time: (candle.time / 1000) as any, // Convert milliseconds to seconds
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close
+      }))
 
-        console.log('Parsed message:', message)
-        console.log('Message type:', message.type)
-        console.log('Message data:', message.data)
-        console.log('Data type:', typeof message.data)
-        console.log('Is data array?', Array.isArray(message.data))
-
-        if (message.type === 'candles' && message.data) {
-          console.log('Received candle data:', message.data)
-
-          // Check if data has candles array
-          const candlesArray = message.data.candles || message.data
-
-          if (Array.isArray(candlesArray)) {
-            // Convert server data to chart format
-            const formattedData: CandlestickData[] = candlesArray.map((candle: any) => ({
-              time: (candle.time / 1000) as any, // Convert milliseconds to seconds
-              open: candle.open,
-              high: candle.high,
-              low: candle.low,
-              close: candle.close
-            }))
-
-            console.log('Formatted data:', formattedData)
-            setCandleData(formattedData)
-          } else {
-            console.log('Data is not an array, cannot map:', candlesArray)
-          }
-        } else if (message.type === 'indicators' && message.data) {
-          console.log('Received indicators data:', message.data)
-          setIndicators(message.data)
-        } else {
-          console.log('Message type not candles or no data:', message.type, message.data)
-        }
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error)
-      }
+      setCandleData(formattedData)
     }
-  }, [lastMessage])
+  }, [propCandlesData])
+
+  useEffect(() => {
+    if (propIndicatorsData) {
+      setIndicators(propIndicatorsData)
+    }
+  }, [propIndicatorsData])
 
   useEffect(() => {
     if (!chartContainerRef.current) return
-
-    console.log('Creating ultra-simple chart...')
 
     try {
       // Get container width for responsive design
@@ -243,8 +214,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         }
       })
 
-      console.log('Chart created, adding candlestick series...')
-
       // Use the CORRECT v5 API method
       const series = chart.addSeries(CandlestickSeries, {
         upColor: '#26a69a',
@@ -281,12 +250,8 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
       // RSI and Volume will be in separate charts below
 
-      console.log('Series added, generating data...')
-
       // Use real data if available, otherwise use mock data
       const data = candleData.length > 0 ? candleData : generateSimpleData()
-
-      console.log('Data generated, setting data...')
 
       // Set data
       series.setData(data)
@@ -297,7 +262,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
       // Add signal markers
       if (signals.length > 0) {
-        console.log('Adding signal markers:', signals)
         const markers = signals.map((signal) => ({
           time: signal.time as any,
           position: signal.type === 'BUY' ? 'belowBar' : 'aboveBar',
@@ -311,7 +275,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         }))
 
         // TODO: Implement markers when Lightweight Charts API is clarified
-        console.log('Markers to be added:', markers)
         // try {
         //   // Add markers one by one
         //   markers.forEach(marker => {
@@ -327,8 +290,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       seriesRef.current = series
       smaFastRef.current = smaFast
       smaSlowRef.current = smaSlow
-
-      console.log('Chart setup completed successfully')
 
       // Handle resize
       const handleResize = () => {
@@ -349,14 +310,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         }
       }
     } catch (error) {
-      console.error('Error creating chart:', error)
+      console.error('❌ CandlestickChart: Error creando gráfico:', error)
     }
-  }, [timeframe])
+  }, [timeframe, candleData, indicators])
 
   // Update chart when new data arrives
   useEffect(() => {
     if (seriesRef.current && candleData.length > 0) {
-      console.log('Updating chart with new data:', candleData.length, 'candles')
       seriesRef.current.setData(candleData)
     }
   }, [candleData])
@@ -364,79 +324,94 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   // Update indicators when new data arrives
   useEffect(() => {
     if (indicators && smaFastRef.current && smaSlowRef.current) {
-      console.log('Updating indicators:', indicators)
+      // Verificar que los datos de indicadores existan y sean arrays
+      if (
+        indicators.sma_fast &&
+        Array.isArray(indicators.sma_fast) &&
+        indicators.sma_slow &&
+        Array.isArray(indicators.sma_slow) &&
+        indicators.timestamps &&
+        Array.isArray(indicators.timestamps)
+      ) {
+        // Prepare SMA data
+        const smaFastData: LineData[] = indicators.sma_fast.map((value, index) => ({
+          time: (indicators.timestamps[index] / 1000) as any,
+          value: value
+        }))
 
-      // Prepare SMA data
-      const smaFastData: LineData[] = indicators.sma_fast.map((value, index) => ({
-        time: (indicators.timestamps[index] / 1000) as any,
-        value: value
-      }))
+        const smaSlowData: LineData[] = indicators.sma_slow.map((value, index) => ({
+          time: (indicators.timestamps[index] / 1000) as any,
+          value: value
+        }))
 
-      const smaSlowData: LineData[] = indicators.sma_slow.map((value, index) => ({
-        time: (indicators.timestamps[index] / 1000) as any,
-        value: value
-      }))
-
-      // Update SMA series
-      smaFastRef.current.setData(smaFastData)
-      smaSlowRef.current.setData(smaSlowData)
+        // Update SMA series
+        smaFastRef.current.setData(smaFastData)
+        smaSlowRef.current.setData(smaSlowData)
+      }
     }
   }, [indicators])
 
   // Create RSI chart
   useEffect(() => {
     if (rsiContainerRef.current && indicators) {
-      const rsiChart = createChart(rsiContainerRef.current, {
-        width: rsiContainerRef.current.clientWidth,
-        height: 200,
-        layout: {
-          background: { type: ColorType.Solid, color: '#1e1e1e' },
-          textColor: '#d1d4dc'
-        },
-        timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-          borderColor: '#485c7b',
-          borderVisible: true
-        },
-        rightPriceScale: {
-          borderColor: '#485c7b',
-          borderVisible: true,
-          scaleMargins: {
-            top: 0.1,
-            bottom: 0.1
+      // Verificar que los datos de RSI existan
+      if (
+        indicators.rsi &&
+        Array.isArray(indicators.rsi) &&
+        indicators.timestamps &&
+        Array.isArray(indicators.timestamps)
+      ) {
+        const rsiChart = createChart(rsiContainerRef.current, {
+          width: rsiContainerRef.current.clientWidth,
+          height: 200,
+          layout: {
+            background: { type: ColorType.Solid, color: '#1e1e1e' },
+            textColor: '#d1d4dc'
+          },
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+            borderColor: '#485c7b',
+            borderVisible: true
+          },
+          rightPriceScale: {
+            borderColor: '#485c7b',
+            borderVisible: true,
+            scaleMargins: {
+              top: 0.1,
+              bottom: 0.1
+            }
+          }
+        })
+
+        const rsiSeries = rsiChart.addSeries(LineSeries, {
+          color: '#f39c12',
+          lineWidth: 2,
+          title: 'RSI'
+        })
+
+        // Prepare RSI data
+        const rsiData: LineData[] = indicators.rsi.map((value, index) => ({
+          time: (indicators.timestamps[index] / 1000) as any,
+          value: value
+        }))
+
+        rsiSeries.setData(rsiData)
+
+        // Handle resize
+        const handleResize = () => {
+          if (rsiContainerRef.current) {
+            rsiChart.applyOptions({
+              width: rsiContainerRef.current.clientWidth
+            })
           }
         }
-      })
 
-      const rsiSeries = rsiChart.addSeries(LineSeries, {
-        color: '#f39c12',
-        lineWidth: 2,
-        title: 'RSI'
-      })
-
-      // Prepare RSI data
-      const rsiData: LineData[] = indicators.rsi.map((value, index) => ({
-        time: (indicators.timestamps[index] / 1000) as any,
-        value: value
-      }))
-
-      rsiSeries.setData(rsiData)
-      // RSI chart created successfully
-
-      // Handle resize
-      const handleResize = () => {
-        if (rsiContainerRef.current) {
-          rsiChart.applyOptions({
-            width: rsiContainerRef.current.clientWidth
-          })
+        window.addEventListener('resize', handleResize)
+        return () => {
+          window.removeEventListener('resize', handleResize)
+          rsiChart.remove()
         }
-      }
-
-      window.addEventListener('resize', handleResize)
-      return () => {
-        window.removeEventListener('resize', handleResize)
-        rsiChart.remove()
       }
     }
   }, [indicators])
@@ -444,57 +419,64 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   // Create Volume chart
   useEffect(() => {
     if (volumeContainerRef.current && indicators) {
-      const volumeChart = createChart(volumeContainerRef.current, {
-        width: volumeContainerRef.current.clientWidth,
-        height: 200,
-        layout: {
-          background: { type: ColorType.Solid, color: '#1e1e1e' },
-          textColor: '#d1d4dc'
-        },
-        timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-          borderColor: '#485c7b',
-          borderVisible: true
-        },
-        rightPriceScale: {
-          borderColor: '#485c7b',
-          borderVisible: true,
-          scaleMargins: {
-            top: 0.1,
-            bottom: 0.1
+      // Verificar que los datos de Volume existan
+      if (
+        indicators.volume &&
+        Array.isArray(indicators.volume) &&
+        indicators.timestamps &&
+        Array.isArray(indicators.timestamps)
+      ) {
+        const volumeChart = createChart(volumeContainerRef.current, {
+          width: volumeContainerRef.current.clientWidth,
+          height: 200,
+          layout: {
+            background: { type: ColorType.Solid, color: '#1e1e1e' },
+            textColor: '#d1d4dc'
+          },
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+            borderColor: '#485c7b',
+            borderVisible: true
+          },
+          rightPriceScale: {
+            borderColor: '#485c7b',
+            borderVisible: true,
+            scaleMargins: {
+              top: 0.1,
+              bottom: 0.1
+            }
+          }
+        })
+
+        const volumeSeries = volumeChart.addSeries(HistogramSeries, {
+          color: '#9b59b6',
+          title: 'Volume'
+        })
+
+        // Prepare Volume data
+        const volumeData = indicators.volume.map((value, index) => ({
+          time: (indicators.timestamps[index] / 1000) as any,
+          value: value,
+          color: value > 0 ? '#26a69a' : '#ef5350'
+        }))
+
+        volumeSeries.setData(volumeData)
+
+        // Handle resize
+        const handleResize = () => {
+          if (volumeContainerRef.current) {
+            volumeChart.applyOptions({
+              width: volumeContainerRef.current.clientWidth
+            })
           }
         }
-      })
 
-      const volumeSeries = volumeChart.addSeries(HistogramSeries, {
-        color: '#9b59b6',
-        title: 'Volume'
-      })
-
-      // Prepare Volume data
-      const volumeData = indicators.volume.map((value, index) => ({
-        time: (indicators.timestamps[index] / 1000) as any,
-        value: value,
-        color: value > 0 ? '#26a69a' : '#ef5350'
-      }))
-
-      volumeSeries.setData(volumeData)
-      // Volume chart created successfully
-
-      // Handle resize
-      const handleResize = () => {
-        if (volumeContainerRef.current) {
-          volumeChart.applyOptions({
-            width: volumeContainerRef.current.clientWidth
-          })
+        window.addEventListener('resize', handleResize)
+        return () => {
+          window.removeEventListener('resize', handleResize)
+          volumeChart.remove()
         }
-      }
-
-      window.addEventListener('resize', handleResize)
-      return () => {
-        window.removeEventListener('resize', handleResize)
-        volumeChart.remove()
       }
     }
   }, [indicators])
@@ -502,8 +484,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   // Update signals when they change
   useEffect(() => {
     if (seriesRef.current && signals.length > 0) {
-      console.log('Updating chart with new signals:', signals.length, 'signals')
-
       const markers = signals.map((signal) => ({
         time: signal.time as any,
         position: signal.type === 'BUY' ? 'belowBar' : 'aboveBar',
@@ -518,7 +498,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       }))
 
       // TODO: Implement markers when Lightweight Charts API is clarified
-      console.log('Markers to be updated:', markers)
       // try {
       //   // Clear existing markers first
       //   seriesRef.current.setMarkers([])
@@ -542,6 +521,8 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           <span>{candleData.length > 0 ? 'Real Data' : 'Test Data'}</span>
           <span>•</span>
           <span>{candleData.length > 0 ? `${candleData.length} candles` : '20 candles'}</span>
+          <span>•</span>
+          <span>Props: {propCandlesData?.length || 0} velas recibidas</span>
           {indicators && (
             <>
               <span>•</span>
