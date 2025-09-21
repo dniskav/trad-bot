@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import InfoBox from './InfoBox'
 
 interface BotInfo {
   name: string
@@ -21,6 +22,8 @@ interface BotInfo {
     position_size: number
     synthetic_mode: boolean
   }
+  synthetic_balance_usdt: number
+  bot_description: string
 }
 
 interface ServerInfo {
@@ -110,13 +113,15 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
 
           // console.log('🔍 PlugAndPlayBots: Filtered bots:', Object.keys(plugAndPlayBots)) // Comentado para reducir spam
 
-          // Apply synthetic mode from localStorage
+          // Apply synthetic mode from localStorage and add additional info
           const botsWithSynthetic = Object.fromEntries(
             Object.entries(plugAndPlayBots).map(([name, bot]) => [
               name,
               {
                 ...bot,
-                synthetic_mode: loadSyntheticMode(name)
+                synthetic_mode: loadSyntheticMode(name),
+                synthetic_balance_usdt: getSyntheticBalance(name),
+                bot_description: getBotDescription(name)
               }
             ])
           )
@@ -295,7 +300,30 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
     if (botName.includes('rsi')) return '📊'
     if (botName.includes('macd')) return '📈'
     if (botName.includes('simple')) return '🤖'
+    if (botName.includes('conservative')) return '🛡️'
+    if (botName.includes('aggressive')) return '⚡'
     return '🔧'
+  }
+
+  const getBotDescription = (botName: string) => {
+    const descriptions: Record<string, string> = {
+      rsibot:
+        'Analiza el RSI (Relative Strength Index) para detectar condiciones de sobrecompra/sobreventa. Genera señales BUY cuando RSI < 30 y SELL cuando RSI > 70.',
+      macdbot:
+        'Utiliza el indicador MACD (Moving Average Convergence Divergence) para identificar cambios de tendencia. Señales basadas en cruces de líneas MACD y histograma.',
+      simplebot:
+        'Bot de tendencia simple que analiza cambios de precio en períodos cortos. Genera señales BUY/SELL basadas en movimientos significativos de precio.',
+      conservative:
+        'Bot conservador SMA Cross con filtros RSI y Volumen. Usa medias móviles de 8/21 períodos con validación de momentum y volumen.',
+      aggressive:
+        'Bot agresivo SMA Cross con filtros RSI y Volumen. Usa medias móviles de 5/13 períodos para señales más rápidas y sensibles.'
+    }
+    return descriptions[botName] || 'Bot de trading automatizado con estrategia personalizada.'
+  }
+
+  const getSyntheticBalance = (botName: string) => {
+    // Cada bot tiene 1000 USDT de saldo synthetic
+    return 1000
   }
 
   const formatUptime = (uptimeSeconds: number | null) => {
@@ -399,162 +427,146 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
         {botEntries.map(([botName, botInfo]) => (
           <div
             key={botName}
-            className={`bot-card-full ${botInfo.is_active ? 'active' : 'inactive'}`}>
-            <div className="bot-card-header">
-              <div className="bot-main-info">
-                <div className="bot-title">
-                  <span className="bot-icon">{getBotIcon(botName)}</span>
-                  <span className="bot-name">{botName}</span>
-                  <span className="bot-status">{botInfo.is_active ? '🟢' : '🔴'}</span>
+            className={`plugin-bot-card ${botInfo.is_active ? 'active' : 'inactive'}`}>
+            <div className="plugin-bot-card-header">
+              <div className="plugin-bot-header-left">
+                <div className="plugin-bot-title">
+                  <span className="plugin-bot-icon">{getBotIcon(botName)}</span>
+                  <span className="plugin-bot-name">{botName}</span>
+                  <span className="plugin-bot-status">{botInfo.is_active ? '🟢' : '🔴'}</span>
                   {botInfo.synthetic_mode && <span className="synthetic-badge">🧪</span>}
                 </div>
-                <div className="bot-description">{botInfo.description}</div>
+                <div className="plugin-bot-description">{botInfo.description}</div>
               </div>
 
-              <div className="bot-controls">
+              <div className="plugin-bot-header-right">
                 <button
-                  className={`synthetic-toggle ${botInfo.synthetic_mode ? 'active' : 'inactive'}`}
+                  className={`plugin-synthetic-toggle ${
+                    botInfo.synthetic_mode ? 'active' : 'inactive'
+                  }`}
                   onClick={() => handleSyntheticToggle(botName, botInfo.synthetic_mode)}
                   title={botInfo.synthetic_mode ? 'Modo Synthetic' : 'Modo Real'}>
-                  {botInfo.synthetic_mode ? '🧪 Synthetic' : '💰 Real'}
+                  {botInfo.synthetic_mode ? '🧪' : '💰'}
                 </button>
                 <button
-                  className={`bot-toggle ${botInfo.is_active ? 'active' : 'inactive'}`}
+                  className={`plugin-bot-toggle ${botInfo.is_active ? 'active' : 'inactive'}`}
                   onClick={() => handleBotToggle(botName, botInfo.is_active)}
                   disabled={loading}>
-                  {botInfo.is_active ? '⏹️ Detener' : '▶️ Iniciar'}
+                  {botInfo.is_active ? 'OFF' : 'ON'}
                 </button>
               </div>
             </div>
 
-            <div className="bot-metrics-row">
-              <div className="metric">
-                <span className="metric-label">Posiciones:</span>
-                <span className="metric-value">{botInfo.positions_count}</span>
-              </div>
-              <div className="metric">
-                <span className="metric-label">Riesgo:</span>
-                <span
-                  className="metric-value"
-                  style={{ color: getRiskLevelColor(botInfo.config.risk_level) }}>
-                  {getRiskLevelIcon(botInfo.config.risk_level)} {botInfo.config.risk_level}
-                </span>
-              </div>
-              <div className="metric">
-                <span className="metric-label">Tamaño:</span>
-                <span className="metric-value">${botInfo.config.position_size}</span>
-              </div>
-              <div className="metric">
-                <span className="metric-label">Símbolo:</span>
-                <span className="metric-value">{botInfo.config.symbol}</span>
-              </div>
-            </div>
-
-            {botInfo.last_signal && (
-              <div className="bot-signal">
-                <div className="signal-header">
-                  <span className="signal-label">Última Señal:</span>
+            <div className="plugin-bot-card-content">
+              <div className="plugin-bot-metrics-row">
+                <div className="plugin-metric">
+                  <span className="plugin-metric-label">Posiciones:</span>
+                  <span className="plugin-metric-value">{botInfo.positions_count}</span>
+                </div>
+                <div className="plugin-metric">
+                  <span className="plugin-metric-label">Riesgo:</span>
                   <span
-                    className="signal-value"
-                    style={{
-                      color:
-                        botInfo.last_signal.signal_type === 'BUY'
-                          ? '#26a69a'
-                          : botInfo.last_signal.signal_type === 'SELL'
-                          ? '#ef5350'
-                          : '#ffa726'
-                    }}>
-                    {botInfo.last_signal.signal_type}
+                    className="plugin-metric-value"
+                    style={{ color: getRiskLevelColor(botInfo.config.risk_level) }}>
+                    {getRiskLevelIcon(botInfo.config.risk_level)} {botInfo.config.risk_level}
                   </span>
                 </div>
-                <div className="signal-reasoning">{botInfo.last_signal.reasoning}</div>
-                <div className="signal-confidence">
-                  Confianza: {(botInfo.last_signal.confidence * 100).toFixed(1)}%
+                <div className="plugin-metric">
+                  <span className="plugin-metric-label">Tamaño:</span>
+                  <span className="plugin-metric-value">${botInfo.config.position_size}</span>
                 </div>
+                <div className="plugin-metric">
+                  <span className="plugin-metric-label">Símbolo:</span>
+                  <span className="plugin-metric-value">{botInfo.config.symbol}</span>
+                </div>
+                {botInfo.synthetic_mode && (
+                  <div className="plugin-metric">
+                    <span className="plugin-metric-label">Saldo Synthetic:</span>
+                    <span className="plugin-metric-value">
+                      ${botInfo.synthetic_balance_usdt} USDT
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
 
-            <div className="bot-accordion">
-              <div className="accordion-header" onClick={() => toggleBotExpansion(botName)}>
-                <span className="accordion-title">📊 Detalles del Bot</span>
-                <span className="accordion-icon">{expandedBots[botName] ? '▼' : '▶'}</span>
-              </div>
-
-              {expandedBots[botName] && (
-                <div className="accordion-content">
-                  <div className="bot-details">
-                    <div className="detail-section">
-                      <h4>📋 Configuración</h4>
-                      <div className="detail-grid">
-                        <div className="detail-item">
-                          <span className="detail-label">Versión:</span>
-                          <span className="detail-value">{botInfo.version}</span>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Autor:</span>
-                          <span className="detail-value">{botInfo.author}</span>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Intervalo:</span>
-                          <span className="detail-value">{botInfo.config.interval}</span>
-                        </div>
-                        <div className="detail-item">
-                          <span className="detail-label">Max Posiciones:</span>
-                          <span className="detail-value">{botInfo.config.max_positions}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {botInfo.is_active && (
-                      <div className="detail-section">
-                        <h4>⏱️ Estado del Bot</h4>
-                        <div className="detail-grid">
-                          <div className="detail-item">
-                            <span className="detail-label">Tiempo Activo:</span>
-                            <span className="detail-value">
-                              {formatUptime(botInfo.uptime_seconds)}
-                            </span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="detail-label">Iniciado:</span>
-                            <span className="detail-value">
-                              {botInfo.start_time
-                                ? new Date(botInfo.start_time).toLocaleString()
-                                : 'N/A'}
-                            </span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="detail-label">Posiciones Abiertas:</span>
-                            <span className="detail-value">{botInfo.positions_count}</span>
-                          </div>
-                          <div className="detail-item">
-                            <span className="detail-label">Modo:</span>
-                            <span className="detail-value">
-                              {botInfo.synthetic_mode ? '🧪 Synthetic' : '💰 Real'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {botInfo.last_signal?.metadata && (
-                      <div className="detail-section">
-                        <h4>📊 Métricas Técnicas</h4>
-                        <div className="detail-grid">
-                          {Object.entries(botInfo.last_signal.metadata).map(([key, value]) => (
-                            <div key={key} className="detail-item">
-                              <span className="detail-label">{key}:</span>
-                              <span className="detail-value">
-                                {typeof value === 'number' ? value.toFixed(4) : String(value)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              {botInfo.last_signal && (
+                <div className="bot-signal">
+                  <div className="signal-header">
+                    <span className="signal-label">Última Señal:</span>
+                    <span
+                      className="signal-value"
+                      style={{
+                        color:
+                          botInfo.last_signal.signal_type === 'BUY'
+                            ? '#26a69a'
+                            : botInfo.last_signal.signal_type === 'SELL'
+                            ? '#ef5350'
+                            : '#ffa726'
+                      }}>
+                      {botInfo.last_signal.signal_type}
+                    </span>
+                  </div>
+                  <div className="signal-reasoning">{botInfo.last_signal.reasoning}</div>
+                  <div className="signal-confidence">
+                    Confianza: {(botInfo.last_signal.confidence * 100).toFixed(1)}%
                   </div>
                 </div>
               )}
+
+              <InfoBox
+                title="📊 Info"
+                isActive={botInfo.is_active}
+                storageKey={`plugin-bot-${botName}-accordion`}
+                description={botInfo.bot_description}
+                items={[
+                  {
+                    label: 'Versión',
+                    value: botInfo.version
+                  },
+                  {
+                    label: 'Autor',
+                    value: botInfo.author
+                  },
+                  {
+                    label: 'Intervalo',
+                    value: botInfo.config.interval
+                  },
+                  {
+                    label: 'Max Posiciones',
+                    value: botInfo.config.max_positions
+                  },
+                  {
+                    label: 'Tamaño Posición',
+                    value: `$${botInfo.config.position_size}`
+                  },
+                  {
+                    label: 'Nivel Riesgo',
+                    value: botInfo.config.risk_level
+                  },
+                  ...(botInfo.is_active
+                    ? [
+                        {
+                          label: 'Tiempo Activo',
+                          value: formatUptime(botInfo.uptime_seconds)
+                        },
+                        {
+                          label: 'Iniciado',
+                          value: botInfo.start_time
+                            ? new Date(botInfo.start_time).toLocaleString()
+                            : 'N/A'
+                        },
+                        {
+                          label: 'Posiciones',
+                          value: botInfo.positions_count
+                        },
+                        {
+                          label: 'Modo',
+                          value: botInfo.synthetic_mode ? 'Synthetic' : 'Real'
+                        }
+                      ]
+                    : [])
+                ]}
+              />
             </div>
           </div>
         ))}

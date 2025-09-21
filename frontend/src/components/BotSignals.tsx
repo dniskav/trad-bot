@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import InfoBox from './InfoBox'
 
 interface BotSignalsProps {
   signals: {
@@ -31,13 +32,14 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     }
   })
 
-  const [accordionOpen, setAccordionOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('bot-signals-accordion')
-      return saved ? JSON.parse(saved) : { conservative: false, aggressive: false }
-    }
-    return { conservative: false, aggressive: false }
-  })
+  // Estado del acordeón ahora manejado por InfoBox
+  // const [accordionOpen, setAccordionOpen] = useState(() => {
+  //   if (typeof window !== 'undefined') {
+  //     const saved = localStorage.getItem('bot-signals-accordion')
+  //     return saved ? JSON.parse(saved) : { conservative: false, aggressive: false }
+  //   }
+  //   return { conservative: false, aggressive: false }
+  // })
 
   const [botProcessInfo, setBotProcessInfo] = useState({
     conservative: {
@@ -153,19 +155,20 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     }
   }
 
-  const toggleAccordion = (botType: 'conservative' | 'aggressive') => {
-    setAccordionOpen((prev: Record<string, boolean>) => {
-      const newState = {
-        ...prev,
-        [botType]: !prev[botType]
-      }
-      // Save to localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('bot-signals-accordion', JSON.stringify(newState))
-      }
-      return newState
-    })
-  }
+  // Función toggleAccordion ahora manejada por InfoBox
+  // const toggleAccordion = (botType: 'conservative' | 'aggressive') => {
+  //   setAccordionOpen((prev: Record<string, boolean>) => {
+  //     const newState = {
+  //       ...prev,
+  //       [botType]: !prev[botType]
+  //     }
+  //     // Save to localStorage
+  //     if (typeof window !== 'undefined') {
+  //       localStorage.setItem('bot-signals-accordion', JSON.stringify(newState))
+  //     }
+  //     return newState
+  //   })
+  // }
 
   const getSignalColor = (signal: string) => {
     switch (signal) {
@@ -335,66 +338,36 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
               <div className="signal-description">SMA 8 vs 21, Threshold 0.0005</div>
               {getPositionInfo('conservative')}
 
-              {/* Info Box - Siempre mostrar, cambiar color según estado */}
-              <div
-                className={`bot-info-box ${
-                  botProcessInfo.conservative.active ? 'active' : 'inactive'
-                }`}>
-                <div className="info-header" onClick={() => toggleAccordion('conservative')}>
-                  ℹ️ Info {accordionOpen.conservative ? '▼' : '▶'}
-                </div>
-                {accordionOpen.conservative && (
-                  <div className="info-content">
-                    <div className="info-item">
-                      <span className="info-label">Proceso:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.conservative.active ? 'active' : 'inactive'
-                        }`}>
-                        {botProcessInfo.conservative.active
-                          ? `activo (PID: ${botProcessInfo.conservative.pid})`
-                          : 'inactivo'}
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Memoria:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.conservative.active ? 'active' : 'inactive'
-                        }`}>
-                        {botProcessInfo.conservative.memory_mb} MB
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">CPU:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.conservative.active ? 'active' : 'inactive'
-                        }`}>
-                        {botProcessInfo.conservative.cpu_percent}%
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Inicio:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.conservative.active ? 'active' : 'inactive'
-                        }`}>
-                        {formatDateTime(botProcessInfo.conservative.create_time)}
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Tiempo ejecución:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.conservative.active ? 'active' : 'inactive'
-                        }`}>
-                        {calculateUptime(botProcessInfo.conservative.create_time)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {/* Info Box - Usar componente reutilizable */}
+              <InfoBox
+                title="ℹ️ Info"
+                isActive={botProcessInfo.conservative.active}
+                storageKey="bot-signals-conservative-accordion"
+                items={[
+                  {
+                    label: 'Proceso',
+                    value: botProcessInfo.conservative.active
+                      ? `activo (PID: ${botProcessInfo.conservative.pid})`
+                      : 'inactivo'
+                  },
+                  {
+                    label: 'Memoria',
+                    value: `${botProcessInfo.conservative.memory_mb} MB`
+                  },
+                  {
+                    label: 'CPU',
+                    value: `${botProcessInfo.conservative.cpu_percent}%`
+                  },
+                  {
+                    label: 'Inicio',
+                    value: formatDateTime(botProcessInfo.conservative.create_time)
+                  },
+                  {
+                    label: 'Tiempo ejecución',
+                    value: calculateUptime(botProcessInfo.conservative.create_time)
+                  }
+                ]}
+              />
             </div>
           </div>
 
@@ -422,66 +395,36 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
               <div className="signal-description">SMA 5 vs 13, Threshold 0.0008</div>
               {getPositionInfo('aggressive')}
 
-              {/* Info Box - Siempre mostrar, cambiar color según estado */}
-              <div
-                className={`bot-info-box ${
-                  botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                }`}>
-                <div className="info-header" onClick={() => toggleAccordion('aggressive')}>
-                  ℹ️ Info {accordionOpen.aggressive ? '▼' : '▶'}
-                </div>
-                {accordionOpen.aggressive && (
-                  <div className="info-content">
-                    <div className="info-item">
-                      <span className="info-label">Proceso:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                        }`}>
-                        {botProcessInfo.aggressive.active
-                          ? `activo (PID: ${botProcessInfo.aggressive.pid})`
-                          : 'inactivo'}
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Memoria:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                        }`}>
-                        {botProcessInfo.aggressive.memory_mb} MB
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">CPU:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                        }`}>
-                        {botProcessInfo.aggressive.cpu_percent}%
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Inicio:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                        }`}>
-                        {formatDateTime(botProcessInfo.aggressive.create_time)}
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Tiempo ejecución:</span>
-                      <span
-                        className={`info-value ${
-                          botProcessInfo.aggressive.active ? 'active' : 'inactive'
-                        }`}>
-                        {calculateUptime(botProcessInfo.aggressive.create_time)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+              {/* Info Box - Usar componente reutilizable */}
+              <InfoBox
+                title="ℹ️ Info"
+                isActive={botProcessInfo.aggressive.active}
+                storageKey="bot-signals-aggressive-accordion"
+                items={[
+                  {
+                    label: 'Proceso',
+                    value: botProcessInfo.aggressive.active
+                      ? `activo (PID: ${botProcessInfo.aggressive.pid})`
+                      : 'inactivo'
+                  },
+                  {
+                    label: 'Memoria',
+                    value: `${botProcessInfo.aggressive.memory_mb} MB`
+                  },
+                  {
+                    label: 'CPU',
+                    value: `${botProcessInfo.aggressive.cpu_percent}%`
+                  },
+                  {
+                    label: 'Inicio',
+                    value: formatDateTime(botProcessInfo.aggressive.create_time)
+                  },
+                  {
+                    label: 'Tiempo ejecución',
+                    value: calculateUptime(botProcessInfo.aggressive.create_time)
+                  }
+                ]}
+              />
             </div>
           </div>
         </div>
