@@ -272,10 +272,41 @@ def main_loop(use_synthetic=False):
         time.sleep(SLEEP_SECONDS)
 
 
+def check_existing_process():
+    """Verifica si ya hay una instancia del bot ejecutándose"""
+    try:
+        import psutil
+        current_pid = os.getpid()
+        script_name = os.path.basename(__file__)
+        
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if (proc.info['pid'] != current_pid and 
+                    proc.info['cmdline'] and 
+                    any(script_name in cmd for cmd in proc.info['cmdline'])):
+                    logging.warning(f"⚠️ Ya hay una instancia del bot ejecutándose (PID: {proc.info['pid']})")
+                    logging.warning(f"⚠️ Terminando esta instancia para evitar duplicados...")
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return False
+    except ImportError:
+        logging.warning("⚠️ psutil no disponible, saltando verificación de duplicados")
+        return False
+    except Exception as e:
+        logging.error(f"❌ Error verificando procesos existentes: {e}")
+        return False
+
 # ------------------ ENTRY POINT ------------------
 if __name__ == "__main__":
+    # Verificar si ya hay una instancia ejecutándose
+    if check_existing_process():
+        logging.info("🛑 Bot terminado para evitar duplicados")
+        exit(0)
+    
     parser = argparse.ArgumentParser(description="SMA Cross Bot para Binance Futures Testnet con métricas y debug.")
     parser.add_argument("--synthetic", action="store_true", help="Ejecuta test sintético en lugar del loop real.")
     args = parser.parse_args()
 
+    logging.info("🚀 Bot conservador iniciado - verificación de duplicados completada")
     main_loop(use_synthetic=args.synthetic)

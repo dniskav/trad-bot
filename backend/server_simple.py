@@ -40,11 +40,60 @@ real_trading_manager.sync_history_with_binance_orders(trading_tracker)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Disable FastAPI access logs for polling endpoints
+import logging
+uvicorn_logger = logging.getLogger("uvicorn.access")
+uvicorn_logger.setLevel(logging.WARNING)
+
 # Global variables to track bot processes
 bot_processes = {
     'conservative': None,
     'aggressive': None
 }
+
+def cleanup_duplicate_bots():
+    """Limpia procesos duplicados de bots al inicio del servidor"""
+    try:
+        import psutil
+        logger.info("🔍 Verificando procesos duplicados de bots...")
+        
+        bot_scripts = ['sma_cross_bot.py', 'aggressive_scalping_bot.py']
+        duplicate_count = 0
+        
+        for script in bot_scripts:
+            processes = []
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if proc.info['cmdline'] and any(script in cmd for cmd in proc.info['cmdline']):
+                        processes.append(proc.info['pid'])
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
+            if len(processes) > 1:
+                logger.warning(f"⚠️ Encontrados {len(processes)} procesos de {script}: {processes}")
+                # Terminar todos excepto el primero
+                for pid in processes[1:]:
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                        logger.info(f"🛑 Proceso duplicado {pid} de {script} terminado")
+                        duplicate_count += 1
+                    except (ProcessLookupError, PermissionError):
+                        pass
+        
+        if duplicate_count > 0:
+            logger.info(f"✅ {duplicate_count} procesos duplicados limpiados")
+            import time
+            time.sleep(2)  # Esperar a que terminen
+        else:
+            logger.info("✅ No se encontraron procesos duplicados")
+            
+    except ImportError:
+        logger.warning("⚠️ psutil no disponible, saltando limpieza de duplicados")
+    except Exception as e:
+        logger.error(f"❌ Error en limpieza de duplicados: {e}")
+
+# Limpiar duplicados al inicio
+cleanup_duplicate_bots()
 
 def get_bot_process_status():
     """Obtiene el estado actual de los procesos de los bots"""
@@ -129,22 +178,48 @@ def get_bot_process_info():
     return process_info
 
 def start_bot(bot_type: str):
-    """Inicia un bot específico"""
+    """Inicia un bot específico con verificación de duplicados"""
     if bot_type not in ['conservative', 'aggressive']:
         return False, f"Tipo de bot inválido: {bot_type}"
     
-    # Check if bot is already running
+    # Verificar si ya hay procesos del bot ejecutándose (incluyendo manuales)
+    script_name = "sma_cross_bot.py" if bot_type == "conservative" else "aggressive_scalping_bot.py"
+    
+    # Buscar procesos existentes del bot
+    try:
+        import psutil
+        existing_processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.info['cmdline'] and any(script_name in cmd for cmd in proc.info['cmdline']):
+                    existing_processes.append(proc.info['pid'])
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        if existing_processes:
+            logger.warning(f"⚠️ Encontrados {len(existing_processes)} procesos existentes del bot {bot_type}: {existing_processes}")
+            # Terminar procesos existentes
+            for pid in existing_processes:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    logger.info(f"🛑 Proceso duplicado {pid} terminado")
+                except (ProcessLookupError, PermissionError):
+                    pass
+            # Esperar un momento para que terminen
+            import time
+            time.sleep(2)
+    except ImportError:
+        logger.warning("⚠️ psutil no disponible, usando verificación básica")
+    
+    # Check if bot is already running in our system
     if bot_processes[bot_type] is not None:
         try:
             if bot_processes[bot_type].poll() is None:
-                return False, f"Bot {bot_type} ya está ejecutándose"
+                return False, f"Bot {bot_type} ya está ejecutándose en nuestro sistema"
         except:
             pass
     
     try:
-        # Determine which script to run
-        script_name = "sma_cross_bot.py" if bot_type == "conservative" else "aggressive_scalping_bot.py"
-        
         # Start the bot process
         process = subprocess.Popen(
             ["python3", script_name],
@@ -1189,5 +1264,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=True,
-        log_level="info"
+        log_level="warning"  # Cambiar a warning para reducir logs
     ) 

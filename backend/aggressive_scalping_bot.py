@@ -327,7 +327,37 @@ def main_loop():
             time.sleep(SLEEP_SECONDS)
 
 
+def check_existing_process():
+    """Verifica si ya hay una instancia del bot ejecutándose"""
+    try:
+        import psutil
+        current_pid = os.getpid()
+        script_name = os.path.basename(__file__)
+        
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if (proc.info['pid'] != current_pid and 
+                    proc.info['cmdline'] and 
+                    any(script_name in cmd for cmd in proc.info['cmdline'])):
+                    logging.warning(f"⚠️ Ya hay una instancia del bot ejecutándose (PID: {proc.info['pid']})")
+                    logging.warning(f"⚠️ Terminando esta instancia para evitar duplicados...")
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return False
+    except ImportError:
+        logging.warning("⚠️ psutil no disponible, saltando verificación de duplicados")
+        return False
+    except Exception as e:
+        logging.error(f"❌ Error verificando procesos existentes: {e}")
+        return False
+
 if __name__ == "__main__":
+    # Verificar si ya hay una instancia ejecutándose
+    if check_existing_process():
+        logging.info("🛑 Bot terminado para evitar duplicados")
+        exit(0)
+    
     parser = argparse.ArgumentParser(description="Bot Agresivo para Scalping")
     parser.add_argument("--paper", action="store_true", help="Modo paper trading (solo simulación)")
     args = parser.parse_args()
@@ -335,4 +365,5 @@ if __name__ == "__main__":
     if args.paper:
         logging.info("📄 Modo Paper Trading activado")
     
+    logging.info("🚀 Bot agresivo iniciado - verificación de duplicados completada")
     main_loop()
