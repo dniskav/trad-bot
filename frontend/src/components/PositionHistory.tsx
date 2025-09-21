@@ -166,16 +166,16 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
               <div className="history-header">
                 <div className="history-bot">
                   <span className="bot-icon">{getBotIcon(position.bot_type)}</span>
-                  <span className="bot-name">{position.bot_type}</span>
+                  <span className="bot-name">{position.bot_type || 'N/A'}</span>
                 </div>
                 <div className="history-type">
-                  <span className={`position-type ${position.type.toLowerCase()}`}>
-                    {position.type}
+                  <span className={`position-type ${position.type?.toLowerCase() || 'unknown'}`}>
+                    {position.type || 'N/A'}
                   </span>
                 </div>
                 <div className="history-reason">
                   <span className="reason-icon">{getCloseReasonIcon(position.close_reason)}</span>
-                  <span className="reason-text">{position.close_reason}</span>
+                  <span className="reason-text">{position.close_reason || 'N/A'}</span>
                 </div>
               </div>
 
