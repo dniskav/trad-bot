@@ -62,7 +62,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
         setPositionHistory(data.data || [])
       } else if (data.type === 'active_positions') {
         setActivePositions(data.data || [])
-      } else if (data.type === 'price_update') {
+      } else if (data.type === 'price' || data.type === 'price_update') {
         setCurrentPrice(data.data?.price || 0)
       } else if (data.type === 'account_balance') {
         setAccountBalance(data.data)
