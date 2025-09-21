@@ -81,6 +81,14 @@ run_foreground() {
     echo -e "${YELLOW}💡 Presiona Ctrl+C para detener${NC}"
     echo "----------------------------------------"
     
+    # Activar entorno virtual
+    if [ -f ".venv/bin/activate" ]; then
+        echo -e "${GREEN}✅ Activando entorno virtual...${NC}"
+        source .venv/bin/activate
+    else
+        echo -e "${YELLOW}⚠️  No se encontró entorno virtual, usando Python del sistema${NC}"
+    fi
+    
     cd backend
     python3 server_simple.py
 }
@@ -88,6 +96,14 @@ run_foreground() {
 # Función para ejecutar en segundo plano
 run_background() {
     echo -e "${BLUE}🚀 Iniciando servidor en segundo plano...${NC}"
+    
+    # Activar entorno virtual
+    if [ -f ".venv/bin/activate" ]; then
+        echo -e "${GREEN}✅ Activando entorno virtual...${NC}"
+        source .venv/bin/activate
+    else
+        echo -e "${YELLOW}⚠️  No se encontró entorno virtual, usando Python del sistema${NC}"
+    fi
     
     cd backend
     nohup python3 server_simple.py > server.log 2>&1 &
