@@ -27,8 +27,8 @@ INTERVAL = "1m"  # Mantenemos 1m como mínimo de Binance
 FAST_WINDOW = 3      # SMA rápida más corta (era 5)
 SLOW_WINDOW = 8      # SMA lenta más corta (era 20)
 CAPITAL = 1000
-RISK_PER_TRADE = 0.02  # Mayor riesgo por trade (era 0.01)
-THRESHOLD = -0.0003    # Más sensible para generar más señales
+RISK_PER_TRADE = 0.01  # 1.0% - Más conservador para DOGE (era 2%)
+THRESHOLD = -0.0002  # Muy sensible para generar más señales
 
 SLEEP_SECONDS = 15   # Verificar más frecuentemente (era 30)
 

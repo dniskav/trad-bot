@@ -14,13 +14,13 @@ load_dotenv()
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
 
-SYMBOL = "ADAUSDT"  # Cardano - Mayor volatilidad (0.78%)
+SYMBOL = "DOGEUSDT"  # Dogecoin - NOTIONAL mínimo $1.00
 INTERVAL = "1m"
 FAST_WINDOW = 5
 SLOW_WINDOW = 20
 CAPITAL = 1000
-RISK_PER_TRADE = 0.01
-THRESHOLD = -0.0005  # Más sensible para generar más señales
+RISK_PER_TRADE = 0.005  # 0.5% - Más conservador para DOGE
+THRESHOLD = -0.0001  # Muy sensible para generar más señales
 
 SLEEP_SECONDS = 30
 

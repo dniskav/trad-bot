@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script de prueba para verificar que el TradingTracker actualizado funcione con el frontend
+Script de prueba para verificar múltiples posiciones por bot
 """
 
 import sys
@@ -14,26 +14,26 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def test_trading_tracker():
-    """Prueba el TradingTracker actualizado"""
+def test_multiple_positions():
+    """Prueba múltiples posiciones por bot"""
     
-    print("🧪 Probando TradingTracker actualizado...")
+    print("🧪 Probando múltiples posiciones por bot...")
     
     # Crear instancia del tracker
     tracker = TradingTracker()
     
-    # Simular algunas posiciones
-    print(f"\n🔍 Simulando posiciones para bot 'conservative':")
+    # Simular múltiples posiciones para conservative
+    print(f"\n🔍 Simulando múltiples posiciones para bot 'conservative':")
     
-    # Primera posición
+    # Primera posición BUY
     tracker.update_position('conservative', 'BUY', 0.5, 10.0)
     print(f"   ✅ Primera posición BUY abierta")
     
-    # Segunda posición (debería abrirse también)
+    # Segunda posición BUY (debería abrirse también)
     tracker.update_position('conservative', 'BUY', 0.52, 8.0)
     print(f"   ✅ Segunda posición BUY abierta")
     
-    # Tercera posición
+    # Tercera posición SELL
     tracker.update_position('conservative', 'SELL', 0.48, 5.0)
     print(f"   ✅ Tercera posición SELL abierta")
     
@@ -94,10 +94,10 @@ def test_trading_tracker():
         return False
 
 if __name__ == "__main__":
-    print("🚀 Iniciando pruebas del TradingTracker actualizado...")
+    print("🚀 Iniciando pruebas del TradingTracker con múltiples posiciones...")
     
     try:
-        success = test_trading_tracker()
+        success = test_multiple_positions()
         
         if success:
             print(f"\n🎉 ¡Todas las pruebas pasaron!")

@@ -21,9 +21,6 @@ class TradingTracker:
     """Rastrea las posiciones de trading en tiempo real - Soporta múltiples posiciones por bot"""
     
     def __init__(self, binance_client=None):
-        # Cliente de Binance para obtener balances en tiempo real
-        self.binance_client = binance_client
-        
         # Múltiples posiciones por bot (compatible con RealTradingManager)
         self.positions = {
             'conservative': {},  # Diccionario de posiciones múltiples
@@ -53,16 +50,15 @@ class TradingTracker:
         self.fee_rate = 0.00075  # 0.075% por trade con BNB
         self.total_fee_rate = 0.0015  # 0.15% total (compra + venta)
         
-        # Stop Loss y Take Profit ajustados para cubrir comisiones + ganancia
-        # Comisión total: 0.15% (BUY + SELL), ganancia mínima: 1.0%
+        # Stop Loss y Take Profit recomendados por tipo de bot
         self.stop_loss_config = {
-            'conservative': {'stop_loss': 0.012, 'take_profit': 0.025},  # SL 1.2%, TP 2.5% (cubre comisiones + ganancia)
-            'aggressive': {'stop_loss': 0.008, 'take_profit': 0.020},   # SL 0.8%, TP 2.0% (más conservador para cubrir comisiones)
-            'demo': {'stop_loss': 0.010, 'take_profit': 0.020}           # 1.0% SL, 2.0% TP
+            'conservative': {'stop_loss': 0.015, 'take_profit': 0.020},  # 1.5% SL, 2.0% TP
+            'aggressive': {'stop_loss': 0.008, 'take_profit': 0.012},   # 0.8% SL, 1.2% TP
+            'demo': {'stop_loss': 0.010, 'take_profit': 0.015}           # 1.0% SL, 1.5% TP
         }
     
     def _calculate_initial_balance_from_binance(self, binance_client):
-        """Calcula el balance inicial desde Binance (USDT + DOGE convertido a USDT)"""
+        """Calcula el balance inicial desde Binance (USDT + ADA convertido a USDT)"""
         if not binance_client:
             logger.warning("⚠️ Cliente de Binance no disponible, usando balance por defecto: $10.00")
             return 10.0
@@ -73,18 +69,18 @@ class TradingTracker:
             balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
             
             usdt_balance = balances.get('USDT', 0.0)
-            doge_balance = balances.get('DOGE', 0.0)
+            ada_balance = balances.get('ADA', 0.0)
             
-            # Obtener precio actual de DOGE para convertir a USDT
-            ticker = binance_client.get_symbol_ticker(symbol='DOGEUSDT')
-            doge_price = float(ticker['price'])
+            # Obtener precio actual de ADA para convertir a USDT
+            ticker = binance_client.get_symbol_ticker(symbol='ADAUSDT')
+            ada_price = float(ticker['price'])
             
             # Calcular balance total en USDT
-            total_balance = usdt_balance + (doge_balance * doge_price)
+            total_balance = usdt_balance + (ada_balance * ada_price)
             
             logger.info(f"💰 Balance inicial calculado desde Binance:")
             logger.info(f"   USDT: ${usdt_balance:.2f}")
-            logger.info(f"   DOGE: {doge_balance:.2f} (${doge_balance * doge_price:.2f})")
+            logger.info(f"   ADA: {ada_balance:.2f} (${ada_balance * ada_price:.2f})")
             logger.info(f"   Total: ${total_balance:.2f}")
             
             return total_balance
@@ -101,59 +97,17 @@ class TradingTracker:
                 with open(HISTORY_FILE, 'r') as f:
                     data = json.load(f)
                     self.position_history = data.get('history', [])
-                    
-                    # Cargar estado de bots (por defecto inactivos)
-                    self.bot_status = data.get('bot_status', {
-                        'conservative': False,  # Por defecto inactivo
-                        'aggressive': False     # Por defecto inactivo
-                    })
-                    
-                    # Cargar posiciones activas
-                    self.active_positions = data.get('active_positions', {
-                        'conservative': {},
-                        'aggressive': {}
-                    })
-                    
-                    # Siempre calcular balance actual desde Binance para mantener sincronización
-                    if self.binance_client:
-                        current_balance_from_binance = self._calculate_initial_balance_from_binance(self.binance_client)
-                        self.current_balance = current_balance_from_binance
-                        logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f}")
-                    
-                    # Solo usar datos guardados si no hay cliente de Binance
-                    if not self.binance_client and not self.position_history:
+                    # Solo cargar balance si no hay historial
+                    if not self.position_history:
                         self.initial_balance = data.get('initial_balance', self.initial_balance)
                         self.current_balance = data.get('current_balance', self.current_balance)
                         self.total_pnl = data.get('total_pnl', 0.0)
-                    
                 logger.info(f"📂 Historial cargado: {len(self.position_history)} posiciones")
-                logger.info(f"🤖 Estado de bots cargado: Conservative={self.bot_status['conservative']}, Aggressive={self.bot_status['aggressive']}")
-                logger.info(f"📊 Posiciones activas cargadas: Conservative={len(self.active_positions['conservative'])}, Aggressive={len(self.active_positions['aggressive'])}")
             else:
                 logger.info("📂 No se encontró archivo de historial, iniciando desde cero")
-                # Estado por defecto: ambos bots inactivos
-                self.bot_status = {
-                    'conservative': False,
-                    'aggressive': False
-                }
-                # Posiciones activas por defecto
-                self.active_positions = {
-                    'conservative': {},
-                    'aggressive': {}
-                }
         except Exception as e:
             logger.error(f"❌ Error cargando historial: {e}")
             self.position_history = []
-            # Estado por defecto en caso de error
-            self.bot_status = {
-                'conservative': False,
-                'aggressive': False
-            }
-            # Posiciones activas por defecto en caso de error
-            self.active_positions = {
-                'conservative': {},
-                'aggressive': {}
-            }
     
     def save_history(self):
         """Guarda el historial de posiciones en archivo"""
@@ -168,22 +122,13 @@ class TradingTracker:
                 'initial_balance': self.initial_balance,
                 'current_balance': self.current_balance,
                 'total_pnl': self.total_pnl,
-                'bot_status': self.bot_status,
-                'active_positions': self.active_positions,
                 'last_updated': datetime.now().isoformat()
             }
             
             with open(HISTORY_FILE, 'w') as f:
                 json.dump(data, f, indent=2, default=str)
             
-            # Log detallado del guardado del historial
-            if len(self.position_history) > 0:
-                last_trade = self.position_history[-1]
-                logger.info(f"💾 Historial guardado: {len(self.position_history)} posiciones")
-                logger.info(f"📈 Último trade: {last_trade['bot_type'].upper()} {last_trade['side']} - PnL: ${last_trade['net_pnl']:.4f}")
-                logger.info(f"💰 Balance actualizado: ${self.current_balance:.2f} (PnL total: ${self.total_pnl:.4f})")
-            else:
-                logger.info(f"💾 Historial guardado: {len(self.position_history)} posiciones")
+            logger.info(f"💾 Historial guardado: {len(self.position_history)} posiciones")
         except Exception as e:
             logger.error(f"❌ Error guardando historial: {e}")
     
@@ -199,17 +144,6 @@ class TradingTracker:
             take_profit = entry_price * (1 - config['take_profit'])
         
         return stop_loss, take_profit
-    
-    def get_bot_status(self) -> Dict[str, bool]:
-        """Obtiene el estado actual de los bots"""
-        return self.bot_status.copy()
-    
-    def update_bot_status(self, bot_type: str, is_active: bool):
-        """Actualiza el estado de un bot y guarda el historial"""
-        if bot_type in self.bot_status:
-            self.bot_status[bot_type] = is_active
-            self.save_history()  # Guardar inmediatamente el cambio de estado
-            logger.info(f"🤖 Estado de bot {bot_type.upper()} actualizado: {'Activo' if is_active else 'Inactivo'}")
     
     def update_position(self, bot_type: str, signal: str, current_price: float, quantity: float = 1.0):
         """Actualiza las posiciones de un bot (soporta múltiples posiciones)"""
@@ -229,7 +163,7 @@ class TradingTracker:
             
             # Abrir nueva posición
             self.positions[bot_type][position_id] = {
-                'signal_type': signal,
+                'type': signal,
                 'entry_price': current_price,
                 'quantity': quantity,
                 'entry_time': datetime.now(),
@@ -264,7 +198,7 @@ class TradingTracker:
                 total_fees = position['entry_fee'] + exit_fee
                 
                 # Calcular PnL bruto
-                if position['signal_type'] == 'BUY':
+                if position['type'] == 'BUY':
                     position['pnl'] = (current_price - position['entry_price']) * position['quantity']
                     position['pnl_pct'] = ((current_price - position['entry_price']) / position['entry_price']) * 100
                 else:  # SELL
@@ -277,8 +211,6 @@ class TradingTracker:
                 position['total_fees'] = total_fees
                 
                 logger.info(f"🔒 {bot_type.upper()} - Cerrando posición {position_id}: PnL ${position['pnl']:.4f} ({position['pnl_pct']:.2f}%)")
-                logger.info(f"📊 Trade completado: {position['signal_type']} {position['quantity']} DOGE - Precio entrada: ${position['entry_price']:.6f} - Precio salida: ${position['exit_price']:.6f}")
-                logger.info(f"💵 PnL Neto: ${position['pnl_net']:.4f} - Comisiones: ${total_fees:.4f}")
                 
                 # Agregar al historial
                 self.position_history.append({
@@ -286,9 +218,6 @@ class TradingTracker:
                     'position_id': position_id,
                     **position
                 })
-                
-                # Guardar historial inmediatamente cuando se cierra una posición
-                self.save_history()
                 
                 # Actualizar saldo de cuenta
                 self.update_balance(position['pnl_net'])
@@ -302,7 +231,7 @@ class TradingTracker:
                 position['current_price'] = current_price
                 
                 # Calcular PnL bruto actual
-                if position['signal_type'] == 'BUY':
+                if position['type'] == 'BUY':
                     position['pnl'] = (current_price - position['entry_price']) * position['quantity']
                     position['pnl_pct'] = ((current_price - position['entry_price']) / position['entry_price']) * 100
                 else:  # SELL
@@ -317,6 +246,10 @@ class TradingTracker:
         
         # Actualizar última señal
         self.last_signals[bot_type] = signal
+        
+        # Guardar historial periódicamente
+        if len(self.position_history) % 10 == 0:  # Cada 10 posiciones
+            self.save_history()
     
     def update_balance(self, pnl_net: float):
         """Actualiza el balance de la cuenta"""
@@ -329,39 +262,13 @@ class TradingTracker:
         """Obtiene información del saldo de la cuenta"""
         balance_change_pct = ((self.current_balance - self.initial_balance) / self.initial_balance) * 100
         
-        # Obtener balances específicos de Binance si está disponible
-        usdt_balance = 0.0
-        doge_balance = 0.0
-        
-        if hasattr(self, 'binance_client') and self.binance_client:
-            try:
-                account_info = self.binance_client.get_account()
-                balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
-                usdt_balance = balances.get('USDT', 0.0)
-                doge_balance = balances.get('DOGE', 0.0)
-            except Exception as e:
-                logger.warning(f"⚠️ No se pudo obtener balance de Binance: {e}")
-        
         return {
             'initial_balance': self.initial_balance,
             'current_balance': self.current_balance,
             'total_pnl': self.total_pnl,
             'balance_change_pct': balance_change_pct,
-            'is_profitable': self.current_balance > self.initial_balance,
-            'usdt_balance': usdt_balance,
-            'doge_balance': doge_balance,
-            'total_balance_usdt': usdt_balance + (doge_balance * self._get_current_doge_price())
+            'is_profitable': self.current_balance > self.initial_balance
         }
-    
-    def _get_current_doge_price(self) -> float:
-        """Obtiene el precio actual de DOGE en USDT"""
-        if hasattr(self, 'binance_client') and self.binance_client:
-            try:
-                ticker = self.binance_client.get_symbol_ticker(symbol='DOGEUSDT')
-                return float(ticker['price'])
-            except Exception as e:
-                logger.warning(f"⚠️ No se pudo obtener precio de DOGE: {e}")
-        return 0.0
     
     def get_position_info(self, bot_type: str) -> Optional[Dict[str, Any]]:
         """Obtiene información de las posiciones actuales de un bot"""
@@ -473,210 +380,6 @@ class TradingTracker:
                 'max_pnl': max(pos.get('pnl_net', 0) for pos in self.position_history) if self.position_history else 0,
                 'min_pnl': min(pos.get('pnl_net', 0) for pos in self.position_history) if self.position_history else 0
             }
-    
-    def get_active_positions(self):
-        """Retorna las posiciones activas"""
-        return self.active_positions
-    
-    def update_active_position(self, bot_type: str, position_id: str, position_data: dict):
-        """Actualiza una posición activa"""
-        if bot_type in self.active_positions:
-            self.active_positions[bot_type][position_id] = position_data
-            logger.info(f"📊 Posición activa actualizada: {bot_type.upper()} - {position_id}")
-    
-    def remove_active_position(self, bot_type: str, position_id: str):
-        """Remueve una posición activa"""
-        if bot_type in self.active_positions and position_id in self.active_positions[bot_type]:
-            del self.active_positions[bot_type][position_id]
-            logger.info(f"📊 Posición activa removida: {bot_type.upper()} - {position_id}")
-    
-    def clear_active_positions(self, bot_type: str = None):
-        """Limpia las posiciones activas de un bot específico o de todos"""
-        if bot_type:
-            if bot_type in self.active_positions:
-                self.active_positions[bot_type] = {}
-                logger.info(f"📊 Posiciones activas limpiadas para {bot_type.upper()}")
-        else:
-            self.active_positions = {
-                'conservative': {},
-                'aggressive': {}
-            }
-            logger.info("📊 Todas las posiciones activas limpiadas")
-    
-    def _parse_datetime(self, dt_value):
-        """Convierte un valor a datetime, manejando strings y objetos datetime"""
-        if dt_value is None:
-            return None
-        
-        if isinstance(dt_value, datetime):
-            return dt_value
-        
-        if isinstance(dt_value, str):
-            try:
-                # Manejar diferentes formatos de fecha
-                if 'T' in dt_value:
-                    return datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
-                else:
-                    # Formato simple sin timezone
-                    return datetime.fromisoformat(dt_value)
-            except ValueError:
-                logger.warning(f"⚠️ No se pudo parsear fecha: {dt_value}")
-                return datetime.now()
-        
-        return datetime.now()
-
-    def create_order_record(self, bot_type: str, symbol: str, side: str, quantity: float, 
-                          entry_price: float, order_id: str, position_id: str) -> dict:
-        """Crea un registro de orden en el historial"""
-        order_record = {
-            'order_id': order_id,
-            'position_id': position_id,
-            'bot_type': bot_type,
-            'symbol': symbol,
-            'side': side,
-            'quantity': quantity,
-            'entry_price': entry_price,
-            'entry_time': datetime.now(),
-            'status': 'OPEN',  # OPEN, UPDATED, CLOSED
-            'current_price': entry_price,
-            'pnl': 0.0,
-            'pnl_percentage': 0.0,
-            'close_price': None,
-            'close_time': None,
-            'duration_minutes': 0,
-            'fees_paid': 0.0,
-            'net_pnl': 0.0
-        }
-        
-        # Agregar al historial
-        self.position_history.append(order_record)
-        logger.info(f"📝 Orden creada en historial: {bot_type.upper()} {side} {quantity} {symbol} a ${entry_price}")
-        
-        return order_record
-    
-    def update_order_status(self, order_id: str, current_price: float, status: str = 'UPDATED'):
-        """Actualiza el estado de una orden en el historial"""
-        for order in reversed(self.position_history):  # Buscar desde el más reciente
-            if order['order_id'] == order_id:
-                order['status'] = status
-                order['current_price'] = current_price
-                
-                # Calcular PnL
-                if order['side'] == 'BUY':
-                    order['pnl'] = (current_price - order['entry_price']) * order['quantity']
-                    order['pnl_percentage'] = ((current_price - order['entry_price']) / order['entry_price']) * 100
-                else:  # SELL
-                    order['pnl'] = (order['entry_price'] - current_price) * order['quantity']
-                    order['pnl_percentage'] = ((order['entry_price'] - current_price) / order['entry_price']) * 100
-                
-                # Calcular duración
-                if order['entry_time']:
-                    entry_time = self._parse_datetime(order['entry_time'])
-                    duration = datetime.now() - entry_time
-                    order['duration_minutes'] = int(duration.total_seconds() / 60)
-                
-                logger.info(f"📊 Orden actualizada: {order['bot_type'].upper()} PnL: ${order['pnl']:.4f} ({order['pnl_percentage']:.2f}%)")
-                return order
-        
-        logger.warning(f"⚠️ Orden {order_id} no encontrada en historial")
-        return None
-    
-    def close_order(self, order_id: str, close_price: float, fees_paid: float = 0.0):
-        """Cierra una orden en el historial con PnL final"""
-        for order in reversed(self.position_history):  # Buscar desde el más reciente
-            if order['order_id'] == order_id:
-                order['status'] = 'CLOSED'
-                order['close_price'] = close_price
-                order['close_time'] = datetime.now()
-                order['fees_paid'] = fees_paid
-                
-                # Calcular PnL final
-                if order['side'] == 'BUY':
-                    order['pnl'] = (close_price - order['entry_price']) * order['quantity']
-                    order['pnl_percentage'] = ((close_price - order['entry_price']) / order['entry_price']) * 100
-                else:  # SELL
-                    order['pnl'] = (order['entry_price'] - close_price) * order['quantity']
-                    order['pnl_percentage'] = ((order['entry_price'] - close_price) / order['entry_price']) * 100
-                
-                # PnL neto (después de comisiones)
-                order['net_pnl'] = order['pnl'] - fees_paid
-                
-                # Calcular duración total
-                if order['entry_time'] and order['close_time']:
-                    entry_time = self._parse_datetime(order['entry_time'])
-                    close_time = self._parse_datetime(order['close_time'])
-                    duration = close_time - entry_time
-                    order['duration_minutes'] = int(duration.total_seconds() / 60)
-                
-                # Actualizar balance y PnL total
-                self.current_balance += order['net_pnl']
-                self.total_pnl += order['net_pnl']
-                
-                # Guardar historial inmediatamente
-                self.save_history()
-                
-                logger.info(f"🔒 Orden cerrada: {order['bot_type'].upper()} {order['side']} PnL: ${order['net_pnl']:.4f} ({order['pnl_percentage']:.2f}%)")
-                logger.info(f"💰 Balance actualizado: ${self.current_balance:.2f} (PnL total: ${self.total_pnl:.4f})")
-                
-                return order
-        
-        logger.warning(f"⚠️ Orden {order_id} no encontrada en historial")
-        return None
-    
-    def get_order_status(self, order_id: str) -> dict:
-        """Obtiene el estado actual de una orden"""
-        for order in reversed(self.position_history):
-            if order['order_id'] == order_id:
-                return order
-        return None
-    
-    def get_open_orders(self) -> list:
-        """Obtiene todas las órdenes abiertas"""
-        return [order for order in self.position_history if order['status'] == 'OPEN']
-    
-    def get_closed_orders(self) -> list:
-        """Obtiene todas las órdenes cerradas"""
-        return [order for order in self.position_history if order['status'] == 'CLOSED']
-    
-    def update_current_balance_from_binance(self):
-        """Actualiza el balance actual desde Binance"""
-        if not self.binance_client:
-            return
-        
-        try:
-            # Obtener balance de la cuenta
-            account_info = self.binance_client.get_account()
-            balances = {balance['asset']: float(balance['free']) for balance in account_info['balances']}
-            
-            usdt_balance = balances.get('USDT', 0.0)
-            doge_balance = balances.get('DOGE', 0.0)
-            
-            # Obtener precio actual de DOGE para convertir a USDT
-            ticker = self.binance_client.get_symbol_ticker(symbol='DOGEUSDT')
-            doge_price = float(ticker['price'])
-            
-            # Calcular balance total en USDT
-            new_balance = usdt_balance + (doge_balance * doge_price)
-            
-            # Actualizar balance actual
-            self.current_balance = new_balance
-            
-            # Calcular PnL total basado en la diferencia con el balance inicial
-            self.total_pnl = self.current_balance - self.initial_balance
-            
-            logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f} (PnL: ${self.total_pnl:.4f})")
-            
-            return {
-                'usdt_balance': usdt_balance,
-                'doge_balance': doge_balance,
-                'doge_price': doge_price,
-                'total_balance': new_balance,
-                'total_pnl': self.total_pnl
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error actualizando balance desde Binance: {e}")
-            return None
 
 # Instancia global del tracker - se inicializará con el cliente de Binance
 trading_tracker = None
