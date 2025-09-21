@@ -12,7 +12,7 @@ const WebSocketTest: React.FC = () => {
   const ctx = useContext(WebSocketContext)
 
   const socket = useSocket({
-    url: 'ws://localhost:3000/ws?interval=1m',
+    url: 'ws://localhost:8000/ws?interval=1m',
     autoConnect: false, // Deshabilitado para evitar bucles
     reconnectInterval: 3000,
     maxReconnectAttempts: 3,

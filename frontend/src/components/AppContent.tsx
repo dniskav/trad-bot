@@ -131,9 +131,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
       <header className="app-header">
         <div className="header-content">
           <div className="header-left">
-            <div className="websocket-status-container">
-              <WebSocketStatus />
-            </div>
+            <WebSocketStatus />
           </div>
 
           <div className="header-center">
@@ -141,93 +139,97 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
           </div>
 
           <div className="header-right">
-            <div className="health-check-container">
-              <button
-                className="health-check-button"
-                onClick={() => {
-                  // Aquí podrías implementar la verificación de salud
-                  setToastMessage('Verificación de salud completada')
-                  setShowToast(true)
-                }}>
-                Status
-              </button>
-            </div>
+            <button
+              className="status-button"
+              onClick={() => {
+                // Aquí podrías implementar la verificación de salud
+                setToastMessage('Verificación de salud completada')
+                setShowToast(true)
+              }}>
+              Status
+            </button>
           </div>
         </div>
       </header>
 
       {/* Contenido principal */}
       <main className="app-main">
-        {/* Saldo de Cuenta */}
-        <Accordion title="Saldo de Cuenta" defaultExpanded={true} storageKey="account-balance">
-          <AccountBalance currentPrice={currentPrice} balance={accountBalance} symbol="DOGEUSDT" />
-        </Accordion>
+        <div className="health-container">
+          {/* Saldo de Cuenta */}
+          <Accordion title="Saldo de Cuenta" defaultExpanded={true} storageKey="account-balance">
+            <AccountBalance
+              currentPrice={currentPrice}
+              balance={accountBalance}
+              symbol="DOGEUSDT"
+            />
+          </Accordion>
 
-        {/* Señales de Trading */}
-        <Accordion title="Señales de Trading" defaultExpanded={true} storageKey="trading-signals">
-          <BotSignals
-            signals={
-              botSignals
-                ? {
-                    conservative: botSignals.conservative || 'N/A',
-                    aggressive: botSignals.aggressive || 'N/A',
-                    current_price: botSignals.current_price || currentPrice,
-                    symbol: 'DOGEUSDT',
-                    positions: botSignals.positions || {
-                      conservative: {},
-                      aggressive: {},
-                      last_signals: botSignals
+          {/* Señales de Trading */}
+          <Accordion title="Señales de Trading" defaultExpanded={true} storageKey="trading-signals">
+            <BotSignals
+              signals={
+                botSignals
+                  ? {
+                      conservative: botSignals.conservative || 'N/A',
+                      aggressive: botSignals.aggressive || 'N/A',
+                      current_price: botSignals.current_price || currentPrice,
+                      symbol: 'DOGEUSDT',
+                      positions: botSignals.positions || {
+                        conservative: {},
+                        aggressive: {},
+                        last_signals: botSignals
+                      }
                     }
-                  }
-                : null
-            }
-          />
-        </Accordion>
+                  : null
+              }
+            />
+          </Accordion>
 
-        {/* Posiciones Concurrentes Activas */}
-        <Accordion
-          title="Posiciones Concurrentes Activas"
-          defaultExpanded={true}
-          storageKey="active-positions">
-          <ActivePositions positions={activePositions as any} />
-        </Accordion>
+          {/* Posiciones Concurrentes Activas */}
+          <Accordion
+            title="Posiciones Concurrentes Activas"
+            defaultExpanded={true}
+            storageKey="active-positions">
+            <ActivePositions positions={activePositions as any} />
+          </Accordion>
 
-        {/* Información de Margen */}
-        <Accordion title="Información de Margen" defaultExpanded={false} storageKey="margin-info">
-          <MarginInfo marginInfo={marginInfo} />
-        </Accordion>
+          {/* Información de Margen */}
+          <Accordion title="Información de Margen" defaultExpanded={false} storageKey="margin-info">
+            <MarginInfo marginInfo={marginInfo} />
+          </Accordion>
 
-        {/* Gráfico de Velas */}
-        <Accordion title="Gráfico de Velas" defaultExpanded={true} storageKey="candlestick-chart">
-          <CandlestickChart
-            symbol="DOGEUSDT"
-            timeframe={timeframe}
-            signals={botSignals}
-            candlesData={candlesData}
-            indicatorsData={indicatorsData}
-            onTimeframeChange={handleTimeframeChange}
-          />
-        </Accordion>
+          {/* Gráfico de Velas */}
+          <Accordion title="Gráfico de Velas" defaultExpanded={true} storageKey="candlestick-chart">
+            <CandlestickChart
+              symbol="DOGEUSDT"
+              timeframe={timeframe}
+              signals={botSignals}
+              candlesData={candlesData}
+              indicatorsData={indicatorsData}
+              onTimeframeChange={handleTimeframeChange}
+            />
+          </Accordion>
 
-        {/* Plugin Bots */}
-        <Accordion title="Plugin Bots" defaultExpanded={true} storageKey="plugin-bots">
-          <PlugAndPlayBots />
-        </Accordion>
+          {/* Plugin Bots */}
+          <Accordion title="Plugin Bots" defaultExpanded={true} storageKey="plugin-bots">
+            <PlugAndPlayBots />
+          </Accordion>
 
-        {/* Historial de Posiciones */}
-        <Accordion
-          title="Historial de Posiciones"
-          defaultExpanded={false}
-          storageKey="position-history">
-          <PositionHistory
-            history={positionHistory}
-            statistics={{
-              conservative: {},
-              aggressive: {},
-              overall: {}
-            }}
-          />
-        </Accordion>
+          {/* Historial de Posiciones */}
+          <Accordion
+            title="Historial de Posiciones"
+            defaultExpanded={false}
+            storageKey="position-history">
+            <PositionHistory
+              history={positionHistory}
+              statistics={{
+                conservative: {},
+                aggressive: {},
+                overall: {}
+              }}
+            />
+          </Accordion>
+        </div>
       </main>
 
       {/* Toast para notificaciones */}

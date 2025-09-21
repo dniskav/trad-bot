@@ -16,7 +16,7 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
 
   // Hook useSocket para manejar la conexión WebSocket
   const socket = useSocket({
-    url: 'ws://localhost:3000/ws?interval=1m',
+    url: 'ws://localhost:8000/ws?interval=1m',
     autoConnect: false, // Conectar automáticamente
     reconnectInterval: 3000,
     maxReconnectAttempts: 5,
