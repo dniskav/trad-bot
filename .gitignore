@@ -110,3 +110,4 @@ dmypy.json
 *.csv
 backtest_results/
 performance_data/
+backend/config_real_trading.env
