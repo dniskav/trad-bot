@@ -62,6 +62,13 @@ run_foreground() {
     echo -e "${YELLOW}💡 Presiona Ctrl+C para detener${NC}"
     echo "----------------------------------------"
     
+    # Limpiar procesos Python huérfanos antes de iniciar
+    if [ -f "cleanup_python_processes.sh" ]; then
+        echo -e "${YELLOW}🧹 Limpiando procesos Python huérfanos...${NC}"
+        ./cleanup_python_processes.sh
+        echo "----------------------------------------"
+    fi
+    
     cd backend
     python3 server_simple.py
 }
@@ -69,6 +76,12 @@ run_foreground() {
 # Función para ejecutar en segundo plano
 run_background() {
     echo -e "${BLUE}🚀 Iniciando servidor en segundo plano (SIN venv)...${NC}"
+    
+    # Limpiar procesos Python huérfanos antes de iniciar
+    if [ -f "cleanup_python_processes.sh" ]; then
+        echo -e "${YELLOW}🧹 Limpiando procesos Python huérfanos...${NC}"
+        ./cleanup_python_processes.sh
+    fi
     
     cd backend
     nohup python3 server_simple.py > server.log 2>&1 &

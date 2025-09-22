@@ -249,16 +249,45 @@ class TradingTracker:
                     })
                     
                     # Cargar posiciones activas
-                    self.active_positions = data.get('active_positions', {
+                    default_active_positions = {
                         'conservative': {},
                         'aggressive': {}
-                    })
+                    }
                     
-                    # Siempre calcular balance actual desde Binance para mantener sincronización
+                    # Agregar bots plug and play a las posiciones activas
+                    from bot_registry import get_bot_registry
+                    bot_registry = get_bot_registry()
+                    for bot_name in bot_registry.get_all_bots().keys():
+                        if bot_name not in ['conservative', 'aggressive']:
+                            default_active_positions[bot_name] = {}
+                    
+                    # Cargar posiciones activas del archivo
+                    loaded_active_positions = data.get('active_positions', default_active_positions)
+                    
+                    # Asegurar que todos los bots plug and play tengan su sección
+                    for bot_name in bot_registry.get_all_bots().keys():
+                        if bot_name not in loaded_active_positions:
+                            loaded_active_positions[bot_name] = {}
+                    
+                    # Forzar inclusión de bots plug and play
+                    self.active_positions = loaded_active_positions
+                    # Asegurar que siempre estén presentes los bots plug and play
+                    for bot_name in bot_registry.get_all_bots().keys():
+                        if bot_name not in self.active_positions:
+                            self.active_positions[bot_name] = {}
+                            logger.info(f"✅ Bot plug and play agregado a active_positions: {bot_name}")
+                    
+                    # HABILITADO PARA PRUEBA - Balance desde Binance
                     if self.binance_client:
+                        logger.info("✅ Actualización de balance desde Binance HABILITADA PARA PRUEBA")
                         current_balance_from_binance = self._calculate_current_balance_from_binance(self.binance_client)
                         self.current_balance = current_balance_from_binance
+                        
+                        # Calcular PnL total basado en la diferencia con el balance inicial
+                        self.total_pnl = self.current_balance - self.initial_balance
+                        
                         logger.info(f"💰 Balance actualizado desde Binance: ${self.current_balance:.2f}")
+                        logger.info(f"📊 PnL total calculado: ${self.total_pnl:.4f}")
                     
                     # Solo usar datos guardados si no hay cliente de Binance
                     if not self.binance_client and not self.position_history:
@@ -281,6 +310,13 @@ class TradingTracker:
                     'conservative': {},
                     'aggressive': {}
                 }
+                
+                # Agregar bots plug and play a las posiciones activas
+                from bot_registry import get_bot_registry
+                bot_registry = get_bot_registry()
+                for bot_name in bot_registry.get_all_bots().keys():
+                    if bot_name not in ['conservative', 'aggressive']:
+                        self.active_positions[bot_name] = {}
         except Exception as e:
             logger.error(f"❌ Error cargando historial: {e}")
             self.position_history = []
@@ -294,10 +330,20 @@ class TradingTracker:
                 'conservative': {},
                 'aggressive': {}
             }
+            
+            # Agregar bots plug and play a las posiciones activas
+            from bot_registry import get_bot_registry
+            bot_registry = get_bot_registry()
+            for bot_name in bot_registry.get_all_bots().keys():
+                if bot_name not in ['conservative', 'aggressive']:
+                    self.active_positions[bot_name] = {}
     
     def save_history(self):
         """Guarda el historial de posiciones en archivo"""
         try:
+            # HABILITADO PARA PRUEBA - FUNCIÓN PRINCIPAL
+            logger.info("✅ save_history() HABILITADO PARA PRUEBA")
+            
             # Crear backup del archivo anterior
             if os.path.exists(HISTORY_FILE):
                 import shutil
@@ -363,6 +409,8 @@ class TradingTracker:
         """Actualiza el estado de un bot y guarda el historial"""
         if bot_type in self.bot_status:
             self.bot_status[bot_type] = is_active
+            # HABILITADO PARA PRUEBA
+            logger.info("✅ save_history() HABILITADO PARA PRUEBA")
             self.save_history()  # Guardar inmediatamente el cambio de estado
             logger.info(f"🤖 Estado de bot {bot_type.upper()} actualizado: {'Activo' if is_active else 'Inactivo'}")
     
@@ -443,6 +491,8 @@ class TradingTracker:
                 })
                 
                 # Guardar historial inmediatamente cuando se cierra una posición
+                # HABILITADO PARA PRUEBA
+                logger.info("✅ save_history() HABILITADO PARA PRUEBA")
                 self.save_history()
                 
                 # Actualizar saldo de cuenta
@@ -680,6 +730,14 @@ class TradingTracker:
                 'conservative': {},
                 'aggressive': {}
             }
+            
+            # Agregar bots plug and play a las posiciones activas
+            from bot_registry import get_bot_registry
+            bot_registry = get_bot_registry()
+            for bot_name in bot_registry.get_all_bots().keys():
+                if bot_name not in ['conservative', 'aggressive']:
+                    self.active_positions[bot_name] = {}
+            
             logger.info("📊 Todas las posiciones activas limpiadas")
     
     def _parse_datetime(self, dt_value):
@@ -792,6 +850,8 @@ class TradingTracker:
                 self.total_pnl += order['net_pnl']
                 
                 # Guardar historial inmediatamente
+                # HABILITADO PARA PRUEBA
+                logger.info("✅ save_history() HABILITADO PARA PRUEBA")
                 self.save_history()
                 
                 logger.info(f"🔒 Orden cerrada: {order['bot_type'].upper()} {order['side']} PnL: ${order['net_pnl']:.4f} ({order['pnl_percentage']:.2f}%)")

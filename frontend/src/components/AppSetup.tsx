@@ -17,11 +17,11 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
   // Hook useSocket para manejar la conexión WebSocket
   const socket = useSocket({
     url: 'ws://localhost:8000/ws?interval=1m',
-    autoConnect: false, // Conectar automáticamente
+    autoConnect: true, // Conectar automáticamente
     reconnectInterval: 3000,
     maxReconnectAttempts: 5,
     onMessage: (data) => {
-      console.log('📨 AppSetup: Mensaje recibido:', data)
+      // console.log('📨 AppSetup: Mensaje recibido:', data)
 
       // Actualizar contexto con mensaje recibido
       if (ctx) {
@@ -30,10 +30,10 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
 
       // También procesar los datos aquí para que estén disponibles globalmente
       // Esto es necesario porque AppContent no puede procesar los mensajes directamente
-      console.log('📨 AppSetup: Procesando mensaje para disponibilidad global:', data.type)
+      // console.log('📨 AppSetup: Procesando mensaje para disponibilidad global:', data.type)
     },
     onOpen: () => {
-      console.log('✅ AppSetup: WebSocket conectado')
+      // console.log('✅ AppSetup: WebSocket conectado')
 
       // Actualizar contexto con estado de conexión
       if (ctx) {
@@ -41,7 +41,7 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
       }
     },
     onClose: () => {
-      console.log('🔌 AppSetup: WebSocket desconectado')
+      // console.log('🔌 AppSetup: WebSocket desconectado')
 
       // Actualizar contexto con estado de desconexión
       if (ctx) {
@@ -49,7 +49,7 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
       }
     },
     onError: (error) => {
-      console.error('❌ AppSetup: Error:', error)
+      // console.error('❌ AppSetup: Error:', error)
 
       // Actualizar contexto con error
       if (ctx) {
@@ -60,14 +60,14 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
 
   // Función para iniciar la conexión manualmente
   const handleConnect = () => {
-    console.log('🔄 AppSetup: Iniciando conexión manual...')
+    // console.log('🔄 AppSetup: Iniciando conexión manual...')
     socket.connect()
   }
 
   // Función para hacer las peticiones iniciales al servidor
   const performInitialSetup = async () => {
     try {
-      console.log('🚀 AppSetup: Iniciando configuración de la aplicación...')
+      // console.log('🚀 AppSetup: Iniciando configuración de la aplicación...')
 
       // Aquí puedes agregar todas las peticiones iniciales necesarias
       // Por ejemplo:
@@ -76,10 +76,10 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
       // - Cargar datos iniciales
       // - etc.
 
-      console.log('✅ AppSetup: Configuración completada')
+      // console.log('✅ AppSetup: Configuración completada')
       setSetupComplete(true)
     } catch (err) {
-      console.error('❌ AppSetup: Error en configuración:', err)
+      // console.error('❌ AppSetup: Error en configuración:', err)
       setSetupError('Error al configurar la aplicación')
     }
   }
@@ -87,7 +87,7 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
   // Efecto para manejar el setup cuando el WebSocket esté listo
   useEffect(() => {
     if (socket.isConnected && !setupComplete && !setupError) {
-      console.log('🔌 AppSetup: WebSocket listo, iniciando setup...')
+      // console.log('🔌 AppSetup: WebSocket listo, iniciando setup...')
       performInitialSetup()
     }
   }, [socket.isConnected, setupComplete, setupError])
@@ -95,7 +95,7 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
   // Resetear setup si el WebSocket se desconecta
   useEffect(() => {
     if (!socket.isConnected && setupComplete) {
-      console.log('🔄 AppSetup: WebSocket desconectado, reseteando setup...')
+      // console.log('🔄 AppSetup: WebSocket desconectado, reseteando setup...')
       setSetupComplete(false)
       setSetupError(null)
     }

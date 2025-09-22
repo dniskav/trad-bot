@@ -33,6 +33,12 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
   // Estados para datos de gráficos
   const [candlesData, setCandlesData] = useState<any[]>([])
   const [indicatorsData, setIndicatorsData] = useState<any>({})
+  const [historyStats, setHistoryStats] = useState<Record<string, any>>({
+    conservative: {},
+    aggressive: {},
+    overall: {}
+  })
+  // (Opcional) Posiciones activas por bot podrían usarse más adelante
 
   // Hook useSocket para enviar mensajes (reutiliza la instancia existente)
   // const socket = useSocket({
@@ -46,12 +52,12 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
 
   // Efecto para procesar mensajes del contexto
   useEffect(() => {
-    console.log('📨 AppContent: Efecto ejecutado, ctx:', ctx, 'lastMessage:', ctx?.lastMessage)
+    // console.log('📨 AppContent: Efecto ejecutado, ctx:', ctx, 'lastMessage:', ctx?.lastMessage)
     if (ctx && ctx.lastMessage) {
       const data = ctx.lastMessage.message
-      console.log('📨 AppContent: Procesando mensaje del contexto:', data)
-      console.log('📨 AppContent: Tipo de mensaje:', data?.type)
-      console.log('📨 AppContent: Datos del mensaje:', data?.data)
+      // console.log('📨 AppContent: Procesando mensaje del contexto:', data)
+      // console.log('📨 AppContent: Tipo de mensaje:', data?.type)
+      // console.log('📨 AppContent: Datos del mensaje:', data?.data)
 
       // Procesar diferentes tipos de mensajes
       if (data.type === 'bot_signals') {
@@ -68,31 +74,46 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
         setMarginInfo(data.data)
       } else if (data.type === 'candles') {
         // Datos de velas para el gráfico
-        console.log('📊 AppContent: === PROCESANDO DATOS DE VELAS ===')
-        console.log('📊 AppContent: data.data:', data.data)
-        console.log('📊 AppContent: data.data.candles:', data.data?.candles)
-        console.log('📊 AppContent: data.data.candles.length:', data.data?.candles?.length)
-        console.log(
-          '📊 AppContent: Datos de velas recibidos desde contexto:',
-          data.data?.candles?.length || 0,
-          'velas'
-        )
-        console.log('📊 AppContent: Estructura de datos de velas desde contexto:', data.data)
+        // console.log('📊 AppContent: === PROCESANDO DATOS DE VELAS ===')
+        // console.log('📊 AppContent: data.data:', data.data)
+        // console.log('📊 AppContent: data.data.candles:', data.data?.candles)
+        // console.log('📊 AppContent: data.data.candles.length:', data.data?.candles?.length)
+        // console.log(
+        //   '📊 AppContent: Datos de velas recibidos desde contexto:',
+        //   data.data?.candles?.length || 0,
+        //   'velas'
+        // )
+        // console.log('📊 AppContent: Estructura de datos de velas desde contexto:', data.data)
         setCandlesData(data.data?.candles || [])
         console.log('📊 AppContent: setCandlesData llamado con:', data.data?.candles || [])
 
         // Procesar bot_signals si están disponibles
         if (data.data?.bot_signals) {
-          console.log('🤖 AppContent: Procesando bot_signals:', data.data.bot_signals)
+          // console.log('🤖 AppContent: Procesando bot_signals:', data.data.bot_signals)
           setBotSignals(data.data.bot_signals)
+
+          // Extraer historial de posiciones si viene embebido en la carga de velas
+          const positionsPayload = data.data?.bot_signals?.positions
+          const historyFromPayload = positionsPayload?.history
+          if (Array.isArray(historyFromPayload)) {
+            setPositionHistory(historyFromPayload)
+            // Calcular estadísticas dinámicas por bot
+            const stats = calculateStatistics(historyFromPayload)
+            setHistoryStats(stats)
+          }
+          // Extraer posiciones activas si vienen embebidas (compatibilidad)
+          const activeFromPayload = positionsPayload?.active_positions
+          if (activeFromPayload) {
+            setActivePositions(activeFromPayload)
+          }
         }
       } else if (data.type === 'indicators') {
         // Datos de indicadores para el gráfico
-        console.log(
-          '📈 AppContent: Datos de indicadores recibidos desde contexto:',
-          Object.keys(data.data || {})
-        )
-        console.log('📈 AppContent: Estructura de datos de indicadores desde contexto:', data.data)
+        // console.log(
+        //   '📈 AppContent: Datos de indicadores recibidos desde contexto:',
+        //   Object.keys(data.data || {})
+        // )
+        // console.log('📈 AppContent: Estructura de datos de indicadores desde contexto:', data.data)
         setIndicatorsData(data.data || {})
       } else if (data.type === 'error') {
         setToastMessage(data.message || 'Error desconocido')
@@ -100,6 +121,68 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
       }
     }
   }, [ctx?.lastMessage])
+
+  // Calcula estadísticas básicas por bot y generales
+  const calculateStatistics = (history: any[]) => {
+    const perBot: Record<
+      string,
+      { total_trades: number; wins: number; total_pnl_net: number; best_trade: number }
+    > = {}
+
+    for (const h of history) {
+      const bot = h.bot_type || 'unknown'
+      if (!perBot[bot]) {
+        perBot[bot] = { total_trades: 0, wins: 0, total_pnl_net: 0, best_trade: -Infinity }
+      }
+      perBot[bot].total_trades += 1
+      const pnlNet = Number(h.pnl_net || 0)
+      if (pnlNet > 0) perBot[bot].wins += 1
+      perBot[bot].total_pnl_net += pnlNet
+      perBot[bot].best_trade = Math.max(perBot[bot].best_trade, pnlNet)
+    }
+
+    // Construir objeto de salida y overall
+    const statsOut: Record<string, any> = {}
+    let overallTrades = 0
+    let overallWins = 0
+    let overallPnl = 0
+    let overallBest = -Infinity
+
+    Object.entries(perBot).forEach(([bot, s]) => {
+      statsOut[bot] = {
+        total_trades: s.total_trades,
+        win_rate: s.total_trades ? (s.wins / s.total_trades) * 100 : 0,
+        total_pnl_net: s.total_trades ? s.total_pnl_net : 0,
+        best_trade: Number.isFinite(s.best_trade) ? s.best_trade : 0
+      }
+      overallTrades += s.total_trades
+      overallWins += s.wins
+      overallPnl += s.total_pnl_net
+      overallBest = Math.max(overallBest, s.best_trade)
+    })
+
+    statsOut.conservative = statsOut.conservative || {
+      total_trades: 0,
+      win_rate: 0,
+      total_pnl_net: 0,
+      best_trade: 0
+    }
+    statsOut.aggressive = statsOut.aggressive || {
+      total_trades: 0,
+      win_rate: 0,
+      total_pnl_net: 0,
+      best_trade: 0
+    }
+
+    statsOut.overall = {
+      total_trades: overallTrades,
+      win_rate: overallTrades ? (overallWins / overallTrades) * 100 : 0,
+      total_pnl_net: overallPnl,
+      best_trade: Number.isFinite(overallBest) ? overallBest : 0
+    }
+
+    return statsOut
+  }
 
   // Función para enviar mensajes usando el socket singleton (mantenida para futuras funcionalidades)
   // const sendMessage = (message: any) => {
@@ -124,6 +207,32 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     onTimeframeChange(newTimeframe)
     // El AppSetup manejará la reconexión
   }
+
+  // Fallback: cargar velas iniciales vía REST si aún no han llegado por WS
+  useEffect(() => {
+    let cancelled = false
+    const loadInitialCandles = async () => {
+      try {
+        const res = await fetch(
+          `/klines?symbol=DOGEUSDT&interval=${encodeURIComponent(timeframe)}&limit=500`
+        )
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          setCandlesData(data)
+        }
+      } catch (_) {
+        // Ignorar errores del fallback
+      }
+    }
+    // Si no tenemos velas aún, intenta cargar
+    if (!candlesData || candlesData.length === 0) {
+      loadInitialCandles()
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [timeframe])
 
   return (
     <div className="app">
@@ -190,7 +299,11 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
             title="Posiciones Concurrentes Activas"
             defaultExpanded={true}
             storageKey="active-positions">
-            <ActivePositions positions={activePositions as any} />
+            <ActivePositions
+              positions={
+                (botSignals?.positions?.active_positions as any) || (activePositions as any)
+              }
+            />
           </Accordion>
 
           {/* Información de Margen */}
@@ -212,7 +325,10 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
 
           {/* Plugin Bots */}
           <Accordion title="Plugin Bots" defaultExpanded={true} storageKey="plugin-bots">
-            <PlugAndPlayBots />
+            <PlugAndPlayBots
+              history={positionHistory}
+              activePositions={botSignals?.positions?.active_positions}
+            />
           </Accordion>
 
           {/* Historial de Posiciones */}
@@ -220,14 +336,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
             title="Historial de Posiciones"
             defaultExpanded={false}
             storageKey="position-history">
-            <PositionHistory
-              history={positionHistory}
-              statistics={{
-                conservative: {},
-                aggressive: {},
-                overall: {}
-              }}
-            />
+            <PositionHistory history={positionHistory} statistics={historyStats} />
           </Accordion>
         </div>
       </main>

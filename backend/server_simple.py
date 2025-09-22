@@ -43,6 +43,114 @@ real_trading_manager.sync_history_with_binance_orders(trading_tracker)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def execute_synthetic_trade(bot_name: str, signal_type: str, current_price: float, trading_tracker) -> dict:
+    """
+    Ejecuta un trade sintético para un bot plug and play
+    
+    Args:
+        bot_name: Nombre del bot
+        signal_type: Tipo de señal (BUY/SELL)
+        current_price: Precio actual
+        trading_tracker: Instancia del trading tracker
+        
+    Returns:
+        dict: Resultado de la ejecución
+    """
+    try:
+        # Generar IDs únicos para la orden sintética
+        order_id = f"SYNTH_{bot_name}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+        position_id = f"SYNTH_{bot_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Calcular cantidad sintética (10% del balance sintético)
+        bot = bot_registry.get_bot(bot_name)
+        if not bot:
+            return {"success": False, "error": "Bot no encontrado"}
+        
+        synthetic_balance = getattr(bot, 'synthetic_balance', 1000.0)
+        quantity_usdt = min(synthetic_balance * 0.1, 100.0)  # Máximo $100 por trade
+        quantity = quantity_usdt / current_price
+        
+        # Crear registro de orden sintética
+        synthetic_order = {
+            'order_id': order_id,
+            'position_id': position_id,
+            'bot_type': bot_name,
+            'symbol': 'DOGEUSDT',
+            'side': signal_type,
+            'quantity': quantity,
+            'entry_price': current_price,
+            'current_price': current_price,
+            'status': 'OPEN',
+            'is_synthetic': True,
+            'synthetic_balance': synthetic_balance,
+            'timestamp': datetime.now().isoformat(),
+            'entry_time': datetime.now(),
+            'close_time': None,
+            'close_price': None,
+            'fees_paid': 0.0,
+            'pnl': 0.0,
+            'pnl_percentage': 0.0,
+            'net_pnl': 0.0
+        }
+        
+        # Agregar al historial de trading
+        if trading_tracker:
+            trading_tracker.position_history.append(synthetic_order)
+            
+            # Agregar a posiciones activas
+            trading_tracker.update_active_position(
+                bot_type=bot_name,
+                position_id=position_id,
+                position_data={
+                    'order_id': order_id,
+                    'position_id': position_id,
+                    'symbol': 'DOGEUSDT',
+                    'side': signal_type,
+                    'quantity': quantity,
+                    'entry_price': current_price,
+                    'entry_time': datetime.now(),
+                    'is_synthetic': True
+                }
+            )
+            
+            # HABILITADO PARA PRUEBA
+            logger.info("✅ save_history() HABILITADO PARA PRUEBA")
+            trading_tracker.save_history()
+        
+        # Actualizar balance sintético del bot
+        if signal_type == 'BUY':
+            bot.synthetic_balance -= quantity_usdt
+        else:  # SELL
+            bot.synthetic_balance += quantity_usdt
+        
+        # Agregar a posiciones sintéticas del bot
+        if not hasattr(bot, 'synthetic_positions'):
+            bot.synthetic_positions = []
+        
+        bot.synthetic_positions.append({
+            'order_id': order_id,
+            'position_id': position_id,
+            'id': position_id,
+            'side': signal_type,
+            'signal_type': signal_type,
+            'quantity': quantity,
+            'entry_price': current_price,
+            'status': 'open',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        logger.info(f"🧪 Trade sintético creado para {bot_name}: {signal_type} {quantity:.2f} DOGE a ${current_price}")
+        
+        return {
+            "success": True,
+            "order": synthetic_order,
+            "message": f"Trade sintético ejecutado: {signal_type} {quantity:.2f} DOGE"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error ejecutando trade sintético para {bot_name}: {e}")
+        return {"success": False, "error": str(e)}
+
 # Disable FastAPI access logs for polling endpoints
 import logging
 uvicorn_logger = logging.getLogger("uvicorn.access")
@@ -59,6 +167,29 @@ bot_start_times = {
     'conservative': None,
     'aggressive': None
 }
+
+def sync_bot_registry_state():
+    """
+    Sincroniza el estado de los bots entre el servidor y el bot_registry
+    """
+    try:
+        # Sincronizar estado de bots legacy
+        for bot_type in ['conservative', 'aggressive']:
+            bot_registry_bot = bot_registry.get_bot(bot_type)
+            if bot_registry_bot:
+                # El bot está activo en el servidor si tiene un proceso corriendo
+                is_active_in_server = bot_processes.get(bot_type) is not None
+                # Sincronizar el estado
+                bot_registry_bot.is_active = is_active_in_server
+        
+        # Sincronizar estado de bots plug and play
+        # Los bots plug and play se manejan directamente a través de los endpoints
+        # pero podemos verificar que el estado sea consistente
+        
+        logger.debug("🔄 Estado de bots sincronizado con bot_registry")
+        
+    except Exception as e:
+        logger.error(f"❌ Error sincronizando estado de bots: {e}")
 
 # Inicializar el sistema de bots plug-and-play
 logger.info("🔌 Inicializando sistema de bots plug-and-play...")
@@ -245,6 +376,10 @@ def start_bot(bot_type: str):
         
         bot_processes[bot_type] = process
         bot_start_times[bot_type] = datetime.now()
+        
+        # Sincronizar estado con bot_registry
+        sync_bot_registry_state()
+        
         logger.info(f"🚀 Bot {bot_type} iniciado con PID {process.pid}")
         return True, f"Bot {bot_type} iniciado correctamente"
         
@@ -275,6 +410,10 @@ def stop_bot(bot_type: str):
         logger.info(f"🛑 Bot {bot_type} detenido")
         bot_processes[bot_type] = None
         bot_start_times[bot_type] = None
+        
+        # Sincronizar estado con bot_registry
+        sync_bot_registry_state()
+        
         return True, f"Bot {bot_type} detenido correctamente"
         
     except Exception as e:
@@ -497,7 +636,8 @@ def get_position_info_for_frontend(current_price=None):
                     'pnl_net_pct': pnl_pct,
                     'timestamp': position['entry_time'],
                     'is_synthetic': False,  # Flag para posiciones reales
-                    'is_plugin_bot': False  # Flag para bots legacy
+                    'is_plugin_bot': False,  # Flag para bots legacy
+                    'bot_on': real_trading_manager.is_bot_active(bot_type)
                 }
             
             formatted_positions[bot_type] = formatted_bot_positions
@@ -509,8 +649,8 @@ def get_position_info_for_frontend(current_price=None):
         if bot_name in ['conservative', 'aggressive']:
             continue
             
-        # Solo procesar bots activos con posiciones sintéticas
-        if bot.is_active and bot.config.synthetic_mode and bot.synthetic_positions:
+        # Mostrar posiciones sintéticas aunque el bot esté apagado
+        if bot.config.synthetic_mode and bot.synthetic_positions:
             formatted_bot_positions = {}
             
             for position in bot.synthetic_positions:
@@ -545,6 +685,7 @@ def get_position_info_for_frontend(current_price=None):
                         'timestamp': position['timestamp'],
                         'is_synthetic': True,  # Flag para posiciones sintéticas
                         'is_plugin_bot': True,  # Flag para bots plug-and-play
+                        'bot_on': bot.is_active,
                         'stop_loss': position.get('stop_loss'),
                         'take_profit': position.get('take_profit')
                     }
@@ -558,6 +699,74 @@ def get_position_info_for_frontend(current_price=None):
         for order_record in tracker_data['history']:
             mapped_record = map_order_to_history_format(order_record)
             formatted_history.append(mapped_record)
+
+            # Además, asegurar que toda posición con estado OPEN/UPDATED
+            # aparezca en active_positions aunque el bot esté apagado
+            try:
+                status = order_record.get('status', 'OPEN')
+                if status in ['OPEN', 'UPDATED']:
+                    bot_name = order_record.get('bot_type', 'unknown')
+
+                    # Saltar si ya existe en formatted_positions para evitar duplicados
+                    existing_for_bot = formatted_positions.get(bot_name, {})
+                    pos_id = order_record.get('position_id') or order_record.get('order_id')
+                    if pos_id and pos_id in existing_for_bot:
+                        continue
+
+                    entry_price = order_record.get('entry_price', 0.0)
+                    qty = order_record.get('quantity', 0.0)
+                    side = order_record.get('side') or order_record.get('type')
+
+                    # Calcular PnL con el precio actual si se dispone
+                    pnl = 0.0
+                    pnl_pct = 0.0
+                    ref_price = current_price or order_record.get('current_price', entry_price)
+                    if ref_price and entry_price:
+                        if side == 'BUY':
+                            pnl = (ref_price - entry_price) * qty
+                            pnl_pct = ((ref_price - entry_price) / entry_price) * 100
+                        else:
+                            pnl = (entry_price - ref_price) * qty
+                            pnl_pct = ((entry_price - ref_price) / entry_price) * 100
+
+                    # Estado del bot
+                    bot_on = False
+                    try:
+                        if bot_name in ['conservative', 'aggressive']:
+                            bot_on = real_trading_manager.is_bot_active(bot_name)
+                        else:
+                            bot_obj = bot_registry.get_bot(bot_name)
+                            bot_on = bot_obj.is_active if bot_obj else False
+                    except Exception:
+                        pass
+
+                    tracker_position = {
+                        'id': pos_id or f"TRACKER_{bot_name}_{order_record.get('entry_time')}",
+                        'bot_type': bot_name,
+                        'type': side or 'N/A',
+                        'entry_price': entry_price,
+                        'quantity': qty,
+                        'entry_time': order_record.get('entry_time'),
+                        'current_price': ref_price,
+                        'pnl': pnl,
+                        'pnl_pct': pnl_pct,
+                        'pnl_net': order_record.get('net_pnl', pnl),
+                        'pnl_net_pct': order_record.get('pnl_percentage', pnl_pct),
+                        'timestamp': order_record.get('entry_time'),
+                        'is_synthetic': order_record.get('is_synthetic', False),
+                        'is_plugin_bot': order_record.get('is_plugin_bot', bot_name not in ['conservative', 'aggressive']),
+                        'bot_on': bot_on
+                    }
+
+                    if bot_name not in formatted_positions:
+                        formatted_positions[bot_name] = {}
+                    if pos_id:
+                        formatted_positions[bot_name][pos_id] = tracker_position
+                    else:
+                        # generar una clave si no hay id
+                        formatted_positions[bot_name][f"NOID_{len(formatted_positions[bot_name])}"] = tracker_position
+            except Exception:
+                pass
     
     # Combinar con datos del tracker
     return {
@@ -878,6 +1087,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
             # Actualizar balance actual desde Binance
             if trading_tracker and hasattr(trading_tracker, 'update_current_balance_from_binance'):
                 trading_tracker.update_current_balance_from_binance()
+                # HABILITADO - Guardar historial
                 trading_tracker.save_history()
             
             # Get position info from RealTradingManager and sync with TradingTracker format
@@ -890,6 +1100,24 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
             logger.info(f"📊 Posiciones activas - Conservative: {conservative_count}, Aggressive: {aggressive_count}")
             
             position_info = clean_data_for_json(position_info)
+
+            # Enviar posiciones activas (mensaje separado)
+            await manager.send_personal_message(
+                json.dumps({
+                    "type": "active_positions",
+                    "data": position_info.get("active_positions", {})
+                }),
+                websocket
+            )
+
+            # Enviar historial (mensaje separado)
+            await manager.send_personal_message(
+                json.dumps({
+                    "type": "position_history",
+                    "data": position_info.get("history", [])
+                }),
+                websocket
+            )
             
             # Send account balance information
             if trading_tracker:
@@ -941,6 +1169,31 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 websocket
             )
             
+            # Ejecutar bots plug and play activos en el envío inicial
+            plugin_bot_signals = {}
+            try:
+                # Sincronizar estado de bots antes de ejecutar
+                sync_bot_registry_state()
+                
+                # Crear MarketData para bots plug and play
+                market_data = MarketData(
+                    symbol=SYMBOL,
+                    interval=interval,
+                    closes=closes.tolist(),
+                    highs=closes.tolist(),
+                    lows=closes.tolist(),
+                    volumes=[1000000] * len(closes),
+                    timestamps=list(range(len(closes))),
+                    current_price=current_price
+                )
+                
+                # Ejecutar todos los bots plug and play activos
+                plugin_bot_signals = bot_registry.analyze_all_bots(market_data)
+                
+            except Exception as e:
+                logger.error(f"❌ Error ejecutando bots plug and play iniciales: {e}")
+                plugin_bot_signals = {}
+            
             # Send initial candlestick data
             await manager.send_personal_message(
                 json.dumps({
@@ -954,7 +1207,8 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                             "conservative": conservative_signal,
                             "aggressive": aggressive_signal,
                             "current_price": current_price,
-                            "positions": position_info
+                            "positions": position_info,
+                            "plugin_bots": plugin_bot_signals
                         }
                     }
                 }),
@@ -974,10 +1228,10 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
         except Exception as e:
             logger.warning(f"Error sending initial data: {e}")
         
-        # Send periodic updates every 10 seconds
+        # Send periodic updates every 5 seconds
         while True:
             try:
-                await asyncio.sleep(10)  # Wait 10 seconds
+                await asyncio.sleep(5)  # Wait 5 seconds
                 
                 # Check if connection is still active
                 if websocket not in manager.active_connections:
@@ -1020,6 +1274,7 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                 # Actualizar balance actual desde Binance
                 if trading_tracker and hasattr(trading_tracker, 'update_current_balance_from_binance'):
                     trading_tracker.update_current_balance_from_binance()
+                    # HABILITADO - Guardar historial
                     trading_tracker.save_history()
                 
                 # Ejecutar órdenes reales si el trading está habilitado
@@ -1122,6 +1377,24 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                         }
                         formatted_klines.append(formatted_kline)
                 
+                # Enviar mensaje de posiciones activas actualizado
+                await manager.send_personal_message(
+                    json.dumps({
+                        "type": "active_positions",
+                        "data": position_info.get("active_positions", {})
+                    }),
+                    websocket
+                )
+
+                # Enviar mensaje de historial actualizado
+                await manager.send_personal_message(
+                    json.dumps({
+                        "type": "position_history",
+                        "data": position_info.get("history", [])
+                    }),
+                    websocket
+                )
+
                 # Send updated price data
                 await manager.send_personal_message(
                     json.dumps({
@@ -1134,6 +1407,91 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                     }),
                     websocket
                 )
+                
+                # Ejecutar bots plug and play activos cada 5 segundos
+                plugin_bot_signals = {}
+                try:
+                    # Sincronizar estado de bots antes de ejecutar
+                    sync_bot_registry_state()
+                    
+                    # Crear MarketData para bots plug and play
+                    market_data = MarketData(
+                        symbol=SYMBOL,
+                        interval=interval,
+                        closes=closes.tolist(),
+                        highs=closes.tolist(),
+                        lows=closes.tolist(),
+                        volumes=[1000000] * len(closes),
+                        timestamps=list(range(len(closes))),
+                        current_price=current_price
+                    )
+                    
+                    # Ejecutar todos los bots plug and play activos
+                    plugin_bot_signals = bot_registry.analyze_all_bots(market_data)
+                    
+                    # Log de actividad de bots plug and play
+                    if plugin_bot_signals:
+                        active_plugin_bots = [name for name, signal in plugin_bot_signals.items() 
+                                            if signal.get('signal_type') != 'HOLD']
+                        if active_plugin_bots:
+                            logger.info(f"🤖 Bots plug and play activos: {active_plugin_bots}")
+                    
+                    # Ejecutar trades para bots plug and play
+                    if plugin_bot_signals:
+                        for bot_name, signal in plugin_bot_signals.items():
+                            signal_type = signal.get('signal_type', 'HOLD')
+                            if signal_type != 'HOLD':
+                                try:
+                                    # Obtener el bot para verificar si está en modo synthetic
+                                    bot = bot_registry.get_bot(bot_name)
+                                    is_synthetic = bot and bot.config.synthetic_mode if bot else False
+                                    
+                                    if is_synthetic:
+                                        # Ejecutar trade sintético (sin límites de riesgo)
+                                        result = execute_synthetic_trade(
+                                            bot_name=bot_name,
+                                            signal_type=signal_type,
+                                            current_price=current_price,
+                                            trading_tracker=trading_tracker
+                                        )
+                                        
+                                        if result.get('success', False):
+                                            logger.info(f"🧪 {bot_name.upper()} - Orden sintética ejecutada: {signal_type} a ${current_price}")
+                                        else:
+                                            logger.warning(f"⚠️ {bot_name.upper()} - Error ejecutando orden sintética: {result.get('error', 'Unknown error')}")
+                                    else:
+                                        # Ejecutar trade real si el trading está habilitado
+                                        if real_trading_manager.is_trading_enabled():
+                                            # Verificar límites de riesgo para bots plug and play
+                                            # Calcular el monto del trade basado en el saldo sintético del bot
+                                            bot = bot_registry.get_bot(bot_name)
+                                            trade_amount = bot.synthetic_balance * 0.1  # 10% del saldo sintético
+                                            risk_checks = real_trading_manager.check_risk_limits(trade_amount, bot_name)
+                                            if not risk_checks.get('can_trade', False):
+                                                logger.warning(f"⚠️ {bot_name.upper()} - Trade bloqueado por límites de riesgo: {', '.join(risk_checks.get('reasons', []))}")
+                                                continue
+                                            
+                                            result = real_trading_manager.execute_trade(
+                                                symbol=SYMBOL,
+                                                signal=signal_type,
+                                                current_price=current_price,
+                                                bot_type=bot_name,
+                                                trading_tracker=trading_tracker
+                                            )
+                                            
+                                            if result.get('success', False):
+                                                logger.info(f"🚀 {bot_name.upper()} - Orden real ejecutada: {signal_type} a ${current_price}")
+                                            else:
+                                                logger.warning(f"⚠️ {bot_name.upper()} - Error ejecutando orden: {result.get('error', 'Unknown error')}")
+                                        else:
+                                            logger.info(f"🔒 {bot_name.upper()} - Trading deshabilitado, no se ejecuta orden real")
+                                        
+                                except Exception as e:
+                                    logger.error(f"❌ Error ejecutando trade para {bot_name}: {e}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Error ejecutando bots plug and play: {e}")
+                    plugin_bot_signals = {}
                 
                 # Send updated candlestick data
                 await manager.send_personal_message(
@@ -1148,7 +1506,8 @@ async def websocket_endpoint(websocket: WebSocket, interval: str = Query(default
                             "conservative": conservative_signal,
                             "aggressive": aggressive_signal,
                             "current_price": current_price,
-                            "positions": position_info
+                            "positions": position_info,
+                            "plugin_bots": plugin_bot_signals
                         }
                     }
                 }),
@@ -1322,6 +1681,48 @@ async def get_order_status(order_id: str):
     except Exception as e:
         logger.error(f"❌ Error obteniendo estado de orden {order_id}: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/trading/history")
+async def get_trading_history(page: int = Query(default=1, ge=1), page_size: int = Query(default=100, ge=1, le=1000)):
+    """Devuelve el historial completo de posiciones con paginación.
+
+    - page: número de página (1-indexado)
+    - page_size: elementos por página (máx 1000 por seguridad)
+    """
+    try:
+        if not trading_tracker:
+            return JSONResponse({"error": "Trading tracker no inicializado"}, status_code=500)
+
+        # Usar el historial completo sin límite desde el tracker
+        raw_history = getattr(trading_tracker, 'position_history', []) or []
+
+        # Mapear al formato esperado por el frontend
+        mapped_history = []
+        try:
+            for record in raw_history:
+                mapped_history.append(map_order_to_history_format(record))
+        except Exception:
+            # Si por alguna razón falla el mapeo, devolver crudo
+            mapped_history = raw_history
+
+        total = len(mapped_history)
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = mapped_history[start:end]
+
+        return {
+            "status": "success",
+            "data": {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "pages": (total + page_size - 1) // page_size,
+                "items": items
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting trading history: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/bot/status")
 async def get_bot_status():

@@ -24,6 +24,11 @@ interface BotInfo {
   }
   synthetic_balance_usdt: number
   bot_description: string
+  trades_count?: number
+  open_positions?: number
+  pnl_total_usdt?: number
+  win_rate_pct?: number
+  active_positions_details?: any[]
 }
 
 interface ServerInfo {
@@ -35,10 +40,21 @@ interface ServerInfo {
 
 interface PlugAndPlayBotsProps {
   className?: string
+  history?: any[]
+  activePositions?: Record<string, any>
 }
 
-const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => {
+const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
+  className = '',
+  history = [],
+  activePositions = {}
+}) => {
   // console.log('🚀 PlugAndPlayBots: Component rendering') // Comentado para reducir spam
+
+  const API_BASE =
+    typeof window !== 'undefined' && window.location.hostname
+      ? `${window.location.protocol}//${window.location.hostname}:8000`
+      : 'http://localhost:8000'
 
   const [bots, setBots] = useState<Record<string, BotInfo>>({})
   const [loading, setLoading] = useState(true)
@@ -87,13 +103,21 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
       try {
         setLoading(true)
 
-        // Fetch both endpoints in parallel
+        // Fetch main endpoints in parallel; position-info is best-effort
         const [botsResponse, serverResponse] = await Promise.all([
-          fetch('/api/bots'),
-          fetch('/bot/process-info')
+          fetch(`${API_BASE}/api/bots`),
+          fetch(`${API_BASE}/bot/process-info`)
         ])
 
-        if (!isMounted) return
+        // Best-effort fetch for position info; don't fail whole UI if it errors
+        let positionInfo: any = null
+        try {
+          const positionInfoRes = await fetch(`${API_BASE}/position-info`)
+          positionInfo = await positionInfoRes.json()
+        } catch (e) {
+          // Silent fallback; metrics derived from history will be empty
+          positionInfo = null
+        }
 
         const [botsResult, serverResult] = await Promise.all([
           botsResponse.json(),
@@ -111,9 +135,39 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
             )
           )
 
-          // console.log('🔍 PlugAndPlayBots: Filtered bots:', Object.keys(plugAndPlayBots)) // Comentado para reducir spam
+          // Extract metrics from either props (WS) or fallback API
+          const historyFromApi =
+            positionInfo?.status === 'success' ? positionInfo?.data?.history || [] : []
+          const activeFromApi =
+            positionInfo?.status === 'success' ? positionInfo?.data?.active_positions || {} : {}
+          const mergedHistory =
+            Array.isArray(history) && history.length > 0 ? history : historyFromApi
+          const mergedActive: any =
+            activePositions && Object.keys(activePositions).length > 0
+              ? activePositions
+              : activeFromApi
 
-          // Apply synthetic mode from localStorage and add additional info
+          const tradesByBot: Record<string, number> = {}
+          const pnlByBot: Record<string, number> = {}
+          const winsByBot: Record<string, number> = {}
+          mergedHistory.forEach((h: any) => {
+            const bot = h.bot_type || 'unknown'
+            tradesByBot[bot] = (tradesByBot[bot] || 0) + 1
+            const pnl = Number(h.pnl_net || 0)
+            pnlByBot[bot] = (pnlByBot[bot] || 0) + pnl
+            if (pnl > 0) {
+              winsByBot[bot] = (winsByBot[bot] || 0) + 1
+            }
+          })
+
+          const openByBot: Record<string, number> = {}
+          const activeDetailsByBot: Record<string, any[]> = {}
+          Object.entries(mergedActive).forEach(([bot, positions]: any) => {
+            const keys = positions ? Object.keys(positions as any) : []
+            openByBot[bot] = keys.length
+            activeDetailsByBot[bot] = positions ? keys.map((k) => (positions as any)[k]) : []
+          })
+
           const botsWithSynthetic = Object.fromEntries(
             Object.entries(plugAndPlayBots).map(([name, bot]) => [
               name,
@@ -121,7 +175,15 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
                 ...bot,
                 synthetic_mode: loadSyntheticMode(name),
                 synthetic_balance_usdt: getSyntheticBalance(name),
-                bot_description: getBotDescription(name)
+                bot_description: getBotDescription(name),
+                trades_count: tradesByBot[name] || 0,
+                open_positions: openByBot[name] || 0,
+                pnl_total_usdt: pnlByBot[name] || 0,
+                win_rate_pct:
+                  (winsByBot[name] || 0) > 0 && (tradesByBot[name] || 0) > 0
+                    ? ((winsByBot[name] || 0) / (tradesByBot[name] || 1)) * 100
+                    : 0,
+                active_positions_details: activeDetailsByBot[name] || []
               }
             ])
           )
@@ -175,7 +237,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
       isMounted = false
       clearInterval(interval)
     }
-  }, []) // Empty dependency array since AppSetup handles the timing
+  }, [history, activePositions]) // Update when WS props change
 
   const handleBotToggle = async (botName: string, isActive: boolean) => {
     try {
@@ -343,10 +405,6 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
   }
 
   if (loading) {
-    // console.log(
-    //   '🔄 PlugAndPlayBots: Rendering loading state, bots count:',
-    //   Object.keys(bots).length
-    // ) // Comentado para reducir spam
     return (
       <div className={`plug-and-play-bots ${className}`}>
         <h3>🔌 Bots Plug-and-Play</h3>
@@ -365,15 +423,6 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
   }
 
   const botEntries = Object.entries(bots)
-
-  // console.log(
-  //   '🔍 PlugAndPlayBots: Current state - loading:',
-  //   loading,
-  //   'bots count:',
-  //   botEntries.length,
-  //   'error:',
-  //   error
-  // ) // Comentado para reducir spam
 
   if (botEntries.length === 0) {
     return (
@@ -461,7 +510,52 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
               <div className="plugin-bot-metrics-row">
                 <div className="plugin-metric">
                   <span className="plugin-metric-label">Posiciones:</span>
-                  <span className="plugin-metric-value">{botInfo.positions_count}</span>
+                  <span className="plugin-metric-value">
+                    {botInfo.open_positions ?? botInfo.positions_count}
+                  </span>
+                </div>
+                {Array.isArray(botInfo.active_positions_details) &&
+                  botInfo.active_positions_details.length > 0 && (
+                    <div className="plugin-metric">
+                      <span className="plugin-metric-label">Activas:</span>
+                      <button
+                        className="plugin-metric-value"
+                        style={{ textDecoration: 'underline', cursor: 'pointer' }}
+                        onClick={() => toggleBotExpansion(`active-${botName}`)}>
+                        Ver ({botInfo.active_positions_details.length}){' '}
+                        {expandedBots[`active-${botName}`] ? '▲' : '▼'}
+                      </button>
+                    </div>
+                  )}
+                <div className="plugin-metric">
+                  <span className="plugin-metric-label">Trades:</span>
+                  <span
+                    className="plugin-metric-value"
+                    style={{ color: '#f1c40f', fontWeight: 600 }}>
+                    {botInfo.trades_count ?? 0}
+                  </span>
+                </div>
+                <div className="plugin-metric">
+                  <span className="plugin-metric-label">Win Rate:</span>
+                  <span
+                    className="plugin-metric-value"
+                    style={{
+                      color: (botInfo.win_rate_pct || 0) > 0 ? '#26a69a' : '#ef5350',
+                      fontWeight: 600
+                    }}>
+                    {(botInfo.win_rate_pct || 0).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="plugin-metric">
+                  <span className="plugin-metric-label">PnL:</span>
+                  <span
+                    className="plugin-metric-value"
+                    style={{
+                      color: (botInfo.pnl_total_usdt || 0) >= 0 ? '#26a69a' : '#ef5350',
+                      fontWeight: 600
+                    }}>
+                    ${(botInfo.pnl_total_usdt || 0).toFixed(5)}
+                  </span>
                 </div>
                 <div className="plugin-metric">
                   <span className="plugin-metric-label">Riesgo:</span>
@@ -488,6 +582,24 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
                   </div>
                 )}
               </div>
+
+              {/* Dropdown con detalles de posiciones activas */}
+              {Array.isArray(botInfo.active_positions_details) &&
+                botInfo.active_positions_details.length > 0 &&
+                expandedBots[`active-${botName}`] && (
+                  <div className="active-positions-dropdown" style={{ marginTop: 8 }}>
+                    {botInfo.active_positions_details.map((p: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="active-position-row"
+                        style={{ fontSize: 12, opacity: 0.9 }}>
+                        {`${(p.type || p.side || '').toUpperCase()} @ ${Number(
+                          p.entry_price || p.current_price || 0
+                        ).toFixed(5)}`}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
               {botInfo.last_signal && (
                 <div className="bot-signal">
@@ -557,7 +669,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '' }) => 
                         },
                         {
                           label: 'Posiciones',
-                          value: botInfo.positions_count
+                          value: botInfo.open_positions ?? botInfo.positions_count
                         },
                         {
                           label: 'Modo',

@@ -14,6 +14,7 @@ interface ActivePosition {
   timestamp: string
   is_synthetic?: boolean
   is_plugin_bot?: boolean
+  bot_on?: boolean
 }
 
 interface ActivePositionsProps {
@@ -60,23 +61,35 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
 
   const getBotIcon = (botType: string) => {
     switch (botType) {
-      case 'conservative': return '🐌'
-      case 'aggressive': return '⚡'
-      case 'simplebot': return '🤖'
-      case 'rsibot': return '📊'
-      case 'macdbot': return '📈'
-      default: return '🔌'
+      case 'conservative':
+        return '🐌'
+      case 'aggressive':
+        return '⚡'
+      case 'simplebot':
+        return '🤖'
+      case 'rsibot':
+        return '📊'
+      case 'macdbot':
+        return '📈'
+      default:
+        return '🔌'
     }
   }
 
   const getBotName = (botType: string) => {
     switch (botType) {
-      case 'conservative': return 'Conservador'
-      case 'aggressive': return 'Agresivo'
-      case 'simplebot': return 'Simple Bot'
-      case 'rsibot': return 'RSI Bot'
-      case 'macdbot': return 'MACD Bot'
-      default: return botType
+      case 'conservative':
+        return 'Conservador'
+      case 'aggressive':
+        return 'Agresivo'
+      case 'simplebot':
+        return 'Simple Bot'
+      case 'rsibot':
+        return 'RSI Bot'
+      case 'macdbot':
+        return 'MACD Bot'
+      default:
+        return botType
     }
   }
 
@@ -97,6 +110,7 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
     )
   }
 
+  // Vista tabla compacta: Bot | Entrada | Actual | PnL Neto | Estado
   return (
     <div className="active-positions">
       <h3>📊 Posiciones Concurrentes Activas</h3>
@@ -109,68 +123,61 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
           <div className="summary-item">
             <span className="summary-label">Reales:</span>
             <span className="summary-value">
-              {activePositions.filter(p => !p.is_synthetic).length}
+              {activePositions.filter((p) => !p.is_synthetic).length}
             </span>
           </div>
           <div className="summary-item">
             <span className="summary-label">Sintéticas:</span>
             <span className="summary-value">
-              {activePositions.filter(p => p.is_synthetic).length}
+              {activePositions.filter((p) => p.is_synthetic).length}
             </span>
           </div>
         </div>
 
-        <div className="positions-list">
-          {activePositions.map((position) => (
-            <div key={position.id} className="position-card">
-              <div className="position-header">
-                <div className="bot-info">
-                  <span className="bot-icon">{getBotIcon(position.botType)}</span>
-                  <span className="bot-name">{getBotName(position.botType)}</span>
-                  {position.is_synthetic && (
-                    <span className="synthetic-badge" title="Posición Sintética">🧪</span>
-                  )}
-                  {position.is_plugin_bot && (
-                    <span className="plugin-badge" title="Bot Plug-and-Play">🔌</span>
-                  )}
-                </div>
-                <div className="position-type" style={{ color: getPositionColor(position.type) }}>
-                  {position.type}
-                </div>
-              </div>
-
-              <div className="position-details">
-                <div className="detail-row">
-                  <span className="detail-label">Entrada:</span>
-                  <span className="detail-value">${position.entry_price.toFixed(5)}</span>
-                </div>
-                <div className="detail-row">
-                  <span className="detail-label">Actual:</span>
-                  <span className="detail-value">${position.current_price.toFixed(5)}</span>
-                </div>
-                <div className="detail-row">
-                  <span className="detail-label">Cantidad:</span>
-                  <span className="detail-value">{position.quantity.toFixed(5)} DOGE</span>
-                </div>
-                <div className="detail-row">
-                  <span className="detail-label">PnL:</span>
-                  {formatPnL(position.pnl, position.pnl_pct)}
-                </div>
-                {position.stop_loss && (
-                  <div className="detail-row">
-                    <span className="detail-label">Stop Loss:</span>
-                    <span className="detail-value">${position.stop_loss.toFixed(4)}</span>
-                  </div>
-                )}
-                {position.take_profit && (
-                  <div className="detail-row">
-                    <span className="detail-label">Take Profit:</span>
-                    <span className="detail-value">${position.take_profit.toFixed(4)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="positions-table" style={{ width: '100%', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Bot</th>
+                <th style={{ textAlign: 'left' }}>Entrada</th>
+                <th style={{ textAlign: 'left' }}>Actual</th>
+                <th style={{ textAlign: 'left' }}>PnL Neto</th>
+                <th style={{ textAlign: 'left' }}>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activePositions.map((p) => (
+                <tr key={p.id} style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <td>
+                    <span
+                      className="bot-icon"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 20,
+                        height: 20,
+                        borderRadius: 4,
+                        background: p.bot_on ? '#1b5e20' : '#b71c1c',
+                        color: '#fff',
+                        fontSize: 12,
+                        marginRight: 6
+                      }}
+                      title={p.bot_on ? 'Encendido' : 'Apagado'}>
+                      {getBotIcon(p.botType)}
+                    </span>{' '}
+                    {getBotName(p.botType)}{' '}
+                    {p.is_synthetic && <span title="Posición Sintética">🧪</span>}
+                    {p.is_plugin_bot && <span title="Bot Plug-and-Play">🔌</span>}
+                  </td>
+                  <td>${p.entry_price.toFixed(5)}</td>
+                  <td>${p.current_price.toFixed(5)}</td>
+                  <td>{formatPnL(p.pnl, p.pnl_pct)}</td>
+                  <td style={{ color: getPositionColor(p.type) }}>{p.type}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

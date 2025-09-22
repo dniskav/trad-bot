@@ -160,7 +160,8 @@ def create_simple_bot(name: str = "simple_bot") -> SimpleBot:
         interval="1m",
         risk_level="medium",
         max_positions=3,
-        position_size=0.5
+        position_size=0.5,
+        synthetic_mode=True  # Activar modo sintético por defecto
     )
     
     return SimpleBot(config)

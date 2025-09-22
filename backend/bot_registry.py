@@ -4,6 +4,7 @@ Registro dinámico de bots de trading
 """
 
 import os
+import json
 import importlib
 import inspect
 from typing import Dict, List, Type, Optional, Any
@@ -14,9 +15,22 @@ from bot_interface import BaseBot, BotConfig, TradingSignal
 class BotRegistry:
     """
     Registro central para gestionar bots de trading
+    Implementa patrón singleton para mantener estado entre llamadas
     """
     
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(BotRegistry, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self):
+        # Solo inicializar una vez
+        if self._initialized:
+            return
+            
         self.bots: Dict[str, BaseBot] = {}
         self.bot_classes: Dict[str, Type[BaseBot]] = {}
         self.logger = logging.getLogger(__name__)
@@ -27,6 +41,9 @@ class BotRegistry:
         
         # Cargar bots existentes
         self._load_existing_bots()
+        
+        # Marcar como inicializado
+        self._initialized = True
     
     def _load_existing_bots(self):
         """Carga bots existentes del sistema"""
@@ -105,19 +122,40 @@ class BotRegistry:
                         
                         # Intentar instanciar el bot con configuración por defecto
                         try:
-                            config = BotConfig(
-                                name=name.lower(),
-                                description=f"Bot {name} cargado dinámicamente",
-                                version="1.0.0",
-                                author="Usuario",
-                                symbol="DOGEUSDT",
-                                interval="1m",
-                                synthetic_mode=False
-                            )
+                            # Buscar función de creación del bot (ej: create_simple_bot)
+                            # Intentar diferentes variaciones del nombre
+                            possible_names = [
+                                f"create_{name.lower()}",  # create_simplebot
+                                f"create_{name.lower().replace('bot', '_bot')}",  # create_simple_bot
+                                f"create_{name.lower().replace('bot', '')}_bot"  # create_simple_bot
+                            ]
                             
-                            bot_instance = obj(config)
+                            create_func = None
+                            for func_name in possible_names:
+                                if hasattr(module, func_name):
+                                    create_func = getattr(module, func_name)
+                                    self.logger.info(f"✅ Encontrada función de creación: {func_name}")
+                                    break
+                            
+                            if create_func:
+                                # Usar la función de creación del bot que tiene la configuración correcta
+                                bot_instance = create_func(name.lower())
+                                self.logger.info(f"✅ Bot dinámico cargado con configuración personalizada: {name}")
+                            else:
+                                # Fallback: crear con configuración por defecto
+                                config = BotConfig(
+                                    name=name.lower(),
+                                    description=f"Bot {name} cargado dinámicamente",
+                                    version="1.0.0",
+                                    author="Usuario",
+                                    symbol="DOGEUSDT",
+                                    interval="1m",
+                                    synthetic_mode=False
+                                )
+                                bot_instance = obj(config)
+                                self.logger.info(f"✅ Bot dinámico cargado con configuración por defecto: {name}")
+                            
                             self.register_bot(bot_instance)
-                            self.logger.info(f"✅ Bot dinámico cargado: {name}")
                             
                         except Exception as e:
                             self.logger.error(f"❌ Error instanciando bot {name}: {e}")
@@ -257,7 +295,26 @@ class BotRegistry:
         for name, bot in self.get_active_bots().items():
             try:
                 signal = bot.analyze_market(market_data)
-                signals[name] = signal.__dict__
+                # Convertir signal a dict y serializar SignalType
+                signal_dict = signal.__dict__.copy()
+                
+                # Remover campos no serializables
+                if 'id' in signal_dict:
+                    del signal_dict['id']
+                
+                # Convertir SignalType enum a string
+                if 'signal_type' in signal_dict:
+                    signal_dict['signal_type'] = signal_dict['signal_type'].value
+                
+                # Verificar que no haya otros campos no serializables
+                for key, value in list(signal_dict.items()):
+                    try:
+                        json.dumps(value)
+                    except (TypeError, ValueError):
+                        self.logger.warning(f"⚠️ Campo no serializable removido: {key}")
+                        del signal_dict[key]
+                
+                signals[name] = signal_dict
                 bot.last_signal = signal
             except Exception as e:
                 self.logger.error(f"❌ Error analizando bot {name}: {e}")
@@ -314,5 +371,12 @@ class LegacyBotWrapper(BaseBot):
         """Indicadores requeridos para bots legacy"""
         return ["SMA", "RSI", "Volume"]
 
-# Instancia global del registro
-bot_registry = BotRegistry()
+# Función para obtener la instancia singleton del registro
+def get_bot_registry() -> BotRegistry:
+    """
+    Obtiene la instancia singleton del BotRegistry
+    """
+    return BotRegistry()
+
+# Instancia global del registro (para compatibilidad)
+bot_registry = get_bot_registry()

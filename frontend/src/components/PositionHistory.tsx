@@ -1,17 +1,37 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 interface PositionHistoryProps {
   history: any[]
-  statistics: {
-    conservative: any
-    aggressive: any
-    overall: any
-  }
+  statistics: Record<string, any>
 }
 
 const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }) => {
-  const [selectedBot, setSelectedBot] = useState<'all' | 'conservative' | 'aggressive'>('all')
+  const [selectedBot, setSelectedBot] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'date' | 'pnl'>('date')
+  const [page, setPage] = useState<number>(1)
+  const [pageSize, setPageSize] = useState<number>(50)
+  const [fullHistory, setFullHistory] = useState<any[] | null>(null)
+
+  // Intentar obtener historial completo del backend (paginación en frontend)
+  useEffect(() => {
+    let cancelled = false
+    const fetchFull = async () => {
+      try {
+        const res = await fetch(`/trading/history?page=1&page_size=100000`)
+        const json = await res.json()
+        const h = json?.data?.items || json?.data?.history || []
+        if (!cancelled && Array.isArray(h) && h.length > 0) {
+          setFullHistory(h)
+        }
+      } catch (_) {
+        // Ignorar errores; usamos el historial provisto por WS
+      }
+    }
+    fetchFull()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const formatDate = (dateString: string | null) => {
     if (!dateString || dateString === 'En curso') {
@@ -73,7 +93,9 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
     }
   }
 
-  const filteredHistory = history.filter(
+  const sourceHistory = fullHistory && fullHistory.length >= history.length ? fullHistory : history
+
+  const filteredHistory = sourceHistory.filter(
     (pos) => selectedBot === 'all' || pos.bot_type === selectedBot
     // Mostrar todas las posiciones, tanto cerradas como abiertas
   )
@@ -88,6 +110,18 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
       return (b.pnl_net || 0) - (a.pnl_net || 0)
     }
   })
+
+  // Paginación
+  const totalPages = Math.max(1, Math.ceil(sortedHistory.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginated = sortedHistory.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+  // Contadores para la lista filtrada
+  const openCount = filteredHistory.filter(
+    (p: any) => !p.is_closed || p.status === 'OPEN' || p.status === 'UPDATED' || !p.close_time
+  ).length
+  const closedCount = filteredHistory.length - openCount
+  const totalCount = filteredHistory.length
 
   const StatCard: React.FC<{ title: string; stats: any; icon: string }> = ({
     title,
@@ -111,13 +145,18 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
         <div className="stat-content">
           <div className="stat-row">
             <span className="stat-label">Trades:</span>
-            <span className="stat-value">{safeStats.total_trades}</span>
+            <span className="stat-value" style={{ color: '#f1c40f', fontWeight: 'bold' }}>
+              {safeStats.total_trades}
+            </span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Win Rate:</span>
             <span
               className="stat-value"
-              style={{ color: safeStats.win_rate >= 50 ? '#26a69a' : '#ef5350' }}>
+              style={{
+                color: safeStats.win_rate > 0 ? '#26a69a' : '#ef5350',
+                fontWeight: 'bold'
+              }}>
               {safeStats.win_rate.toFixed(1)}%
             </span>
           </div>
@@ -131,7 +170,9 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           </div>
           <div className="stat-row">
             <span className="stat-label">Mejor Trade:</span>
-            <span className="stat-value" style={{ color: '#26a69a' }}>
+            <span
+              className="stat-value"
+              style={{ color: safeStats.best_trade >= 0 ? '#26a69a' : '#ef5350' }}>
               ${safeStats.best_trade.toFixed(5)}
             </span>
           </div>
@@ -146,8 +187,24 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
 
       {/* Estadísticas */}
       <div className="statistics-grid">
-        <StatCard title="Conservador" stats={statistics.conservative} icon="🐌" />
-        <StatCard title="Agresivo" stats={statistics.aggressive} icon="⚡" />
+        {/* Render dinámico de tarjetas por bot presente en statistics (excluye overall al final) */}
+        {Object.keys(statistics)
+          .filter((k) => k !== 'overall')
+          .map((botKey) => (
+            <StatCard
+              key={botKey}
+              title={
+                botKey === 'conservative'
+                  ? 'Conservador'
+                  : botKey === 'aggressive'
+                  ? 'Agresivo'
+                  : botKey
+              }
+              stats={statistics[botKey]}
+              icon={getBotIcon(botKey)}
+            />
+          ))}
+        {/* Resumen general */}
         <StatCard title="General" stats={statistics.overall} icon="📈" />
       </div>
 
@@ -157,8 +214,17 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           <label>Bot:</label>
           <select value={selectedBot} onChange={(e) => setSelectedBot(e.target.value as any)}>
             <option value="all">Todos</option>
-            <option value="conservative">Conservador</option>
-            <option value="aggressive">Agresivo</option>
+            {Object.keys(statistics)
+              .filter((k) => k !== 'overall')
+              .map((botKey) => (
+                <option key={botKey} value={botKey}>
+                  {botKey === 'conservative'
+                    ? 'Conservador'
+                    : botKey === 'aggressive'
+                    ? 'Agresivo'
+                    : botKey}
+                </option>
+              ))}
           </select>
         </div>
         <div className="filter-group">
@@ -166,6 +232,43 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
             <option value="date">Fecha</option>
             <option value="pnl">PnL</option>
+          </select>
+        </div>
+        <div className="filter-group" style={{ minWidth: 260 }}>
+          <label style={{ visibility: 'hidden' }}>Contadores:</label>
+          <div style={{ fontSize: 12, opacity: 0.9 }}>
+            Abiertas: <strong>{openCount}</strong> · Cerradas: <strong>{closedCount}</strong> ·
+            Total: <strong>{totalCount}</strong>
+          </div>
+        </div>
+        <div className="filter-group">
+          <label>Página:</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}>
+              ◀
+            </button>
+            <span style={{ minWidth: 60, textAlign: 'center' }}>
+              {safePage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}>
+              ▶
+            </button>
+          </div>
+        </div>
+        <div className="filter-group">
+          <label>Tamaño:</label>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(parseInt(e.target.value))
+              setPage(1)
+            }}>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
           </select>
         </div>
       </div>
@@ -177,7 +280,7 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
             <p>No hay posiciones en el historial</p>
           </div>
         ) : (
-          sortedHistory.map((position, index) => (
+          paginated.map((position, index) => (
             <div key={index} className="history-item">
               <div className="history-header">
                 <div className="history-bot">
