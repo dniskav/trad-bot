@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 from typing import Dict, Optional, Any
 import logging
-from colored_logger import get_colored_logger
+from utils.colored_logger import get_colored_logger
 from persistence.file_repository import FilePersistenceRepository
 from persistence.service import PersistenceService
 
@@ -267,7 +267,7 @@ class TradingTracker:
             logger.info(f"📊 (Nuevo formato) Posiciones activas: { {k: len(v) for k,v in self.active_positions.items()} }")
 
             # Agregar bots plug-and-play faltantes
-            from bot_registry import get_bot_registry
+            from .bot_registry import get_bot_registry
             bot_registry = get_bot_registry()
             for bot_name in bot_registry.get_all_bots().keys():
                 if bot_name not in self.active_positions:
@@ -292,7 +292,7 @@ class TradingTracker:
                     }
                     
                     # Agregar bots plug and play a las posiciones activas
-                    from bot_registry import get_bot_registry
+                    from .bot_registry import get_bot_registry
                     bot_registry = get_bot_registry()
                     for bot_name in bot_registry.get_all_bots().keys():
                         if bot_name not in ['conservative', 'aggressive']:
@@ -349,7 +349,7 @@ class TradingTracker:
                 }
                 
                 # Agregar bots plug and play a las posiciones activas
-                from bot_registry import get_bot_registry
+                from .bot_registry import get_bot_registry
                 bot_registry = get_bot_registry()
                 for bot_name in bot_registry.get_all_bots().keys():
                     if bot_name not in ['conservative', 'aggressive']:
@@ -369,7 +369,7 @@ class TradingTracker:
             }
             
             # Agregar bots plug and play a las posiciones activas
-            from bot_registry import get_bot_registry
+            from .bot_registry import get_bot_registry
             bot_registry = get_bot_registry()
             for bot_name in bot_registry.get_all_bots().keys():
                 if bot_name not in ['conservative', 'aggressive']:
@@ -763,7 +763,7 @@ class TradingTracker:
             }
             
             # Agregar bots plug and play a las posiciones activas
-            from bot_registry import get_bot_registry
+            from .bot_registry import get_bot_registry
             bot_registry = get_bot_registry()
             for bot_name in bot_registry.get_all_bots().keys():
                 if bot_name not in ['conservative', 'aggressive']:

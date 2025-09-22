@@ -13,10 +13,10 @@ import logging
 import datetime
 
 from binance.um_futures import UMFutures  # Cliente oficial USDT-M Futures
-from metrics_logger import MetricsLogger, Trade
-from real_trading_manager import real_trading_manager
-from trading_tracker import initialize_tracker
-from colored_logger import get_colored_logger
+from utils.metrics_logger import MetricsLogger, Trade
+from services.real_trading_manager import real_trading_manager
+from services.trading_tracker import initialize_tracker
+from utils.colored_logger import get_colored_logger
 
 # ------------------ CONFIG / PARÁMETROS AGRESIVOS ------------------
 load_dotenv()

@@ -10,7 +10,7 @@ import inspect
 from typing import Dict, List, Type, Optional, Any
 from pathlib import Path
 import logging
-from bot_interface import BaseBot, BotConfig, TradingSignal
+from .bot_interface import BaseBot, BotConfig, TradingSignal
 
 class BotRegistry:
     """

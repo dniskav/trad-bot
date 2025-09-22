@@ -16,15 +16,15 @@ import threading
 import time
 
 # Core services
-from real_trading_manager import RealTradingManager
-from trading_tracker import TradingTracker
-from bot_registry import bot_registry
-from bot_interface import TradingSignal, SignalType
+from services.real_trading_manager import RealTradingManager
+from services.trading_tracker import TradingTracker
+from services.bot_registry import bot_registry
+from services.bot_interface import TradingSignal, SignalType
 from persistence.service import PersistenceService
 from persistence.file_repository import FilePersistenceRepository
 
 # API modules
-from api import health, trading, positions, bots, orders, klines, metrics
+from features import health, trading, positions, bots, orders, klines, metrics
 from websocket import manager as ws_manager
 
 # Disable FastAPI access logs for polling endpoints

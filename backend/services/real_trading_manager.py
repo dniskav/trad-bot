@@ -11,7 +11,7 @@ from typing import Dict, Optional, Any
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 from dotenv import load_dotenv
-from colored_logger import get_colored_logger
+from utils.colored_logger import get_colored_logger
 
 # Cargar variables de entorno
 load_dotenv('config_real_trading.env')
