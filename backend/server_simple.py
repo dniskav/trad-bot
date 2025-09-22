@@ -1950,6 +1950,18 @@ async def get_plugin_bots_process_info():
         logger.error(f"Error getting plugin bots process info: {e}")
         return {"status": "error", "message": str(e)}
 
+@app.post("/trading/persist")
+async def persist_trading_state():
+    """Fuerza la persistencia en archivos separados (history/active/account/bot_status)."""
+    try:
+        if not trading_tracker:
+            return JSONResponse({"error": "Trading tracker no inicializado"}, status_code=500)
+        trading_tracker.save_history()
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Error forcing persist: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/bots/{bot_name}")
 async def get_bot_info(bot_name: str):
     """Obtiene información detallada de un bot específico"""

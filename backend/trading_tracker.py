@@ -14,9 +14,15 @@ from colored_logger import get_colored_logger
 # Usar logger con colores
 logger = get_colored_logger(__name__)
 
-# Archivo para persistir el historial
-HISTORY_FILE = "logs/trading_history.json"
+# Archivos para persistencia (nuevo formato separado)
+HISTORY_FILE = "logs/trading_history.json"  # legado (único)
 BACKUP_FILE = "logs/trading_history_backup.json"
+
+# Nuevo formato (separado por dominios)
+HISTORY_FILE_NEW = "logs/history.json"
+ACTIVE_POS_FILE_NEW = "logs/active_positions.json"
+ACCOUNT_FILE_NEW = "logs/account.json"
+BOT_STATUS_FILE_NEW = "logs/bot_status.json"
 
 class TradingTracker:
     """Rastrea las posiciones de trading en tiempo real - Soporta múltiples posiciones por bot"""
@@ -237,7 +243,40 @@ class TradingTracker:
     def load_history(self):
         """Carga el historial de posiciones desde archivo"""
         try:
-            if os.path.exists(HISTORY_FILE):
+            # 1) Intentar cargar desde el nuevo formato (archivos separados)
+            if all(os.path.exists(p) for p in [HISTORY_FILE_NEW, ACTIVE_POS_FILE_NEW, ACCOUNT_FILE_NEW, BOT_STATUS_FILE_NEW]):
+                # Historial
+                with open(HISTORY_FILE_NEW, 'r') as f:
+                    self.position_history = json.load(f)
+
+                # Estado de bots
+                with open(BOT_STATUS_FILE_NEW, 'r') as f:
+                    self.bot_status = json.load(f)
+
+                # Posiciones activas
+                with open(ACTIVE_POS_FILE_NEW, 'r') as f:
+                    self.active_positions = json.load(f)
+
+                # Cuenta
+                with open(ACCOUNT_FILE_NEW, 'r') as f:
+                    account = json.load(f)
+                    self.initial_balance = account.get('initial_balance', self.initial_balance)
+                    self.current_balance = account.get('current_balance', self.current_balance)
+                    self.total_pnl = account.get('total_pnl', self.total_pnl)
+
+                logger.info(f"📂 (Nuevo formato) Historial cargado: {len(self.position_history)} posiciones")
+                logger.info(f"🤖 (Nuevo formato) Estado bots: {self.bot_status}")
+                logger.info(f"📊 (Nuevo formato) Posiciones activas: { {k: len(v) for k,v in self.active_positions.items()} }")
+
+                # Agregar bots plug-and-play faltantes
+                from bot_registry import get_bot_registry
+                bot_registry = get_bot_registry()
+                for bot_name in bot_registry.get_all_bots().keys():
+                    if bot_name not in self.active_positions:
+                        self.active_positions[bot_name] = {}
+
+            # 2) Fallback: cargar del formato legado único
+            elif os.path.exists(HISTORY_FILE):
                 with open(HISTORY_FILE, 'r') as f:
                     data = json.load(f)
                     self.position_history = data.get('history', [])
@@ -344,23 +383,36 @@ class TradingTracker:
             # HABILITADO PARA PRUEBA - FUNCIÓN PRINCIPAL
             logger.info("✅ save_history() HABILITADO PARA PRUEBA")
             
-            # Crear backup del archivo anterior
-            if os.path.exists(HISTORY_FILE):
-                import shutil
-                shutil.copy2(HISTORY_FILE, BACKUP_FILE)
-            
-            data = {
-                'history': self.position_history,
+            # Crear carpeta logs si no existe
+            os.makedirs("logs", exist_ok=True)
+
+            # Escribir en archivos separados (nuevo formato)
+            def _safe_write(path, payload):
+                tmp_path = f"{path}.tmp"
+                with open(tmp_path, 'w') as tf:
+                    json.dump(payload, tf, indent=2, default=str)
+                os.replace(tmp_path, path)
+
+            # history.json (lista de órdenes)
+            _safe_write(HISTORY_FILE_NEW, self.position_history)
+
+            # active_positions.json (diccionario)
+            _safe_write(ACTIVE_POS_FILE_NEW, self.active_positions)
+
+            # account.json (saldos y pnl)
+            account_payload = {
                 'initial_balance': self.initial_balance,
                 'current_balance': self.current_balance,
                 'total_pnl': self.total_pnl,
-                'bot_status': self.bot_status,
-                'active_positions': self.active_positions,
                 'last_updated': datetime.now().isoformat()
             }
-            
-            with open(HISTORY_FILE, 'w') as f:
-                json.dump(data, f, indent=2, default=str)
+            _safe_write(ACCOUNT_FILE_NEW, account_payload)
+
+            # bot_status.json (estados)
+            _safe_write(BOT_STATUS_FILE_NEW, self.bot_status)
+
+            # (Deshabilitado) Escritura de archivo legado trading_history.json
+            # Se mantiene solo el nuevo formato separado.
             
             # Log detallado del guardado del historial solo si cambió
             if len(self.position_history) > 0:
