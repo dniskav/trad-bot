@@ -105,10 +105,34 @@ class RealTradingManager:
     
     def sync_active_positions_with_tracker(self, trading_tracker):
         """Sincroniza las posiciones activas con el TradingTracker"""
+        # HABILITADO PARA PRUEBA
+        logger.info("✅ sync_active_positions_with_tracker() HABILITADO PARA PRUEBA")
+        
         if trading_tracker and hasattr(trading_tracker, 'active_positions'):
-            trading_tracker.active_positions = self.active_positions
+            logger.info(f"🔄 Iniciando sync_active_positions_with_tracker")
+            logger.info(f"📊 Active positions antes: {list(trading_tracker.active_positions.keys())}")
+            
+            # Preservar bots plug and play existentes
+            plugin_bot_positions = {}
+            for bot_name, positions in trading_tracker.active_positions.items():
+                if bot_name not in ['conservative', 'aggressive']:
+                    plugin_bot_positions[bot_name] = positions
+                    logger.info(f"🔒 Preservando bot plug and play: {bot_name}")
+            
+            # Sincronizar solo bots legacy
+            trading_tracker.active_positions = self.active_positions.copy()
+            logger.info(f"📊 Active positions después de sync: {list(trading_tracker.active_positions.keys())}")
+            
+            # Restaurar bots plug and play
+            for bot_name, positions in plugin_bot_positions.items():
+                trading_tracker.active_positions[bot_name] = positions
+                logger.info(f"🔄 Restaurando bot plug and play: {bot_name}")
+            
+            logger.info(f"📊 Active positions final: {list(trading_tracker.active_positions.keys())}")
+            # HABILITADO PARA PRUEBA
+            logger.info("✅ save_history() HABILITADO PARA PRUEBA")
             trading_tracker.save_history()
-            logger.info("📊 Posiciones activas sincronizadas con el tracker")
+            logger.info("📊 Posiciones activas sincronizadas con el tracker (preservando bots plug and play)")
     
     def sync_with_binance_orders(self, trading_tracker=None):
         """Sincroniza las posiciones activas con las órdenes reales de Binance"""
@@ -174,6 +198,9 @@ class RealTradingManager:
     
     def sync_history_with_binance_orders(self, trading_tracker=None):
         """Sincroniza el historial con las órdenes reales de Binance, cerrando órdenes que ya no existen"""
+        # HABILITADO PARA PRUEBA
+        logger.info("✅ sync_history_with_binance_orders() HABILITADO PARA PRUEBA")
+        
         if not self.client or not trading_tracker:
             logger.warning("⚠️ Cliente de Binance o TradingTracker no disponible para sincronización del historial")
             return
@@ -189,6 +216,10 @@ class RealTradingManager:
             
             for order in history_open_orders:
                 order_id = str(order.get('order_id', ''))
+                
+                # Saltar órdenes sintéticas - no se sincronizan con Binance
+                if order.get('is_synthetic', False):
+                    continue
                 
                 if order_id and order_id not in binance_order_ids:
                     # La orden ya no existe en Binance, debe cerrarse en el historial
@@ -233,6 +264,9 @@ class RealTradingManager:
                     self.sync_active_positions_with_tracker(trading_tracker)
             else:
                 logger.info("✅ Historial sincronizado con órdenes de Binance")
+                # Asegurar que los bots plug and play se preserven incluso cuando no hay órdenes que cerrar
+                if trading_tracker:
+                    self.sync_active_positions_with_tracker(trading_tracker)
                 
         except Exception as e:
             logger.error(f"❌ Error sincronizando historial con Binance: {e}")
@@ -247,9 +281,13 @@ class RealTradingManager:
             ticker = self.client.get_symbol_ticker(symbol='DOGEUSDT')
             current_price = float(ticker['price'])
             
-            # Actualizar todas las órdenes abiertas
+            # Actualizar todas las órdenes abiertas (excepto sintéticas)
             open_orders = trading_tracker.get_open_orders()
             for order in open_orders:
+                # Saltar órdenes sintéticas - no se actualizan con precio de Binance
+                if order.get('is_synthetic', False):
+                    continue
+                    
                 trading_tracker.update_order_status(
                     order_id=order['order_id'],
                     current_price=current_price,
@@ -277,6 +315,7 @@ class RealTradingManager:
                 side = order['side']
                 entry_price = order['entry_price']
                 quantity = order['quantity']
+                is_synthetic = order.get('is_synthetic', False)
                 
                 # Calcular PnL actual
                 if side == 'BUY':
@@ -309,7 +348,10 @@ class RealTradingManager:
                         close_reason = "Stop Loss"
                 
                 if should_close:
-                    logger.info(f"🎯 {bot_type.upper()} - Cerrando posición por {close_reason}: ${entry_price:.5f} → ${current_price:.5f} ({pnl_pct:.2f}%)")
+                    if is_synthetic:
+                        logger.info(f"🧪 {bot_type.upper()} - Cerrando posición sintética por {close_reason}: ${entry_price:.5f} → ${current_price:.5f} ({pnl_pct:.2f}%)")
+                    else:
+                        logger.info(f"🎯 {bot_type.upper()} - Cerrando posición por {close_reason}: ${entry_price:.5f} → ${current_price:.5f} ({pnl_pct:.2f}%)")
                     
                     # Cerrar la posición
                     self.close_position_with_tracking(
