@@ -21,7 +21,6 @@ export interface Position {
 
 export interface HistoryItemProps {
   position: Position
-  getBotIcon: (botType: string) => string
   getCloseReasonIcon: (reason: string) => string
   formatPnL: (pnl: number, pnlPct: number) => JSX.Element
   formatDate: (dateString: string | null) => string
