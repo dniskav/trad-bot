@@ -21,7 +21,7 @@ Sistema de trading automatizado con bots plug-and-play, frontend React, y backen
 
 ```bash
 cd backend
-python3 server_simple.py
+python3 server.py
 ```
 
 ### 2. Frontend
@@ -57,7 +57,7 @@ npm run dev
 ```
 trading_bot/
 ├── backend/
-│   ├── server_simple.py          # Servidor principal
+│   ├── server.py                 # Servidor principal
 │   ├── real_trading_manager.py   # Trading real
 │   ├── bot_registry.py           # Sistema plug-and-play
 │   ├── bots/                     # Bots dinámicos
