@@ -66,8 +66,6 @@ class WebSocketSingleton {
       if (options.onOpen) this.callbacks.onOpen = options.onOpen
       if (options.onClose) this.callbacks.onClose = options.onClose
       if (options.onError) this.callbacks.onError = options.onError
-
-      console.log('🔧 WebSocketSingleton: Configurado con opciones:', options)
     }
   }
 
@@ -85,15 +83,11 @@ class WebSocketSingleton {
   }
 
   connect() {
-    console.log('🔌 WebSocketSingleton: connect() llamado')
-
     if (this.isConnecting || this.isConnected) {
-      console.log('⚠️ WebSocketSingleton: Ya conectando o conectado, saltando conexión')
       return
     }
 
     if (!window.WebSocket) {
-      console.error('❌ WebSocketSingleton: WebSocket no soportado por el navegador')
       this.error = 'WebSocket no soportado por el navegador'
       return
     }
@@ -107,7 +101,6 @@ class WebSocketSingleton {
       this.ws = new WebSocket(this.url)
 
       this.ws.onopen = () => {
-        console.log('✅ WebSocketSingleton: WebSocket conectado')
         this.isConnected = true
         this.isConnecting = false
         this.error = null
@@ -122,7 +115,6 @@ class WebSocketSingleton {
       this.ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data)
-          console.log('📨 WebSocketSingleton: Mensaje recibido:', message)
           this.lastMessage = message
 
           if (this.callbacks.onMessage) {
@@ -134,7 +126,6 @@ class WebSocketSingleton {
       }
 
       this.ws.onclose = (event) => {
-        console.log('🔌 WebSocketSingleton: WebSocket desconectado:', event.code, event.reason)
         this.isConnected = false
         this.isConnecting = false
 
@@ -144,10 +135,7 @@ class WebSocketSingleton {
       }
 
       this.ws.onerror = (event) => {
-        console.error('❌ WebSocketSingleton: Error de WebSocket:', event)
-
         if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
-          console.log('⚠️ WebSocketSingleton: En estado CONNECTING, no es un error real')
           return
         }
 
@@ -155,7 +143,6 @@ class WebSocketSingleton {
           this.ws &&
           (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CLOSED)
         ) {
-          console.log('⚠️ WebSocketSingleton: Error real detectado')
           this.error = `Error de conexión WebSocket: ${event.type}`
           this.isConnecting = false
         }
@@ -165,15 +152,12 @@ class WebSocketSingleton {
         }
       }
     } catch (err) {
-      console.error('❌ WebSocketSingleton: Error creando WebSocket:', err)
       this.error = 'Error creando conexión WebSocket'
       this.isConnecting = false
     }
   }
 
   disconnect() {
-    console.log('🛑 WebSocketSingleton: disconnect() llamado')
-
     if (this.reconnectTimeoutRef) {
       clearTimeout(this.reconnectTimeoutRef)
       this.reconnectTimeoutRef = null
@@ -240,7 +224,6 @@ export const useSocket = (options: UseSocketOptions = {}): UseSocketReturn => {
   // Auto-connect cuando el componente se monta (solo si autoConnect es true)
   useEffect(() => {
     if (options.autoConnect !== false) {
-      console.log('🔄 useSocket: Auto-conectando...')
       socketSingleton.connect()
     }
   }, [options.autoConnect])
