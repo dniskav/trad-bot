@@ -1,8 +1,8 @@
 import React from 'react'
-import InfoBox from '../InfoBox'
 import BotSignal from './BotSignal'
 import './PluginBotCard.css'
 import type { PluginBotCardProps } from './types'
+import { InfoBox } from '../InfoBox'
 
 const PluginBotCard: React.FC<PluginBotCardProps> = ({
   botName,
