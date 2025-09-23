@@ -56,6 +56,9 @@
   font-weight: 600;
   font-size: 12px;
 }
+.history-row .bot .mode-flag {
+  opacity: 0.85;
+}
 
 /* Fine-tune column widths to reduce empty space */
 .history-row .prices {

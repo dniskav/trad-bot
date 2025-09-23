@@ -1,15 +1,90 @@
 import React, { useEffect, useState } from 'react'
 import { useApiTradingHistory } from '../../hooks'
+import { HistoryItem } from '../HistoryItem'
 import type { PositionHistoryProps } from './types'
 
 const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }) => {
-  const [selectedBot, setSelectedBot] = useState<string>('all')
-  const [sortBy, setSortBy] = useState<'date' | 'pnl'>('date')
+  const [selectedBot, setSelectedBot] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'all'
+    return window.localStorage.getItem('ph_filter_bot') || 'all'
+  })
+  const [sortBy, setSortBy] = useState<'date' | 'pnl'>(() => {
+    if (typeof window === 'undefined') return 'date'
+    const saved = window.localStorage.getItem('ph_sort_by') as 'date' | 'pnl' | null
+    return saved || 'date'
+  })
   const [page, setPage] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(50)
+  const [pageSize, setPageSize] = useState<number>(() => {
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem('ph_page_size') : null
+    return saved ? parseInt(saved) : 50
+  })
   const [fullHistory, setFullHistory] = useState<any[] | null>(null)
 
-  const { data: tradingHistoryData } = useApiTradingHistory()
+  const { data: tradingHistoryData, fetchTradingHistory, isLoading } = useApiTradingHistory()
+
+  // Filtros avanzados
+  const [filterEstado, setFilterEstado] = useState<'all' | 'open' | 'closed'>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const v = window.localStorage.getItem('ph_filter_estado') as any
+    return v || 'all'
+  })
+  const [filterTipo, setFilterTipo] = useState<'all' | 'buy' | 'sell'>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const v = window.localStorage.getItem('ph_filter_tipo') as any
+    return v || 'all'
+  })
+  const [filterCierre, setFilterCierre] = useState<'all' | 'tp' | 'sl'>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const v = window.localStorage.getItem('ph_filter_cierre') as any
+    return v || 'all'
+  })
+  const [filterResultado, setFilterResultado] = useState<'all' | 'ganancia' | 'perdida'>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const v = window.localStorage.getItem('ph_filter_resultado') as any
+    return v || 'all'
+  })
+  const [filterModo, setFilterModo] = useState<'all' | 'synthetic' | 'real'>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const v = window.localStorage.getItem('ph_filter_modo') as any
+    return v || 'all'
+  })
+
+  // Persist settings
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ph_filter_bot', selectedBot)
+    } catch {}
+  }, [selectedBot])
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ph_sort_by', sortBy)
+    } catch {}
+  }, [sortBy])
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ph_filter_estado', filterEstado)
+    } catch {}
+  }, [filterEstado])
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ph_filter_tipo', filterTipo)
+    } catch {}
+  }, [filterTipo])
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ph_filter_cierre', filterCierre)
+    } catch {}
+  }, [filterCierre])
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ph_filter_resultado', filterResultado)
+    } catch {}
+  }, [filterResultado])
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('ph_filter_modo', filterModo)
+    } catch {}
+  }, [filterModo])
 
   useEffect(() => {
     if (tradingHistoryData && Array.isArray(tradingHistoryData) && tradingHistoryData.length > 0) {
@@ -35,13 +110,16 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
   }
 
   const formatPnL = (pnl: number, pnlPct: number) => {
-    const isPositive = pnl >= 0
-    const color = isPositive ? '#26a69a' : '#ef5350'
-    const sign = isPositive ? '+' : ''
+    let color = '#f1c40f' // cero => amarillo
+    if (pnl > 0) color = '#26a69a'
+    if (pnl < 0) color = '#ef5350'
+
+    const sign = pnl > 0 ? '+' : pnl === 0 ? '' : ''
+    const signPct = pnlPct > 0 ? '+' : pnlPct === 0 ? '' : ''
 
     return (
       <span style={{ color, fontWeight: 'bold' }}>
-        {sign}${pnl.toFixed(5)} ({sign}
+        {sign}${pnl.toFixed(5)} ({signPct}
         {pnlPct.toFixed(2)}%)
       </span>
     )
@@ -77,11 +155,58 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
     }
   }
 
-  const sourceHistory = fullHistory && fullHistory.length >= history.length ? fullHistory : history
+  // Preferir SIEMPRE el historial del endpoint si está disponible
+  const sourceHistory = (tradingHistoryData as any[] | null) ?? fullHistory ?? history
 
-  const filteredHistory = sourceHistory.filter(
-    (pos) => selectedBot === 'all' || pos.bot_type === selectedBot
-  )
+  const filteredHistory = sourceHistory.filter((pos) => {
+    if (selectedBot !== 'all' && pos.bot_type !== selectedBot) return false
+    // Modo synthetic/real
+    const isSynthetic = !!pos.is_synthetic
+    if (filterModo === 'synthetic' && !isSynthetic) return false
+    if (filterModo === 'real' && isSynthetic) return false
+    // Estado
+    const isOpen =
+      !pos.is_closed || pos.status === 'OPEN' || pos.status === 'UPDATED' || !pos.close_time
+    if (filterEstado === 'open' && !isOpen) return false
+    if (filterEstado === 'closed' && isOpen) return false
+    // Tipo de operación
+    const side = (pos.type || pos.side || '').toString().toLowerCase()
+    if (filterTipo !== 'all' && side !== filterTipo) return false
+    // Motivo de cierre (tp/sl)
+    const reason = (pos.close_reason || '').toString().toLowerCase()
+    if (filterCierre === 'tp' && reason !== 'take profit') return false
+    if (filterCierre === 'sl' && reason !== 'stop loss') return false
+    // Resultado (ganancia/perdida) basado en pnl_net
+    const pnlNet = Number(pos.pnl_net || pos.pnl || 0)
+    if (filterResultado === 'ganancia' && !(pnlNet > 0)) return false
+    if (filterResultado === 'perdida' && !(pnlNet < 0)) return false
+    return true
+  })
+
+  // Auto-reset de filtros si el endpoint trae datos pero los filtros dejan 0 resultados
+  const [didAutoReset, setDidAutoReset] = useState(false)
+  useEffect(() => {
+    if (
+      !didAutoReset &&
+      Array.isArray(sourceHistory) &&
+      sourceHistory.length > 0 &&
+      filteredHistory.length === 0
+    ) {
+      setSelectedBot('all')
+      setFilterEstado('all')
+      setFilterTipo('all')
+      setFilterCierre('all')
+      setFilterResultado('all')
+      try {
+        window.localStorage.removeItem('ph_filter_bot')
+        window.localStorage.removeItem('ph_filter_estado')
+        window.localStorage.removeItem('ph_filter_tipo')
+        window.localStorage.removeItem('ph_filter_cierre')
+        window.localStorage.removeItem('ph_filter_resultado')
+      } catch {}
+      setDidAutoReset(true)
+    }
+  }, [sourceHistory, filteredHistory.length, didAutoReset])
 
   const sortedHistory = [...filteredHistory].sort((a, b) => {
     if (sortBy === 'date') {
@@ -120,6 +245,19 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
         <div className="stat-header">
           <span className="stat-icon">{icon}</span>
           <span className="stat-title">{title}</span>
+        </div>
+        <div className="filter-group">
+          <label>Modo:</label>
+          <select
+            value={filterModo}
+            onChange={(e) => {
+              setFilterModo(e.target.value as any)
+              setPage(1)
+            }}>
+            <option value="all">Todos</option>
+            <option value="synthetic">Synthetic</option>
+            <option value="real">Reales</option>
+          </select>
         </div>
         <div className="stat-content">
           <div className="stat-row">
@@ -163,7 +301,179 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
   return (
     <div className="position-history">
       <h3>📊 Historial de Posiciones</h3>
-      {/* ...rest of JSX identical... */}
+
+      {/* Estadísticas */}
+      <div className="statistics-grid">
+        {/* Render dinámico de tarjetas por bot presente en statistics (excluye overall al final) */}
+        {Object.keys(statistics)
+          .filter((k) => k !== 'overall')
+          .map((botKey) => (
+            <StatCard
+              key={botKey}
+              title={
+                botKey === 'conservative'
+                  ? 'Conservador'
+                  : botKey === 'aggressive'
+                  ? 'Agresivo'
+                  : botKey
+              }
+              stats={statistics[botKey]}
+              icon={getBotIcon(botKey)}
+            />
+          ))}
+        {/* Resumen general */}
+        <StatCard title="General" stats={statistics.overall} icon="📈" />
+      </div>
+
+      {/* Filtros */}
+      <div className="history-filters">
+        <div className="filter-group">
+          <label>Bot:</label>
+          <select value={selectedBot} onChange={(e) => setSelectedBot(e.target.value as any)}>
+            <option value="all">Todos</option>
+            {Object.keys(statistics)
+              .filter((k) => k !== 'overall')
+              .map((botKey) => (
+                <option key={botKey} value={botKey}>
+                  {botKey === 'conservative'
+                    ? 'Conservador'
+                    : botKey === 'aggressive'
+                    ? 'Agresivo'
+                    : botKey}
+                </option>
+              ))}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Estado:</label>
+          <select
+            value={filterEstado}
+            onChange={(e) => {
+              setFilterEstado(e.target.value as any)
+              setPage(1)
+            }}>
+            <option value="all">Todos</option>
+            <option value="open">Abiertas</option>
+            <option value="closed">Cerradas</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Tipo:</label>
+          <select
+            value={filterTipo}
+            onChange={(e) => {
+              setFilterTipo(e.target.value as any)
+              setPage(1)
+            }}>
+            <option value="all">Todos</option>
+            <option value="buy">Buy</option>
+            <option value="sell">Sell</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Cierre:</label>
+          <select
+            value={filterCierre}
+            onChange={(e) => {
+              setFilterCierre(e.target.value as any)
+              setPage(1)
+            }}>
+            <option value="all">Todos</option>
+            <option value="tp">TP</option>
+            <option value="sl">SL</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Resultado:</label>
+          <select
+            value={filterResultado}
+            onChange={(e) => {
+              setFilterResultado(e.target.value as any)
+              setPage(1)
+            }}>
+            <option value="all">Todos</option>
+            <option value="ganancia">Ganancias</option>
+            <option value="perdida">Pérdidas</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label>Acciones:</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => fetchTradingHistory(1, 10000, true)} disabled={isLoading}>
+              {isLoading ? 'Cargando…' : 'Refrescar'}
+            </button>
+          </div>
+        </div>
+        <div className="filter-group">
+          <label>Ordenar por:</label>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+            <option value="date">Fecha</option>
+            <option value="pnl">PnL</option>
+          </select>
+        </div>
+        <div className="filter-group" style={{ minWidth: 260 }}>
+          <label style={{ visibility: 'hidden' }}>Contadores:</label>
+          <div style={{ fontSize: 12, opacity: 0.9 }}>
+            Abiertas: <strong>{openCount}</strong> · Cerradas: <strong>{closedCount}</strong> ·
+            Total: <strong>{totalCount}</strong>
+          </div>
+        </div>
+        <div className="filter-group">
+          <label>Página:</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}>
+              ◀
+            </button>
+            <span style={{ minWidth: 60, textAlign: 'center' }}>
+              {safePage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}>
+              ▶
+            </button>
+          </div>
+        </div>
+        <div className="filter-group">
+          <label>Tamaño:</label>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const next = parseInt(e.target.value)
+              setPageSize(next)
+              try {
+                window.localStorage.setItem('ph_page_size', String(next))
+              } catch {}
+              setPage(1)
+            }}>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
+            <option value={500}>500</option>
+            <option value={1000}>1000</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Lista de posiciones */}
+      <div className="history-list">
+        {sortedHistory.length === 0 ? (
+          <div className="no-history">
+            <p>No hay posiciones en el historial</p>
+          </div>
+        ) : (
+          paginated.map((position, index) => (
+            <HistoryItem
+              key={index}
+              position={position}
+              getCloseReasonIcon={getCloseReasonIcon}
+              formatPnL={formatPnL}
+              formatDate={formatDate}
+            />
+          ))
+        )}
+      </div>
     </div>
   )
 }

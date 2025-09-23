@@ -8,6 +8,10 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
   formatDate
 }) => {
   const isOpen = !position.is_closed || position.status === 'UPDATED' || position.status === 'OPEN'
+  const idStr = `${(position as any).order_id || ''} ${(position as any).position_id || ''}`
+    .toString()
+    .toLowerCase()
+  const isSynthetic = Boolean((position as any).is_synthetic) || idStr.includes('synth')
   const reason = position.close_reason || ''
   const isTP = !isOpen && reason === 'Take Profit'
   const isSL = !isOpen && reason === 'Stop Loss'
@@ -16,6 +20,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
   return (
     <div className={rowClass}>
       <span className="row-col bot">
+        <span className="mode-flag" title={isSynthetic ? 'Synthetic' : 'Real'}>
+          {isSynthetic ? '🧪' : '💼'}
+        </span>
         <span className="bot-name">{position.bot_type || 'N/A'}</span>
       </span>
       <span className="row-col prices">

@@ -44,20 +44,13 @@
 }
 .history-list {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 .history-item {
-  border: 1px solid var(--binance-gray-2, #333);
-  border-radius: 8px;
-  padding: 10px;
-  background: var(--binance-dark-2, #111);
+  display: none; /* legacy block hidden, replaced by .history-row */
 }
 .history-header {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
+  display: none;
 }
 .history-bot {
   display: flex;
@@ -78,9 +71,7 @@
   opacity: 0.9;
 }
 .history-details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
+  display: none;
 }
 .price-info,
 .pnl-info,
