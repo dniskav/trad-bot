@@ -22,6 +22,9 @@ class PersistenceService:
     def get_bot_status(self) -> Dict[str, bool]:
         return self.repo.load_bot_status()
 
+    def get_bot_configs(self) -> Dict[str, Dict[str, Any]]:
+        return self.repo.load_bot_configs()
+
     # Facades de escritura
     def set_history(self, history: List[Dict[str, Any]]) -> None:
         self.repo.save_history(history)
@@ -35,6 +38,9 @@ class PersistenceService:
     def set_bot_status(self, status: Dict[str, bool]) -> None:
         self.repo.save_bot_status(status)
 
+    def set_bot_configs(self, configs: Dict[str, Dict[str, Any]]) -> None:
+        self.repo.save_bot_configs(configs)
+
     # Snapshots (operaciones agrupadas)
     def get_snapshot(self) -> Dict[str, Any]:
         return {
@@ -42,9 +48,10 @@ class PersistenceService:
             "active_positions": self.get_active_positions(),
             "account": self.get_account(),
             "bot_status": self.get_bot_status(),
+            "bot_configs": self.get_bot_configs(),
         }
 
-    def save_snapshot(self, *, history=None, active_positions=None, account=None, bot_status=None) -> None:
+    def save_snapshot(self, *, history=None, active_positions=None, account=None, bot_status=None, bot_configs=None) -> None:
         if history is not None:
             self.set_history(history)
         if active_positions is not None:
@@ -53,5 +60,7 @@ class PersistenceService:
             self.set_account(account)
         if bot_status is not None:
             self.set_bot_status(bot_status)
+        if bot_configs is not None:
+            self.set_bot_configs(bot_configs)
 
 

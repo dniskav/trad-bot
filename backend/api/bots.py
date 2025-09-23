@@ -124,11 +124,11 @@ async def start_plugin_bot(bot_name: str, synthetic_mode: bool = True):
         from services.bot_registry import get_bot_registry
         registry = get_bot_registry()
         
-        # Configurar modo sintético antes de iniciar
-        bot = registry.get_bot(bot_name)
-        if bot:
-            bot.config.synthetic_mode = synthetic_mode
-            logger.info(f"🤖 Configurando {bot_name} en modo {'sintético' if synthetic_mode else 'real'}")
+        # Actualizar configuración usando el nuevo método
+        config_success = registry.update_bot_config(bot_name, {"synthetic_mode": synthetic_mode})
+        if not config_success:
+            logger.error(f"❌ Error actualizando configuración de {bot_name}")
+            return {"status": "error", "message": f"Error actualizando configuración de {bot_name}"}
         
         success = registry.start_bot(bot_name)
         if success:
@@ -158,6 +158,31 @@ async def stop_plugin_bot(bot_name: str):
             return {"status": "error", "message": f"Error deteniendo bot {bot_name}"}
     except Exception as e:
         logger.error(f"❌ Error stopping bot {bot_name}: {e}")
+        return {"status": "error", "message": str(e)}
+
+@router.put("/{bot_name}/config")
+async def update_bot_config(bot_name: str, config_data: dict):
+    """Actualiza la configuración de un bot (incluyendo synthetic mode)"""
+    try:
+        from services.bot_registry import get_bot_registry
+        registry = get_bot_registry()
+        
+        # Validar que el bot existe
+        bot = registry.get_bot(bot_name)
+        if not bot:
+            logger.error(f"❌ Bot no encontrado: {bot_name}")
+            return {"status": "error", "message": f"Bot {bot_name} no encontrado"}
+        
+        # Actualizar configuración
+        success = registry.update_bot_config(bot_name, config_data)
+        if success:
+            logger.info(f"✅ Configuración actualizada para {bot_name}: {config_data}")
+            return {"status": "success", "message": f"Configuración actualizada para {bot_name}"}
+        else:
+            logger.error(f"❌ Error actualizando configuración de {bot_name}")
+            return {"status": "error", "message": f"Error actualizando configuración de {bot_name}"}
+    except Exception as e:
+        logger.error(f"❌ Error updating bot config {bot_name}: {e}")
         return {"status": "error", "message": str(e)}
 
 def get_bot_display_name(bot_name: str) -> str:

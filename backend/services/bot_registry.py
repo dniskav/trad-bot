@@ -36,11 +36,19 @@ class BotRegistry:
         self.logger = logging.getLogger(__name__)
         self.bots_directory = Path(__file__).parent.parent / "bots"
         
+        # Inicializar servicio de persistencia
+        from persistence.file_repository import FilePersistenceRepository
+        from persistence.service import PersistenceService
+        self.persistence = PersistenceService(FilePersistenceRepository())
+        
         # Crear directorio de bots si no existe
         self.bots_directory.mkdir(exist_ok=True)
         
         # Cargar bots existentes
         self._load_existing_bots()
+        
+        # Aplicar configuraciones guardadas
+        self._apply_saved_configs()
         
         # Marcar como inicializado
         self._initialized = True
@@ -52,6 +60,31 @@ class BotRegistry:
         
         # Cargar bots dinámicos del directorio bots/
         self._load_dynamic_bots()
+    
+    def _apply_saved_configs(self):
+        """Aplica configuraciones guardadas a los bots existentes"""
+        try:
+            saved_configs = self.persistence.get_bot_configs()
+            self.logger.info(f"📂 Cargando configuraciones guardadas: {list(saved_configs.keys())}")
+            
+            for bot_name, config_data in saved_configs.items():
+                bot = self.get_bot(bot_name)
+                if bot:
+                    # Aplicar configuración guardada
+                    if 'synthetic_mode' in config_data:
+                        bot.config.synthetic_mode = config_data['synthetic_mode']
+                        self.logger.info(f"🔄 Aplicando synthetic_mode={config_data['synthetic_mode']} a {bot_name}")
+                    
+                    # Aplicar otros campos de configuración si existen
+                    for key, value in config_data.items():
+                        if hasattr(bot.config, key) and key != 'synthetic_mode':
+                            setattr(bot.config, key, value)
+                            self.logger.info(f"🔄 Aplicando {key}={value} a {bot_name}")
+                else:
+                    self.logger.warning(f"⚠️ Bot {bot_name} no encontrado para aplicar configuración guardada")
+                    
+        except Exception as e:
+            self.logger.error(f"❌ Error aplicando configuraciones guardadas: {e}")
     
     def _load_legacy_bots(self):
         """Carga bots legacy (conservative y aggressive)"""
@@ -251,6 +284,9 @@ class BotRegistry:
             
             bot.start()
             
+            # Guardar configuración actualizada
+            self._save_bot_config(bot_name)
+            
             # Log después de iniciar
             self.logger.info(f"✅ Bot {bot_name} iniciado exitosamente en modo {mode_text}")
             return True
@@ -278,6 +314,9 @@ class BotRegistry:
             self.logger.info(f"🛑 Deteniendo bot {bot_name}")
             
             bot.stop()
+            
+            # Guardar configuración actualizada
+            self._save_bot_config(bot_name)
             
             # Log después de detener
             self.logger.info(f"✅ Bot {bot_name} detenido exitosamente")
@@ -338,6 +377,56 @@ class BotRegistry:
                 signals[name] = {"error": str(e)}
         
         return signals
+    
+    def _save_bot_config(self, bot_name: str):
+        """Guarda la configuración de un bot específico"""
+        try:
+            bot = self.get_bot(bot_name)
+            if bot:
+                # Obtener configuraciones existentes
+                saved_configs = self.persistence.get_bot_configs()
+                
+                # Actualizar configuración del bot específico
+                saved_configs[bot_name] = {
+                    'synthetic_mode': bot.config.synthetic_mode,
+                    'enabled': bot.config.enabled,
+                    'risk_level': bot.config.risk_level,
+                    'max_positions': bot.config.max_positions,
+                    'position_size': bot.config.position_size,
+                    'symbol': bot.config.symbol,
+                    'interval': bot.config.interval
+                }
+                
+                # Guardar configuraciones actualizadas
+                self.persistence.set_bot_configs(saved_configs)
+                self.logger.info(f"💾 Configuración guardada para {bot_name}: synthetic_mode={bot.config.synthetic_mode}")
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error guardando configuración de {bot_name}: {e}")
+    
+    def update_bot_config(self, bot_name: str, config_updates: Dict[str, Any]):
+        """Actualiza la configuración de un bot y la guarda"""
+        try:
+            bot = self.get_bot(bot_name)
+            if not bot:
+                self.logger.error(f"❌ Bot no encontrado: {bot_name}")
+                return False
+            
+            # Aplicar actualizaciones
+            for key, value in config_updates.items():
+                if hasattr(bot.config, key):
+                    setattr(bot.config, key, value)
+                    self.logger.info(f"🔄 Actualizando {key}={value} para {bot_name}")
+                else:
+                    self.logger.warning(f"⚠️ Campo {key} no existe en configuración de {bot_name}")
+            
+            # Guardar configuración actualizada
+            self._save_bot_config(bot_name)
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error actualizando configuración de {bot_name}: {e}")
+            return False
 
 class LegacyBotWrapper(BaseBot):
     """

@@ -15,6 +15,7 @@ class FilePersistenceRepository(PersistencePort):
         self.active_path = os.path.join(base_dir, "active_positions.json")
         self.account_path = os.path.join(base_dir, "account.json")
         self.bot_status_path = os.path.join(base_dir, "bot_status.json")
+        self.bot_configs_path = os.path.join(base_dir, "bot_configs.json")
 
         os.makedirs(self.base_dir, exist_ok=True)
 
@@ -68,5 +69,12 @@ class FilePersistenceRepository(PersistencePort):
 
     def save_bot_status(self, status: Dict[str, bool]) -> None:
         self._safe_write(self.bot_status_path, status)
+
+    # ---------- bot configs ------------
+    def load_bot_configs(self) -> Dict[str, Dict[str, Any]]:
+        return self._read_json(self.bot_configs_path, {})
+
+    def save_bot_configs(self, configs: Dict[str, Dict[str, Any]]) -> None:
+        self._safe_write(self.bot_configs_path, configs)
 
 
