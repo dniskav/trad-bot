@@ -1,7 +1,7 @@
 /* One-line compact history row */
 .history-row {
   display: grid;
-  grid-template-columns: 80px auto auto auto auto 1fr;
+  grid-template-columns: 80px auto auto auto auto auto 1fr;
   column-gap: clamp(4px, 1.2vw, 2rem);
   row-gap: 0;
   align-items: center;
@@ -27,6 +27,9 @@
 }
 .history-row .status {
   min-width: auto;
+}
+.history-row .reason {
+  min-width: 120px;
 }
 .history-row .pnl {
   min-width: auto;
@@ -74,6 +77,14 @@
 }
 .history-row .dates {
   min-width: 200px;
+}
+
+/* Status text colors */
+.history-row .status .value.status-open {
+  color: #ffffff;
+}
+.history-row .status .value.status-closed {
+  color: #bdbdbd;
 }
 
 /* Backgrounds by status */

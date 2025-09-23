@@ -9,6 +9,7 @@ export interface Position {
   type?: string
   close_reason?: string
   entry_price?: number
+  current_price?: number
   exit_price?: number
   pnl?: number
   pnl_pct?: number
@@ -21,7 +22,6 @@ export interface Position {
 
 export interface HistoryItemProps {
   position: Position
-  getCloseReasonIcon: (reason: string) => string
   formatPnL: (pnl: number, pnlPct: number) => JSX.Element
   formatDate: (dateString: string | null) => string
 }

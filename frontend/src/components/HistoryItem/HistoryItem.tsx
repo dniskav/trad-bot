@@ -1,12 +1,7 @@
 import React from 'react'
 import type { HistoryItemProps } from './types'
 
-const HistoryItem: React.FC<HistoryItemProps> = ({
-  position,
-  getCloseReasonIcon,
-  formatPnL,
-  formatDate
-}) => {
+const HistoryItem: React.FC<HistoryItemProps> = ({ position, formatPnL, formatDate }) => {
   const isOpen = !position.is_closed || position.status === 'UPDATED' || position.status === 'OPEN'
   const idStr = `${(position as any).order_id || ''} ${(position as any).position_id || ''}`
     .toString()
@@ -16,6 +11,12 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
   const isTP = !isOpen && reason === 'Take Profit'
   const isSL = !isOpen && reason === 'Stop Loss'
   const rowClass = `history-row ${isOpen ? 'open' : isTP ? 'tp' : isSL ? 'sl' : 'open'}`
+
+  const sideText = ((position as any).side || position.type || '').toString().toUpperCase() || 'N/A'
+  const sideClass =
+    ((position as any).side || position.type || '').toString().toLowerCase() || 'unknown'
+  const statusText = (position.status || (isOpen ? 'OPEN' : 'CLOSED')).toString().toUpperCase()
+  const statusClass = statusText === 'OPEN' ? 'status-open' : 'status-closed'
 
   return (
     <div className={rowClass}>
@@ -30,23 +31,24 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
         <span className="value">${position.entry_price?.toFixed(5)}</span>
         <span className="sep">·</span>
         <span className="label">s</span>
-        <span className="value">
-          {isOpen ? 'pendiente…' : `$${position.exit_price?.toFixed(5) ?? '-'}`}
-        </span>
+        <span className="value">{`$${(position.current_price ?? position.exit_price ?? 0).toFixed(
+          5
+        )}`}</span>
       </span>
       <span className="row-col status">
-        <span className="value">
-          {isOpen ? 'En curso' : isTP ? 'TP' : isSL ? 'SL' : getCloseReasonIcon(reason)}
-        </span>
+        <span className={`value ${statusClass}`}>{statusText}</span>
       </span>
       <span className="row-col pnl">
         <span className="label">PnL</span>
-        <span className="value">{formatPnL(position.pnl_net || 0, position.pnl_net_pct || 0)}</span>
+        <span className="value">
+          {formatPnL(
+            (position as any).pnl_net ?? (position as any).net_pnl ?? 0,
+            (position as any).pnl_net_pct ?? (position as any).net_pnl_pct ?? 0
+          )}
+        </span>
       </span>
       <span className="row-col side">
-        <span className={`position-type ${position.type?.toLowerCase() || 'unknown'}`}>
-          {(position.type || 'N/A').toUpperCase()}
-        </span>
+        <span className={`position-type ${sideClass}`}>{sideText}</span>
       </span>
       <span className="row-col dates">
         <span className="label">Inicio</span>
@@ -56,6 +58,9 @@ const HistoryItem: React.FC<HistoryItemProps> = ({
         <span className="value">
           {formatDate(position.close_time ?? position.exit_time ?? null)}
         </span>
+      </span>
+      <span className="row-col reason">
+        <span className="value">{position.close_reason || ''}</span>
       </span>
     </div>
   )

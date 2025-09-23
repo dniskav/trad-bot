@@ -20,7 +20,7 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
   })
   const [fullHistory, setFullHistory] = useState<any[] | null>(null)
 
-  const { data: tradingHistoryData, fetchTradingHistory, isLoading } = useApiTradingHistory()
+  const { fetchTradingHistory, isLoading } = useApiTradingHistory()
 
   // Filtros avanzados
   const [filterEstado, setFilterEstado] = useState<'all' | 'open' | 'closed'>(() => {
@@ -86,11 +86,16 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
     } catch {}
   }, [filterModo])
 
+  // Cargar historial inicial desde el endpoint
   useEffect(() => {
-    if (tradingHistoryData && Array.isArray(tradingHistoryData) && tradingHistoryData.length > 0) {
-      setFullHistory(tradingHistoryData)
+    const load = async () => {
+      const items = await fetchTradingHistory(1, 10000)
+      if (Array.isArray(items)) {
+        setFullHistory(items)
+      }
     }
-  }, [tradingHistoryData])
+    load()
+  }, [])
 
   const formatDate = (dateString: string | null) => {
     if (!dateString || dateString === 'En curso') {
@@ -110,7 +115,7 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
   }
 
   const formatPnL = (pnl: number, pnlPct: number) => {
-    let color = '#f1c40f' // cero => amarillo
+    let color = '#f1c40f' // cero plu=> amarillo
     if (pnl > 0) color = '#26a69a'
     if (pnl < 0) color = '#ef5350'
 
@@ -142,21 +147,14 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
     }
   }
 
-  const getCloseReasonIcon = (reason: string) => {
-    switch (reason) {
-      case 'Stop Loss':
-        return '🛑'
-      case 'Take Profit':
-        return '🎯'
-      case 'Señal Contraria':
-        return '🔄'
-      default:
-        return '📊'
-    }
-  }
+  // (Iconos de motivo ya no se usan en la fila; la razón se muestra como texto al final)
 
-  // Preferir SIEMPRE el historial del endpoint si está disponible
-  const sourceHistory = (tradingHistoryData as any[] | null) ?? fullHistory ?? history
+  // Preferir SIEMPRE el historial del endpoint si está disponible (siempre devolver array)
+  const sourceHistory: any[] = Array.isArray(fullHistory)
+    ? (fullHistory as any[])
+    : Array.isArray(history)
+    ? history
+    : []
 
   const filteredHistory = sourceHistory.filter((pos) => {
     if (selectedBot !== 'all' && pos.bot_type !== selectedBot) return false
@@ -399,7 +397,12 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
         <div className="filter-group">
           <label>Acciones:</label>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => fetchTradingHistory(1, 10000, true)} disabled={isLoading}>
+            <button
+              onClick={async () => {
+                const items = await fetchTradingHistory(1, 10000)
+                if (Array.isArray(items)) setFullHistory(items)
+              }}
+              disabled={isLoading}>
               {isLoading ? 'Cargando…' : 'Refrescar'}
             </button>
           </div>
@@ -467,7 +470,6 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
             <HistoryItem
               key={index}
               position={position}
-              getCloseReasonIcon={getCloseReasonIcon}
               formatPnL={formatPnL}
               formatDate={formatDate}
             />
