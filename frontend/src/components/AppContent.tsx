@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { WebSocketContext } from '../contexts/WebSocketContext'
+import { useApiKlines, useApiMarginInfo } from '../hooks'
 // import { useSocket } from '../hooks/useSocket'
 import Accordion from './Accordion'
 import AccountBalance from './AccountBalance'
@@ -26,7 +27,35 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
   const [activePositions, setActivePositions] = useState<any[]>([])
   const [currentPrice, setCurrentPrice] = useState<number>(0)
   const [accountBalance, setAccountBalance] = useState<any>(null)
-  const [marginInfo, setMarginInfo] = useState<any>(null)
+
+  // Debug: Log cuando cambie accountBalance
+  useEffect(() => {
+    console.log('📊 AppContent: accountBalance cambió a:', accountBalance)
+  }, [accountBalance])
+  // Use margin info hook
+  const { isLoading: marginLoading, error: marginError, fetchMarginInfo } = useApiMarginInfo()
+
+  // State for margin info data
+  const [marginInfo, setMarginInfo] = useState<any | null>(null)
+
+  // Fetch margin info on mount and log when loading is false
+  useEffect(() => {
+    const fetchData = async () => {
+      const data = await fetchMarginInfo()
+      if (data) {
+        setMarginInfo(data)
+      }
+    }
+    fetchData()
+  }, []) // Remove fetchMarginInfo dependency to prevent infinite loop
+
+  // Debug: Log margin info data when loading is false
+  useEffect(() => {
+    if (!marginLoading) {
+      console.log('📊 AppContent: marginError:', marginError)
+    }
+  }, [marginLoading, marginError])
+
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
@@ -60,7 +89,42 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
       // console.log('📨 AppContent: Datos del mensaje:', data?.data)
 
       // Procesar diferentes tipos de mensajes
-      if (data.type === 'bot_signals') {
+      if (data.type === 'initial_data') {
+        if (data.data) {
+          if (data.data.current_price) {
+            setCurrentPrice(data.data.current_price)
+          }
+          if (data.data.account_balance) {
+            console.log(
+              '📨 AppContent: Estableciendo accountBalance (initial_data):',
+              data.data.account_balance
+            )
+            setAccountBalance(data.data.account_balance)
+          }
+          if (data.data.active_positions) {
+            setActivePositions(data.data.active_positions)
+          }
+          if (data.data.bot_status) {
+            // Los bot_status se pueden usar más adelante
+            console.log('🤖 AppContent: Bot status recibido:', data.data.bot_status)
+          }
+        }
+      } else if (data.type === 'update') {
+        if (data.data) {
+          if (data.data.current_price) {
+            setCurrentPrice(data.data.current_price)
+          }
+          if (data.data.account_balance) {
+            setAccountBalance(data.data.account_balance)
+          }
+          if (data.data.active_positions) {
+            setActivePositions(data.data.active_positions)
+          }
+          if (data.data.bot_status) {
+            console.log('🤖 AppContent: Bot status actualizado:', data.data.bot_status)
+          }
+        }
+      } else if (data.type === 'bot_signals') {
         setBotSignals(data.data || [])
       } else if (data.type === 'position_history') {
         setPositionHistory(data.data || [])
@@ -71,19 +135,19 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
       } else if (data.type === 'account_balance') {
         setAccountBalance(data.data)
       } else if (data.type === 'margin_info') {
-        setMarginInfo(data.data)
+        // Margin info is now handled by the hook
+      } else if (data.type === 'history_stream') {
+        // Stream de historial para refresco en vivo
+        const list = Array.isArray(data.data) ? data.data : []
+        setPositionHistory(list)
+        const stats = calculateStatistics(list)
+        setHistoryStats(stats)
+      } else if (data.type === 'plugin_bots_realtime') {
+        // Publicar en el contexto para que cualquier componente (p.ej. PlugAndPlayBots) lo consuma
+        if (ctx && ctx.setPluginBotsRealtime) {
+          ctx.setPluginBotsRealtime(data.data || {})
+        }
       } else if (data.type === 'candles') {
-        // Datos de velas para el gráfico
-        // console.log('📊 AppContent: === PROCESANDO DATOS DE VELAS ===')
-        // console.log('📊 AppContent: data.data:', data.data)
-        // console.log('📊 AppContent: data.data.candles:', data.data?.candles)
-        // console.log('📊 AppContent: data.data.candles.length:', data.data?.candles?.length)
-        // console.log(
-        //   '📊 AppContent: Datos de velas recibidos desde contexto:',
-        //   data.data?.candles?.length || 0,
-        //   'velas'
-        // )
-        // console.log('📊 AppContent: Estructura de datos de velas desde contexto:', data.data)
         setCandlesData(data.data?.candles || [])
         console.log('📊 AppContent: setCandlesData llamado con:', data.data?.candles || [])
 
@@ -208,31 +272,23 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     // El AppSetup manejará la reconexión
   }
 
+  // Use klines hook
+  const { data: klinesData, fetchKlines } = useApiKlines()
+
   // Fallback: cargar velas iniciales vía REST si aún no han llegado por WS
   useEffect(() => {
-    let cancelled = false
-    const loadInitialCandles = async () => {
-      try {
-        const res = await fetch(
-          `/klines?symbol=DOGEUSDT&interval=${encodeURIComponent(timeframe)}&limit=500`
-        )
-        if (!res.ok) return
-        const data = await res.json()
-        if (!cancelled && Array.isArray(data) && data.length > 0) {
-          setCandlesData(data)
-        }
-      } catch (_) {
-        // Ignorar errores del fallback
-      }
-    }
     // Si no tenemos velas aún, intenta cargar
     if (!candlesData || candlesData.length === 0) {
-      loadInitialCandles()
+      fetchKlines('DOGEUSDT', timeframe, 500)
     }
-    return () => {
-      cancelled = true
+  }, [timeframe, candlesData.length, fetchKlines])
+
+  // Update candles data when klines data changes
+  useEffect(() => {
+    if (klinesData && Array.isArray(klinesData) && klinesData.length > 0) {
+      setCandlesData(klinesData)
     }
-  }, [timeframe])
+  }, [klinesData])
 
   return (
     <div className="app">
@@ -328,6 +384,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
             <PlugAndPlayBots
               history={positionHistory}
               activePositions={botSignals?.positions?.active_positions}
+              currentPrice={currentPrice}
             />
           </Accordion>
 

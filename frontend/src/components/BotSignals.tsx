@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useApiProcessInfo } from '../hooks'
 import InfoBox from './InfoBox'
 
 interface BotSignalsProps {
@@ -22,7 +23,7 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     aggressive: false
   })
 
-  const [dynamicLimits, setDynamicLimits] = useState({
+  const [dynamicLimits] = useState({
     total_max_positions: 10,
     active_bots: 2,
     available_positions_per_bot: 5,
@@ -58,58 +59,21 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
     }
   })
 
-  // Fetch bot status and dynamic limits on component mount
+  // Use process info hook
+  const { data: processInfoData } = useApiProcessInfo()
+
+  // Update process info when data changes
   useEffect(() => {
-    const fetchBotStatus = async () => {
-      try {
-        const response = await fetch('/bot/status')
-        const result = await response.json()
-        if (result.status === 'success') {
-          // Use real process status from backend - new structure
-          const legacyBots = result.data.legacy_bots
-          if (legacyBots && legacyBots.bot_status) {
-            setBotStatus(legacyBots.bot_status)
-          }
-          if (legacyBots && legacyBots.dynamic_limits) {
-            setDynamicLimits(legacyBots.dynamic_limits)
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching bot status:', error)
-      }
+    if (processInfoData) {
+      setBotProcessInfo(processInfoData)
     }
+  }, [processInfoData])
 
-    const fetchBotProcessInfo = async () => {
-      try {
-        const response = await fetch('/bot/process-info')
-        const result = await response.json()
-        if (result.status === 'success') {
-          setBotProcessInfo(result.data)
-        }
-      } catch (error) {
-        console.error('Error fetching bot process info:', error)
-      }
-    }
-
-    // Fetch initial status
-    fetchBotStatus()
-    fetchBotProcessInfo()
-
-    // Set up automatic polling every 3 seconds
-    const interval = setInterval(() => {
-      fetchBotStatus()
-      fetchBotProcessInfo()
-    }, 3000)
-
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval)
-  }, [])
-
-  // Actualizar tiempo de ejecución cada segundo
+  // Actualizar tiempo de ejecución cada segundo (sin forzar re-render)
   useEffect(() => {
     const interval = setInterval(() => {
-      // Forzar re-render para actualizar el tiempo de ejecución
-      setBotProcessInfo((prev) => ({ ...prev }))
+      // Solo actualizar el tiempo de ejecución sin forzar re-render
+      // El componente se actualizará automáticamente cuando cambien los datos
     }, 1000)
 
     return () => clearInterval(interval)

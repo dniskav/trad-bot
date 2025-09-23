@@ -1,4 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useContext, useEffect, useState } from 'react'
+import { WebSocketContext } from '../contexts/WebSocketContext'
+import { useApiBotActions, useApiBots, useApiProcessInfo } from '../hooks'
 import InfoBox from './InfoBox'
 
 interface BotInfo {
@@ -24,11 +26,6 @@ interface BotInfo {
   }
   synthetic_balance_usdt: number
   bot_description: string
-  trades_count?: number
-  open_positions?: number
-  pnl_total_usdt?: number
-  win_rate_pct?: number
-  active_positions_details?: any[]
 }
 
 interface ServerInfo {
@@ -40,25 +37,21 @@ interface ServerInfo {
 
 interface PlugAndPlayBotsProps {
   className?: string
+  currentPrice?: number
   history?: any[]
-  activePositions?: Record<string, any>
+  activePositions?: any
 }
 
 const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
   className = '',
-  history = [],
-  activePositions = {}
+  currentPrice = 0,
+  history,
+  activePositions
 }) => {
   // console.log('🚀 PlugAndPlayBots: Component rendering') // Comentado para reducir spam
 
-  const API_BASE =
-    typeof window !== 'undefined' && window.location.hostname
-      ? `${window.location.protocol}//${window.location.hostname}:8000`
-      : 'http://localhost:8000'
-
+  const wsCtx = useContext(WebSocketContext)
   const [bots, setBots] = useState<Record<string, BotInfo>>({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [expandedBots, setExpandedBots] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('plugin-bots-accordion')
@@ -67,6 +60,16 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
     return {}
   })
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null)
+
+  // Use API hooks
+  const { fetchBots, isLoading: botsLoading, error: botsError } = useApiBots()
+  const { data: processInfoData } = useApiProcessInfo()
+  const { startBot, stopBot } = useApiBotActions()
+
+  // Debug: Log current price changes
+  useEffect(() => {
+    console.log('💰 PlugAndPlayBots: Current price updated:', currentPrice)
+  }, [currentPrice])
 
   // Load synthetic mode from localStorage
   const loadSyntheticMode = (botName: string): boolean => {
@@ -79,188 +82,152 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
     localStorage.setItem(`bot_${botName}_synthetic`, JSON.stringify(synthetic))
   }
 
-  // Use ref to persist lastFetchTime across renders
-  const lastFetchTimeRef = useRef(0)
-  const MIN_FETCH_INTERVAL = 15000 // 15 seconds minimum between fetches
-
-  // Fetch bots data with proper debouncing
+  // Fetch bots data using the new hooks
   useEffect(() => {
-    // console.log('🔄 PlugAndPlayBots: useEffect triggered') // Comentado para reducir spam
-    let isMounted = true
+    const fetchData = async () => {
+      console.log('🤖 PlugAndPlayBots: Fetching bots data...')
+      const botsData = await fetchBots()
+      if (botsData) {
+        console.log('🤖 PlugAndPlayBots: Processing bots data:', botsData)
 
-    const fetchAllData = async () => {
-      if (!isMounted) return
+        // Filter out legacy bots (conservative, aggressive)
+        const plugAndPlayBots = botsData.filter(
+          (bot: any) => !['conservative', 'aggressive'].includes(bot.name)
+        )
 
-      const now = Date.now()
-      if (now - lastFetchTimeRef.current < MIN_FETCH_INTERVAL) {
-        // console.log('🚫 PlugAndPlayBots: Skipping fetch - too soon') // Comentado para reducir spam
-        return
+        console.log('🤖 PlugAndPlayBots: Filtered plug-and-play bots:', plugAndPlayBots)
+
+        // Convert array to object and add additional info
+        const botsWithSynthetic = Object.fromEntries(
+          plugAndPlayBots.map((bot: any) => [
+            bot.name,
+            {
+              ...bot,
+              synthetic_mode: loadSyntheticMode(bot.name),
+              synthetic_balance_usdt: getSyntheticBalance(),
+              bot_description: getBotDescription(bot.name),
+              config: {
+                symbol: 'DOGEUSDT',
+                interval: '1m',
+                risk_level: 'medium',
+                max_positions: 3,
+                position_size: 0.5,
+                synthetic_mode: loadSyntheticMode(bot.name)
+              }
+            }
+          ])
+        )
+
+        console.log('🤖 PlugAndPlayBots: Setting new bots:', botsWithSynthetic)
+        setBots(botsWithSynthetic)
       }
+    }
+    fetchData()
+  }, []) // Only run once on mount
 
-      // console.log('🔄 PlugAndPlayBots: Fetching all data...') // Comentado para reducir spam
-      lastFetchTimeRef.current = now
+  // Update process info when data changes
+  useEffect(() => {
+    if (processInfoData) {
+      setServerInfo(processInfoData)
+    }
+  }, [processInfoData])
 
-      try {
-        setLoading(true)
+  // Overlay en vivo con datos de plugin_bots_realtime desde el contexto
+  useEffect(() => {
+    if (!wsCtx || !wsCtx.pluginBotsRealtime) return
+    const rt = wsCtx.pluginBotsRealtime
+    if (!rt || Object.keys(rt).length === 0) return
 
-        // Fetch main endpoints in parallel; position-info is best-effort
-        const [botsResponse, serverResponse] = await Promise.all([
-          fetch(`${API_BASE}/api/bots`),
-          fetch(`${API_BASE}/bot/process-info`)
-        ])
+    console.log('🔄 PlugAndPlayBots: WebSocket data received:', rt)
 
-        // Best-effort fetch for position info; don't fail whole UI if it errors
-        let positionInfo: any = null
-        try {
-          const positionInfoRes = await fetch(`${API_BASE}/position-info`)
-          positionInfo = await positionInfoRes.json()
-        } catch (e) {
-          // Silent fallback; metrics derived from history will be empty
-          positionInfo = null
+    setBots((prev) => {
+      const next: Record<string, BotInfo> = { ...prev }
+      Object.entries(rt as Record<string, any>).forEach(([name, info]) => {
+        if (!next[name]) return
+
+        console.log(`🔄 PlugAndPlayBots: Updating bot ${name} with data:`, info)
+
+        next[name] = {
+          ...next[name],
+          is_active: info.is_active ?? next[name].is_active,
+          positions_count: info.positions_count ?? next[name].positions_count,
+          last_signal: info.last_signal ?? next[name].last_signal,
+          uptime_seconds: info.uptime ?? next[name].uptime_seconds,
+          start_time: info.start_time ?? next[name].start_time,
+          synthetic_mode: info.synthetic_mode ?? next[name].synthetic_mode,
+          synthetic_balance: info.synthetic_balance ?? next[name].synthetic_balance,
+          author: info.author ?? next[name].author
         }
+      })
+      return next
+    })
+  }, [wsCtx?.pluginBotsRealtime])
 
-        const [botsResult, serverResult] = await Promise.all([
-          botsResponse.json(),
-          serverResponse.json()
-        ])
+  // Listen to other WebSocket messages for bot updates
+  useEffect(() => {
+    if (!wsCtx || !wsCtx.lastMessage) return
 
-        if (!isMounted) return
+    const data = wsCtx.lastMessage.message
+    console.log('🔄 PlugAndPlayBots: WebSocket message received:', data)
 
-        // Process bots data
-        if (botsResult.status === 'success') {
-          // Filter out legacy bots (conservative, aggressive)
-          const plugAndPlayBots = Object.fromEntries(
-            Object.entries(botsResult.data.bots).filter(
-              ([name]) => !['conservative', 'aggressive'].includes(name)
-            )
-          )
+    if (data.type === 'initial_data' || data.type === 'update') {
+      if (data.data && data.data.bot_status) {
+        console.log('🔄 PlugAndPlayBots: Bot status from WebSocket:', data.data.bot_status)
 
-          // Extract metrics from either props (WS) or fallback API
-          const historyFromApi =
-            positionInfo?.status === 'success' ? positionInfo?.data?.history || [] : []
-          const activeFromApi =
-            positionInfo?.status === 'success' ? positionInfo?.data?.active_positions || {} : {}
-          const mergedHistory =
-            Array.isArray(history) && history.length > 0 ? history : historyFromApi
-          const mergedActive: any =
-            activePositions && Object.keys(activePositions).length > 0
-              ? activePositions
-              : activeFromApi
+        setBots((prev) => {
+          const next: Record<string, BotInfo> = { ...prev }
+          Object.entries(data.data.bot_status).forEach(([name, status]: [string, any]) => {
+            if (!next[name]) return
 
-          const tradesByBot: Record<string, number> = {}
-          const pnlByBot: Record<string, number> = {}
-          const winsByBot: Record<string, number> = {}
-          mergedHistory.forEach((h: any) => {
-            const bot = h.bot_type || 'unknown'
-            tradesByBot[bot] = (tradesByBot[bot] || 0) + 1
-            const pnl = Number(h.pnl_net || 0)
-            pnlByBot[bot] = (pnlByBot[bot] || 0) + pnl
-            if (pnl > 0) {
-              winsByBot[bot] = (winsByBot[bot] || 0) + 1
+            console.log(`🔄 PlugAndPlayBots: Updating bot ${name} status:`, status)
+
+            next[name] = {
+              ...next[name],
+              is_active: status.is_active ?? next[name].is_active,
+              positions_count: status.positions_count ?? next[name].positions_count,
+              last_signal: status.last_signal ?? next[name].last_signal,
+              uptime_seconds: status.uptime ?? next[name].uptime_seconds,
+              start_time: status.start_time ?? next[name].start_time,
+              synthetic_mode: status.synthetic_mode ?? next[name].synthetic_mode,
+              author: status.author ?? next[name].author
             }
           })
-
-          const openByBot: Record<string, number> = {}
-          const activeDetailsByBot: Record<string, any[]> = {}
-          Object.entries(mergedActive).forEach(([bot, positions]: any) => {
-            const keys = positions ? Object.keys(positions as any) : []
-            openByBot[bot] = keys.length
-            activeDetailsByBot[bot] = positions ? keys.map((k) => (positions as any)[k]) : []
-          })
-
-          const botsWithSynthetic = Object.fromEntries(
-            Object.entries(plugAndPlayBots).map(([name, bot]) => [
-              name,
-              {
-                ...bot,
-                synthetic_mode: loadSyntheticMode(name),
-                synthetic_balance_usdt: getSyntheticBalance(name),
-                bot_description: getBotDescription(name),
-                trades_count: tradesByBot[name] || 0,
-                open_positions: openByBot[name] || 0,
-                pnl_total_usdt: pnlByBot[name] || 0,
-                win_rate_pct:
-                  (winsByBot[name] || 0) > 0 && (tradesByBot[name] || 0) > 0
-                    ? ((winsByBot[name] || 0) / (tradesByBot[name] || 1)) * 100
-                    : 0,
-                active_positions_details: activeDetailsByBot[name] || []
-              }
-            ])
-          )
-
-          setBots(botsWithSynthetic)
-          setError(null)
-          // console.log(
-          //   '✅ PlugAndPlayBots: Bots data updated successfully, count:',
-          //   Object.keys(botsWithSynthetic).length
-          // ) // Comentado para reducir spam
-        } else {
-          setError('Error al cargar bots')
-          console.error('❌ PlugAndPlayBots: Error response:', botsResult)
-        }
-
-        // Process server info
-        if (serverResult.status === 'success' && isMounted) {
-          setServerInfo(serverResult.data)
-          // console.log('✅ PlugAndPlayBots: Server info updated successfully') // Comentado para reducir spam
-        } else {
-          console.warn(
-            '⚠️ PlugAndPlayBots: Server info not available, continuing with bots data only'
-          )
-        }
-      } catch (err) {
-        if (!isMounted) return
-        setError('Error de conexión')
-        console.error('❌ PlugAndPlayBots: Fetch error:', err)
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-          // console.log('🔄 PlugAndPlayBots: Loading state set to false') // Comentado para reducir spam
-        }
+          return next
+        })
       }
     }
-
-    // Initial fetch
-    // console.log('🚀 PlugAndPlayBots: Component mounted, starting initial fetch') // Comentado para reducir spam
-    fetchAllData()
-
-    // Poll every 30 seconds (increased interval to reduce load)
-    const interval = setInterval(() => {
-      if (isMounted) {
-        // console.log('⏰ PlugAndPlayBots: Interval tick - fetching data') // Comentado para reducir spam
-        fetchAllData()
-      }
-    }, 30000)
-
-    return () => {
-      // console.log('🛑 PlugAndPlayBots: Component unmounting, cleaning up') // Comentado para reducir spam
-      isMounted = false
-      clearInterval(interval)
-    }
-  }, [history, activePositions]) // Update when WS props change
+  }, [wsCtx?.lastMessage])
 
   const handleBotToggle = async (botName: string, isActive: boolean) => {
     try {
-      const action = isActive ? 'stop' : 'start'
-      const response = await fetch(`/api/bots/${botName}/${action}`, {
-        method: 'POST'
-      })
-      const result = await response.json()
-
-      if (result.status === 'success') {
-        // Update local state
-        setBots((prev) => ({
-          ...prev,
-          [botName]: {
-            ...prev[botName],
-            is_active: !isActive
-          }
-        }))
+      if (isActive) {
+        const success = await stopBot(botName)
+        if (success) {
+          // Update local state
+          setBots((prev) => ({
+            ...prev,
+            [botName]: {
+              ...prev[botName],
+              is_active: false
+            }
+          }))
+        }
       } else {
-        console.error('Error toggling bot:', result.message)
+        const syntheticMode = loadSyntheticMode(botName)
+        const success = await startBot(botName, syntheticMode)
+        if (success) {
+          // Update local state
+          setBots((prev) => ({
+            ...prev,
+            [botName]: {
+              ...prev[botName],
+              is_active: true
+            }
+          }))
+        }
       }
-    } catch (err) {
-      console.error('Error toggling bot:', err)
+    } catch (error) {
+      console.error('Error toggling bot:', error)
     }
   }
 
@@ -280,29 +247,43 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
         }
       }))
 
-      // Send to backend
-      const response = await fetch(`/api/bots/${botName}/synthetic`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          synthetic_mode: newSynthetic
-        })
-      })
+      // If bot is active, restart it with new synthetic mode
+      if (bots[botName]?.is_active) {
+        console.log(`🔄 Restarting bot ${botName} with synthetic mode: ${newSynthetic}`)
 
-      const result = await response.json()
-      if (result.status !== 'success') {
-        console.error('Error toggling synthetic mode:', result.message)
-        // Revert local state on error
-        setBots((prev) => ({
-          ...prev,
-          [botName]: {
-            ...prev[botName],
-            synthetic_mode: currentSynthetic
-          }
-        }))
-        saveSyntheticMode(botName, currentSynthetic)
+        // Stop the bot first
+        const stopSuccess = await stopBot(botName)
+        if (stopSuccess) {
+          // Wait a moment then start with new synthetic mode
+          setTimeout(async () => {
+            const startSuccess = await startBot(botName, newSynthetic)
+            if (!startSuccess) {
+              console.error('Error restarting bot with new synthetic mode')
+              // Revert local state on error
+              setBots((prev) => ({
+                ...prev,
+                [botName]: {
+                  ...prev[botName],
+                  synthetic_mode: currentSynthetic
+                }
+              }))
+              saveSyntheticMode(botName, currentSynthetic)
+            }
+          }, 1000)
+        } else {
+          console.error('Error stopping bot for synthetic mode change')
+          // Revert local state on error
+          setBots((prev) => ({
+            ...prev,
+            [botName]: {
+              ...prev[botName],
+              synthetic_mode: currentSynthetic
+            }
+          }))
+          saveSyntheticMode(botName, currentSynthetic)
+        }
+      } else {
+        console.log(`💾 Saved synthetic mode for ${botName}: ${newSynthetic} (bot is inactive)`)
       }
     } catch (err) {
       console.error('Error toggling synthetic mode:', err)
@@ -383,7 +364,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
     return descriptions[botName] || 'Bot de trading automatizado con estrategia personalizada.'
   }
 
-  const getSyntheticBalance = (botName: string) => {
+  const getSyntheticBalance = () => {
     // Cada bot tiene 1000 USDT de saldo synthetic
     return 1000
   }
@@ -404,7 +385,8 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
     }
   }
 
-  if (loading) {
+  // Show loading state when bots are loading and no data yet
+  if (botsLoading && Object.keys(bots).length === 0) {
     return (
       <div className={`plug-and-play-bots ${className}`}>
         <h3>🔌 Bots Plug-and-Play</h3>
@@ -413,16 +395,26 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
     )
   }
 
-  if (error) {
+  // Show error state if there's an error
+  if (botsError) {
     return (
       <div className={`plug-and-play-bots ${className}`}>
         <h3>🔌 Bots Plug-and-Play</h3>
-        <div className="error">❌ {error}</div>
+        <div className="error">❌ {botsError}</div>
       </div>
     )
   }
 
   const botEntries = Object.entries(bots)
+
+  // console.log(
+  //   '🔍 PlugAndPlayBots: Current state - loading:',
+  //   loading,
+  //   'bots count:',
+  //   botEntries.length,
+  //   'error:',
+  //   error
+  // ) // Comentado para reducir spam
 
   if (botEntries.length === 0) {
     return (
@@ -500,7 +492,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
                 <button
                   className={`plugin-bot-toggle ${botInfo.is_active ? 'active' : 'inactive'}`}
                   onClick={() => handleBotToggle(botName, botInfo.is_active)}
-                  disabled={loading}>
+                  disabled={botsLoading}>
                   {botInfo.is_active ? 'OFF' : 'ON'}
                 </button>
               </div>
@@ -510,52 +502,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
               <div className="plugin-bot-metrics-row">
                 <div className="plugin-metric">
                   <span className="plugin-metric-label">Posiciones:</span>
-                  <span className="plugin-metric-value">
-                    {botInfo.open_positions ?? botInfo.positions_count}
-                  </span>
-                </div>
-                {Array.isArray(botInfo.active_positions_details) &&
-                  botInfo.active_positions_details.length > 0 && (
-                    <div className="plugin-metric">
-                      <span className="plugin-metric-label">Activas:</span>
-                      <button
-                        className="plugin-metric-value"
-                        style={{ textDecoration: 'underline', cursor: 'pointer' }}
-                        onClick={() => toggleBotExpansion(`active-${botName}`)}>
-                        Ver ({botInfo.active_positions_details.length}){' '}
-                        {expandedBots[`active-${botName}`] ? '▲' : '▼'}
-                      </button>
-                    </div>
-                  )}
-                <div className="plugin-metric">
-                  <span className="plugin-metric-label">Trades:</span>
-                  <span
-                    className="plugin-metric-value"
-                    style={{ color: '#f1c40f', fontWeight: 600 }}>
-                    {botInfo.trades_count ?? 0}
-                  </span>
-                </div>
-                <div className="plugin-metric">
-                  <span className="plugin-metric-label">Win Rate:</span>
-                  <span
-                    className="plugin-metric-value"
-                    style={{
-                      color: (botInfo.win_rate_pct || 0) > 0 ? '#26a69a' : '#ef5350',
-                      fontWeight: 600
-                    }}>
-                    {(botInfo.win_rate_pct || 0).toFixed(1)}%
-                  </span>
-                </div>
-                <div className="plugin-metric">
-                  <span className="plugin-metric-label">PnL:</span>
-                  <span
-                    className="plugin-metric-value"
-                    style={{
-                      color: (botInfo.pnl_total_usdt || 0) >= 0 ? '#26a69a' : '#ef5350',
-                      fontWeight: 600
-                    }}>
-                    ${(botInfo.pnl_total_usdt || 0).toFixed(5)}
-                  </span>
+                  <span className="plugin-metric-value">{botInfo.positions_count}</span>
                 </div>
                 <div className="plugin-metric">
                   <span className="plugin-metric-label">Riesgo:</span>
@@ -573,6 +520,10 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
                   <span className="plugin-metric-label">Símbolo:</span>
                   <span className="plugin-metric-value">{botInfo.config.symbol}</span>
                 </div>
+                <div className="plugin-metric">
+                  <span className="plugin-metric-label">Precio:</span>
+                  <span className="plugin-metric-value">${currentPrice.toFixed(5)}</span>
+                </div>
                 {botInfo.synthetic_mode && (
                   <div className="plugin-metric">
                     <span className="plugin-metric-label">Saldo Synthetic:</span>
@@ -582,24 +533,6 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
                   </div>
                 )}
               </div>
-
-              {/* Dropdown con detalles de posiciones activas */}
-              {Array.isArray(botInfo.active_positions_details) &&
-                botInfo.active_positions_details.length > 0 &&
-                expandedBots[`active-${botName}`] && (
-                  <div className="active-positions-dropdown" style={{ marginTop: 8 }}>
-                    {botInfo.active_positions_details.map((p: any, idx: number) => (
-                      <div
-                        key={idx}
-                        className="active-position-row"
-                        style={{ fontSize: 12, opacity: 0.9 }}>
-                        {`${(p.type || p.side || '').toUpperCase()} @ ${Number(
-                          p.entry_price || p.current_price || 0
-                        ).toFixed(5)}`}
-                      </div>
-                    ))}
-                  </div>
-                )}
 
               {botInfo.last_signal && (
                 <div className="bot-signal">
@@ -669,7 +602,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
                         },
                         {
                           label: 'Posiciones',
-                          value: botInfo.open_positions ?? botInfo.positions_count
+                          value: botInfo.positions_count
                         },
                         {
                           label: 'Modo',

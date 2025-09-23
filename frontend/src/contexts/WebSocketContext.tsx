@@ -25,6 +25,10 @@ interface WebSocketContextType {
   }) => void
   addMessage: (type: 'sent' | 'received', message: any) => void
   clearMessages: () => void
+
+  // Estado en tiempo real de plugin bots
+  pluginBotsRealtime: Record<string, any>
+  setPluginBotsRealtime: (data: Record<string, any>) => void
 }
 
 export const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined)
@@ -52,6 +56,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   // Mensajes
   const [messages, setMessages] = useState<WebSocketMessage[]>([])
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
+
+  // Estado WS específico: plugin bots realtime
+  const [pluginBotsRealtime, setPluginBotsRealtime] = useState<Record<string, any>>({})
 
   // Función para actualizar el estado de conexión
   const updateConnectionState = (state: {
@@ -99,7 +106,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     // Funciones
     updateConnectionState,
     addMessage,
-    clearMessages
+    clearMessages,
+
+    // Realtime plugin bots
+    pluginBotsRealtime,
+    setPluginBotsRealtime
   }
 
   // console.log('🔌 WebSocketProvider: Renderizando con value:', value) // Comentado para reducir spam

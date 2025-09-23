@@ -20,7 +20,10 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
   currentPrice,
   symbol = 'DOGEUSDT'
 }) => {
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | undefined | null) => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return '$0.00'
+    }
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -29,14 +32,20 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
     }).format(amount)
   }
 
-  const formatDoge = (amount: number) => {
+  const formatDoge = (amount: number | undefined | null) => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return '0.00'
+    }
     return new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     }).format(amount)
   }
 
-  const formatPercentage = (percentage: number) => {
+  const formatPercentage = (percentage: number | undefined | null) => {
+    if (percentage === undefined || percentage === null || isNaN(percentage)) {
+      return '0.00%'
+    }
     const sign = percentage >= 0 ? '+' : ''
     return `${sign}${percentage.toFixed(2)}%`
   }

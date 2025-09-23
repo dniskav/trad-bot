@@ -17,7 +17,7 @@ interface MarginInfoProps {
 }
 
 const MarginInfo: React.FC<MarginInfoProps> = ({ marginInfo }) => {
-  if (!marginInfo || !marginInfo.success) {
+  if (!marginInfo) {
     return (
       <div className="margin-info">
         <h3>📊 Información de Margen</h3>

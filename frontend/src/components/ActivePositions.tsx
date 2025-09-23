@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 interface ActivePosition {
   id: string
@@ -23,6 +23,15 @@ interface ActivePositionsProps {
 }
 
 const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
+  const [confirming, setConfirming] = useState<null | {
+    positionId: string
+    botType: string
+    entryPrice: number
+    currentPrice: number
+    quantity: number
+    side: 'BUY' | 'SELL'
+  }>(null)
+  const [submitting, setSubmitting] = useState(false)
   if (!positions) {
     return (
       <div className="active-positions">
@@ -47,6 +56,39 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
   }
 
   const activePositions = getAllPositions()
+
+  const feeRate = 0.0015 // 0.15% total (entrada+salida) por defecto; el backend usa 0.0015 total
+
+  const estimateNetPnl = (side: 'BUY' | 'SELL', entry: number, curr: number, qty: number) => {
+    const gross = side === 'BUY' ? (curr - entry) * qty : (entry - curr) * qty
+    const fees = curr * qty * feeRate // consider exit fee (entrada ya ocurió); conservador: total si se prefiere
+    return gross - fees
+  }
+
+  const API_BASE =
+    typeof window !== 'undefined' && window.location.hostname
+      ? `${window.location.protocol}//${window.location.hostname}:8000`
+      : 'http://localhost:8000'
+
+  const requestClose = async (botType: string, positionId: string) => {
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/positions/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bot_type: botType, position_id: positionId })
+      })
+      const json = await res.json()
+      if (json.status !== 'success') {
+        alert(`Error: ${json.message || 'No se pudo cerrar la posición'}`)
+      }
+    } catch (e) {
+      alert('Error de red cerrando la posición')
+    } finally {
+      setSubmitting(false)
+      setConfirming(null)
+    }
+  }
 
   if (activePositions.length === 0) {
     return (
@@ -174,11 +216,78 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
                   <td>${p.current_price.toFixed(5)}</td>
                   <td>{formatPnL(p.pnl, p.pnl_pct)}</td>
                   <td style={{ color: getPositionColor(p.type) }}>{p.type}</td>
+                  <td>
+                    <button
+                      disabled={submitting}
+                      onClick={() =>
+                        setConfirming({
+                          positionId: p.id,
+                          botType: p.botType,
+                          entryPrice: p.entry_price,
+                          currentPrice: p.current_price,
+                          quantity: p.quantity,
+                          side: p.type
+                        })
+                      }>
+                      Cerrar
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {confirming && (
+          <div
+            className="modal-overlay"
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)' }}>
+            <div
+              className="modal"
+              style={{
+                background: '#1e1e1e',
+                color: '#fff',
+                maxWidth: 420,
+                margin: '10% auto',
+                padding: 16,
+                borderRadius: 8,
+                boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
+              }}>
+              <h4>Confirmar cierre</h4>
+              <p>
+                Vas a cerrar la posición <strong>{confirming.positionId}</strong> de{' '}
+                <strong>{getBotName(confirming.botType)}</strong>.
+              </p>
+              <p>
+                Entrada ${confirming.entryPrice.toFixed(5)} · Actual $
+                {confirming.currentPrice.toFixed(5)} · Cantidad {confirming.quantity.toFixed(4)}
+              </p>
+              <p>
+                PnL estimado neto (incluye comisión):{' '}
+                <strong>
+                  $
+                  {estimateNetPnl(
+                    confirming.side,
+                    confirming.entryPrice,
+                    confirming.currentPrice,
+                    confirming.quantity
+                  ).toFixed(5)}
+                </strong>
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button disabled={submitting} onClick={() => setConfirming(null)}>
+                  Cancelar
+                </button>
+                <button
+                  disabled={submitting}
+                  onClick={() => requestClose(confirming.botType, confirming.positionId)}
+                  style={{ background: '#b71c1c', color: '#fff' }}>
+                  Sí, cerrar ahora
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

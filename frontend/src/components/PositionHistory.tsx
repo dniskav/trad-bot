@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useApiTradingHistory } from '../hooks'
 
 interface PositionHistoryProps {
   history: any[]
@@ -12,26 +13,15 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
   const [pageSize, setPageSize] = useState<number>(50)
   const [fullHistory, setFullHistory] = useState<any[] | null>(null)
 
-  // Intentar obtener historial completo del backend (paginación en frontend)
+  // Use trading history hook
+  const { data: tradingHistoryData } = useApiTradingHistory()
+
+  // Update full history when data changes
   useEffect(() => {
-    let cancelled = false
-    const fetchFull = async () => {
-      try {
-        const res = await fetch(`/trading/history?page=1&page_size=100000`)
-        const json = await res.json()
-        const h = json?.data?.items || json?.data?.history || []
-        if (!cancelled && Array.isArray(h) && h.length > 0) {
-          setFullHistory(h)
-        }
-      } catch (_) {
-        // Ignorar errores; usamos el historial provisto por WS
-      }
+    if (tradingHistoryData && Array.isArray(tradingHistoryData) && tradingHistoryData.length > 0) {
+      setFullHistory(tradingHistoryData)
     }
-    fetchFull()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  }, [tradingHistoryData])
 
   const formatDate = (dateString: string | null) => {
     if (!dateString || dateString === 'En curso') {
