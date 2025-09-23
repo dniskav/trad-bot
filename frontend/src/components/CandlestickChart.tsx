@@ -359,16 +359,20 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         indicators.timestamps &&
         Array.isArray(indicators.timestamps)
       ) {
-        // Prepare SMA data
-        const smaFastData: LineData[] = indicators.sma_fast.map((value, index) => ({
-          time: (indicators.timestamps[index] / 1000) as any,
-          value: value
-        }))
+        // Prepare SMA data - filter out null values
+        const smaFastData: LineData[] = indicators.sma_fast
+          .map((value, index) => ({
+            time: (indicators.timestamps[index] / 1000) as any,
+            value: value
+          }))
+          .filter((item) => item.value !== null && item.value !== undefined && !isNaN(item.value))
 
-        const smaSlowData: LineData[] = indicators.sma_slow.map((value, index) => ({
-          time: (indicators.timestamps[index] / 1000) as any,
-          value: value
-        }))
+        const smaSlowData: LineData[] = indicators.sma_slow
+          .map((value, index) => ({
+            time: (indicators.timestamps[index] / 1000) as any,
+            value: value
+          }))
+          .filter((item) => item.value !== null && item.value !== undefined && !isNaN(item.value))
 
         // Update SMA series
         smaFastRef.current.setData(smaFastData)
@@ -416,11 +420,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           title: 'RSI'
         })
 
-        // Prepare RSI data
-        const rsiData: LineData[] = indicators.rsi.map((value, index) => ({
-          time: (indicators.timestamps[index] / 1000) as any,
-          value: value
-        }))
+        // Prepare RSI data - filter out null values
+        const rsiData: LineData[] = indicators.rsi
+          .map((value, index) => ({
+            time: (indicators.timestamps[index] / 1000) as any,
+            value: value
+          }))
+          .filter((item) => item.value !== null && item.value !== undefined && !isNaN(item.value))
 
         rsiSeries.setData(rsiData)
 

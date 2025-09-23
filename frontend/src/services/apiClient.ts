@@ -37,22 +37,28 @@ apiClient.interceptors.response.use(
     return response
   },
   (error) => {
-    console.error('❌ API Response Error:', error.response?.status, error.response?.data)
+    const status = error?.response?.status
+    const data = error?.response?.data
+    const message = error?.message || (typeof data === 'string' ? data : JSON.stringify(data || {}))
+    const url = error?.config?.url
+    console.error('❌ API Response Error:', status ?? 'NETWORK', message, url || '')
 
-    // Retry logic for failed requests
-    if (error.response?.status >= 500 && error.config && !error.config.__retryCount) {
-      error.config.__retryCount = 0
-    }
-
-    if (error.config && error.config.__retryCount < API_CONFIG.RETRY_ATTEMPTS) {
-      error.config.__retryCount++
-      console.log(`🔄 Retrying request (${error.config.__retryCount}/${API_CONFIG.RETRY_ATTEMPTS})`)
-
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve(apiClient(error.config))
-        }, API_CONFIG.RETRY_DELAY)
-      })
+    // Retry logic only for server errors (>=500) when config exists
+    if (error?.config && typeof status === 'number' && status >= 500) {
+      if (!error.config.__retryCount) {
+        error.config.__retryCount = 0
+      }
+      if (error.config.__retryCount < API_CONFIG.RETRY_ATTEMPTS) {
+        error.config.__retryCount++
+        console.log(
+          `🔄 Retrying request (${error.config.__retryCount}/${API_CONFIG.RETRY_ATTEMPTS})`
+        )
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resolve(apiClient(error.config))
+          }, API_CONFIG.RETRY_DELAY)
+        })
+      }
     }
 
     return Promise.reject(error)

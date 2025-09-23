@@ -46,8 +46,6 @@ interface WebSocketProviderProps {
 }
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
-  // console.log('🔌 WebSocketProvider: Componente montado') // Comentado para reducir spam
-
   // Estado de conexión
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
@@ -66,7 +64,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     isConnecting?: boolean
     error?: string | null
   }) => {
-    console.log('🔄 WebSocketContext: Actualizando estado de conexión:', state)
     if (state.isConnected !== undefined) setIsConnected(state.isConnected)
     if (state.isConnecting !== undefined) setIsConnecting(state.isConnecting)
     if (state.error !== undefined) setError(state.error)
@@ -81,14 +78,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       timestamp: Date.now()
     }
 
-    console.log('📨 WebSocketContext: Agregando mensaje:', newMessage)
     setMessages((prev) => [...prev, newMessage])
     setLastMessage(newMessage)
   }
 
   // Función para limpiar mensajes
   const clearMessages = () => {
-    console.log('🗑️ WebSocketContext: Limpiando mensajes')
     setMessages([])
     setLastMessage(null)
   }

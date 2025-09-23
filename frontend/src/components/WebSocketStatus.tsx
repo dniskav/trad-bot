@@ -1,8 +1,17 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useWebSocketContext } from '../contexts/WebSocketContext'
 
 const WebSocketStatus: React.FC = () => {
-  const { isConnected, isConnecting, error } = useWebSocketContext()
+  const { isConnected, isConnecting, error, lastMessage } = useWebSocketContext()
+  const [pulse, setPulse] = useState(false)
+
+  useEffect(() => {
+    if (!lastMessage) return
+    // Trigger a short pulse on each message
+    setPulse(true)
+    const t = setTimeout(() => setPulse(false), 250)
+    return () => clearTimeout(t)
+  }, [lastMessage?.id])
 
   const getStatusIcon = () => {
     if (isConnected) return '🟢'
@@ -30,7 +39,7 @@ const WebSocketStatus: React.FC = () => {
         color: 'white',
         zIndex: 1000,
         minWidth: 'auto',
-        boxShadow: 'none',
+        boxShadow: pulse ? `0 0 10px 2px ${getBorderColor()}` : 'none',
         width: '100%',
         height: '100%',
         display: 'flex',

@@ -1,7 +1,8 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { WebSocketContext } from '../contexts/WebSocketContext'
 import { useApiBotActions, useApiBots, useApiProcessInfo } from '../hooks'
-import InfoBox from './InfoBox'
+import { PluginBotCard, type BotInfo as PluginBotInfo } from './PluginBotCard'
+import { ServerInfoAccordion } from './ServerInfoAccordion'
 
 interface BotInfo {
   name: string
@@ -38,18 +39,9 @@ interface ServerInfo {
 interface PlugAndPlayBotsProps {
   className?: string
   currentPrice?: number
-  history?: any[]
-  activePositions?: any
 }
 
-const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
-  className = '',
-  currentPrice = 0,
-  history,
-  activePositions
-}) => {
-  // console.log('🚀 PlugAndPlayBots: Component rendering') // Comentado para reducir spam
-
+const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', currentPrice = 0 }) => {
   const wsCtx = useContext(WebSocketContext)
   const [bots, setBots] = useState<Record<string, BotInfo>>({})
   const [expandedBots, setExpandedBots] = useState<Record<string, boolean>>(() => {
@@ -64,12 +56,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
   // Use API hooks
   const { fetchBots, isLoading: botsLoading, error: botsError } = useApiBots()
   const { data: processInfoData } = useApiProcessInfo()
-  const { startBot, stopBot } = useApiBotActions()
-
-  // Debug: Log current price changes
-  useEffect(() => {
-    console.log('💰 PlugAndPlayBots: Current price updated:', currentPrice)
-  }, [currentPrice])
+  const { startBot, stopBot, updateBotConfig } = useApiBotActions()
 
   // Load synthetic mode from localStorage
   const loadSyntheticMode = (botName: string): boolean => {
@@ -85,17 +72,12 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
   // Fetch bots data using the new hooks
   useEffect(() => {
     const fetchData = async () => {
-      console.log('🤖 PlugAndPlayBots: Fetching bots data...')
       const botsData = await fetchBots()
       if (botsData) {
-        console.log('🤖 PlugAndPlayBots: Processing bots data:', botsData)
-
         // Filter out legacy bots (conservative, aggressive)
         const plugAndPlayBots = botsData.filter(
           (bot: any) => !['conservative', 'aggressive'].includes(bot.name)
         )
-
-        console.log('🤖 PlugAndPlayBots: Filtered plug-and-play bots:', plugAndPlayBots)
 
         // Convert array to object and add additional info
         const botsWithSynthetic = Object.fromEntries(
@@ -118,7 +100,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
           ])
         )
 
-        console.log('🤖 PlugAndPlayBots: Setting new bots:', botsWithSynthetic)
+        //        console.log('🤖 PlugAndPlayBots: Setting new bots:', botsWithSynthetic)
         setBots(botsWithSynthetic)
       }
     }
@@ -138,14 +120,14 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
     const rt = wsCtx.pluginBotsRealtime
     if (!rt || Object.keys(rt).length === 0) return
 
-    console.log('🔄 PlugAndPlayBots: WebSocket data received:', rt)
+    // console.log('🔄 PlugAndPlayBots: WebSocket data received:', rt)
 
     setBots((prev) => {
       const next: Record<string, BotInfo> = { ...prev }
       Object.entries(rt as Record<string, any>).forEach(([name, info]) => {
         if (!next[name]) return
 
-        console.log(`🔄 PlugAndPlayBots: Updating bot ${name} with data:`, info)
+        //  console.log(`🔄 PlugAndPlayBots: Updating bot ${name} with data:`, info)
 
         next[name] = {
           ...next[name],
@@ -168,18 +150,19 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
     if (!wsCtx || !wsCtx.lastMessage) return
 
     const data = wsCtx.lastMessage.message
-    console.log('🔄 PlugAndPlayBots: WebSocket message received:', data)
+    //console.log('🔄 PlugAndPlayBots: WebSocket message received:', data)
 
     if (data.type === 'initial_data' || data.type === 'update') {
       if (data.data && data.data.bot_status) {
-        console.log('🔄 PlugAndPlayBots: Bot status from WebSocket:', data.data.bot_status)
+        //console.log('🔄 PlugAndPlayBots: Bot status from WebSocket:', data.data.bot_status)
 
         setBots((prev) => {
           const next: Record<string, BotInfo> = { ...prev }
           Object.entries(data.data.bot_status).forEach(([name, status]: [string, any]) => {
             if (!next[name]) return
 
-            console.log(`🔄 PlugAndPlayBots: Updating bot ${name} status:`, status)
+            //            console.log(`🔄 PlugAndPlayBots: Updating bot ${name} status:`, status)
+            //            console.log(`🔄 PlugAndPlayBots: last_signal for ${name}:`, status.last_signal)
 
             next[name] = {
               ...next[name],
@@ -247,6 +230,22 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
         }
       }))
 
+      // Always update the backend configuration
+      const configSuccess = await updateBotConfig(botName, { synthetic_mode: newSynthetic })
+      if (!configSuccess) {
+        console.error('Error updating bot configuration in backend')
+        // Revert local state on error
+        setBots((prev) => ({
+          ...prev,
+          [botName]: {
+            ...prev[botName],
+            synthetic_mode: currentSynthetic
+          }
+        }))
+        saveSyntheticMode(botName, currentSynthetic)
+        return
+      }
+
       // If bot is active, restart it with new synthetic mode
       if (bots[botName]?.is_active) {
         console.log(`🔄 Restarting bot ${botName} with synthetic mode: ${newSynthetic}`)
@@ -283,7 +282,9 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
           saveSyntheticMode(botName, currentSynthetic)
         }
       } else {
-        console.log(`💾 Saved synthetic mode for ${botName}: ${newSynthetic} (bot is inactive)`)
+        console.log(
+          `💾 Saved synthetic mode for ${botName}: ${newSynthetic} (bot is inactive) - Backend updated`
+        )
       }
     } catch (err) {
       console.error('Error toggling synthetic mode:', err)
@@ -431,189 +432,28 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({
 
       {/* Server Info Accordion */}
       {serverInfo && (
-        <div className="server-info-accordion">
-          <div className="accordion-header" onClick={() => toggleBotExpansion('server')}>
-            <span className="accordion-title">🖥️ Información del Servidor</span>
-            <span className="accordion-icon">{expandedBots['server'] ? '▼' : '▶'}</span>
-          </div>
-          {expandedBots['server'] && (
-            <div className="accordion-content">
-              <div className="server-metrics">
-                <div className="server-metric">
-                  <span className="metric-label">PID:</span>
-                  <span className="metric-value">{serverInfo.pid}</span>
-                </div>
-                <div className="server-metric">
-                  <span className="metric-label">Memoria:</span>
-                  <span className="metric-value">{serverInfo.memory_mb} MB</span>
-                </div>
-                <div className="server-metric">
-                  <span className="metric-label">CPU:</span>
-                  <span className="metric-value">{serverInfo.cpu_percent}%</span>
-                </div>
-                <div className="server-metric">
-                  <span className="metric-label">Iniciado:</span>
-                  <span className="metric-value">
-                    {new Date(serverInfo.create_time).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <ServerInfoAccordion
+          serverInfo={serverInfo}
+          expanded={!!expandedBots['server']}
+          onToggle={() => toggleBotExpansion('server')}
+        />
       )}
 
       {/* Individual Bot Cards */}
       <div className="bots-list">
         {botEntries.map(([botName, botInfo]) => (
-          <div
+          <PluginBotCard
             key={botName}
-            className={`plugin-bot-card ${botInfo.is_active ? 'active' : 'inactive'}`}>
-            <div className="plugin-bot-card-header">
-              <div className="plugin-bot-header-left">
-                <div className="plugin-bot-title">
-                  <span className="plugin-bot-icon">{getBotIcon(botName)}</span>
-                  <span className="plugin-bot-name">{botName}</span>
-                  <span className="plugin-bot-status">{botInfo.is_active ? '🟢' : '🔴'}</span>
-                  {botInfo.synthetic_mode && <span className="synthetic-badge">🧪</span>}
-                </div>
-                <div className="plugin-bot-description">{botInfo.description}</div>
-              </div>
-
-              <div className="plugin-bot-header-right">
-                <button
-                  className={`plugin-synthetic-toggle ${
-                    botInfo.synthetic_mode ? 'active' : 'inactive'
-                  }`}
-                  onClick={() => handleSyntheticToggle(botName, botInfo.synthetic_mode)}
-                  title={botInfo.synthetic_mode ? 'Modo Synthetic' : 'Modo Real'}>
-                  {botInfo.synthetic_mode ? '🧪' : '💰'}
-                </button>
-                <button
-                  className={`plugin-bot-toggle ${botInfo.is_active ? 'active' : 'inactive'}`}
-                  onClick={() => handleBotToggle(botName, botInfo.is_active)}
-                  disabled={botsLoading}>
-                  {botInfo.is_active ? 'OFF' : 'ON'}
-                </button>
-              </div>
-            </div>
-
-            <div className="plugin-bot-card-content">
-              <div className="plugin-bot-metrics-row">
-                <div className="plugin-metric">
-                  <span className="plugin-metric-label">Posiciones:</span>
-                  <span className="plugin-metric-value">{botInfo.positions_count}</span>
-                </div>
-                <div className="plugin-metric">
-                  <span className="plugin-metric-label">Riesgo:</span>
-                  <span
-                    className="plugin-metric-value"
-                    style={{ color: getRiskLevelColor(botInfo.config.risk_level) }}>
-                    {getRiskLevelIcon(botInfo.config.risk_level)} {botInfo.config.risk_level}
-                  </span>
-                </div>
-                <div className="plugin-metric">
-                  <span className="plugin-metric-label">Tamaño:</span>
-                  <span className="plugin-metric-value">${botInfo.config.position_size}</span>
-                </div>
-                <div className="plugin-metric">
-                  <span className="plugin-metric-label">Símbolo:</span>
-                  <span className="plugin-metric-value">{botInfo.config.symbol}</span>
-                </div>
-                <div className="plugin-metric">
-                  <span className="plugin-metric-label">Precio:</span>
-                  <span className="plugin-metric-value">${currentPrice.toFixed(5)}</span>
-                </div>
-                {botInfo.synthetic_mode && (
-                  <div className="plugin-metric">
-                    <span className="plugin-metric-label">Saldo Synthetic:</span>
-                    <span className="plugin-metric-value">
-                      ${botInfo.synthetic_balance_usdt} USDT
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {botInfo.last_signal && (
-                <div className="bot-signal">
-                  <div className="signal-header">
-                    <span className="signal-label">Última Señal:</span>
-                    <span
-                      className="signal-value"
-                      style={{
-                        color:
-                          botInfo.last_signal.signal_type === 'BUY'
-                            ? '#26a69a'
-                            : botInfo.last_signal.signal_type === 'SELL'
-                            ? '#ef5350'
-                            : '#ffa726'
-                      }}>
-                      {botInfo.last_signal.signal_type}
-                    </span>
-                  </div>
-                  <div className="signal-reasoning">{botInfo.last_signal.reasoning}</div>
-                  <div className="signal-confidence">
-                    Confianza: {(botInfo.last_signal.confidence * 100).toFixed(1)}%
-                  </div>
-                </div>
-              )}
-
-              <InfoBox
-                title="📊 Info"
-                isActive={botInfo.is_active}
-                storageKey={`plugin-bot-${botName}-accordion`}
-                description={botInfo.bot_description}
-                items={[
-                  {
-                    label: 'Versión',
-                    value: botInfo.version
-                  },
-                  {
-                    label: 'Autor',
-                    value: botInfo.author
-                  },
-                  {
-                    label: 'Intervalo',
-                    value: botInfo.config.interval
-                  },
-                  {
-                    label: 'Max Posiciones',
-                    value: botInfo.config.max_positions
-                  },
-                  {
-                    label: 'Tamaño Posición',
-                    value: `$${botInfo.config.position_size}`
-                  },
-                  {
-                    label: 'Nivel Riesgo',
-                    value: botInfo.config.risk_level
-                  },
-                  ...(botInfo.is_active
-                    ? [
-                        {
-                          label: 'Tiempo Activo',
-                          value: formatUptime(botInfo.uptime_seconds)
-                        },
-                        {
-                          label: 'Iniciado',
-                          value: botInfo.start_time
-                            ? new Date(botInfo.start_time).toLocaleString()
-                            : 'N/A'
-                        },
-                        {
-                          label: 'Posiciones',
-                          value: botInfo.positions_count
-                        },
-                        {
-                          label: 'Modo',
-                          value: botInfo.synthetic_mode ? 'Synthetic' : 'Real'
-                        }
-                      ]
-                    : [])
-                ]}
-              />
-            </div>
-          </div>
+            botName={botName}
+            botInfo={botInfo as unknown as PluginBotInfo}
+            botsLoading={botsLoading}
+            onToggleBot={handleBotToggle}
+            onToggleSynthetic={handleSyntheticToggle}
+            getRiskLevelColor={getRiskLevelColor}
+            getRiskLevelIcon={getRiskLevelIcon}
+            getBotIcon={getBotIcon}
+            formatUptime={formatUptime}
+          />
         ))}
       </div>
     </div>

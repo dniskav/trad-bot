@@ -35,7 +35,6 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
   if (!positions) {
     return (
       <div className="active-positions">
-        <h3>📊 Posiciones Concurrentes Activas</h3>
         <div className="positions-status">
           <p>No hay posiciones activas</p>
         </div>
@@ -47,8 +46,44 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
     const allPositions: (ActivePosition & { botType: string })[] = []
 
     Object.entries(positions).forEach(([botType, botPositions]) => {
-      Object.entries(botPositions).forEach(([, pos]) => {
-        allPositions.push({ ...pos, botType })
+      Object.entries(botPositions).forEach(([key, anyPos]) => {
+        const pos: any = anyPos || {}
+
+        // Incluir también posiciones cerradas para debugging (no filtrar)
+
+        const id = String(pos.id || pos.position_id || key)
+        const type = String(pos.type || pos.signal_type || 'BUY').toUpperCase() as 'BUY' | 'SELL'
+        const entry_price = Number(pos.entry_price || pos.entry || 0)
+        const current_price = Number(pos.current_price || pos.price || entry_price)
+        const quantity = Number(pos.quantity || pos.qty || 0)
+
+        // Estimar PnL si no viene del backend
+        const feeRate = 0.0015
+        const gross =
+          type === 'BUY'
+            ? (current_price - entry_price) * quantity
+            : (entry_price - current_price) * quantity
+        const fees = current_price * quantity * feeRate
+        const pnl = Number(pos.pnl ?? gross - fees)
+        const base = entry_price * quantity || 1
+        const pnl_pct = Number(pos.pnl_pct ?? ((gross - fees) / base) * 100)
+
+        allPositions.push({
+          id,
+          bot_type: String(pos.bot_type || botType),
+          type,
+          entry_price,
+          current_price,
+          quantity,
+          pnl,
+          pnl_pct,
+          stop_loss: pos.stop_loss,
+          take_profit: pos.take_profit,
+          timestamp: String(pos.entry_time || pos.timestamp || ''),
+          is_synthetic: Boolean(pos.is_synthetic),
+          is_plugin_bot: Boolean(pos.is_plugin_bot),
+          bot_on: Boolean(pos.bot_on)
+        } as ActivePosition & { botType: string })
       })
     })
 
@@ -93,7 +128,6 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
   if (activePositions.length === 0) {
     return (
       <div className="active-positions">
-        <h3>📊 Posiciones Concurrentes Activas</h3>
         <div className="positions-status">
           <p>No hay posiciones activas</p>
         </div>
@@ -135,7 +169,8 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
     }
   }
 
-  const getPositionColor = (type: string) => {
+  const getPositionColor = (type: string, status?: string) => {
+    if ((status || '').toUpperCase() === 'CLOSED') return '#bdbdbd'
     return type === 'BUY' ? '#26a69a' : '#ef5350'
   }
 
@@ -155,32 +190,61 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
   // Vista tabla compacta: Bot | Entrada | Actual | PnL Neto | Estado
   return (
     <div className="active-positions">
-      <h3>📊 Posiciones Concurrentes Activas</h3>
       <div className="positions-container">
-        <div className="positions-summary">
-          <div className="summary-item">
-            <span className="summary-label">Total Activas:</span>
-            <span className="summary-value">{activePositions.length}</span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-label">Reales:</span>
-            <span className="summary-value">
-              {activePositions.filter((p) => !p.is_synthetic).length}
-            </span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-label">Sintéticas:</span>
-            <span className="summary-value">
-              {activePositions.filter((p) => p.is_synthetic).length}
-            </span>
-          </div>
-        </div>
+        {(() => {
+          const totals = activePositions.reduce(
+            (acc, p) => {
+              const base = (p.entry_price || 0) * (p.quantity || 0)
+              acc.base += base
+              if (p.pnl >= 0) acc.gains += p.pnl
+              else acc.losses += -p.pnl
+              return acc
+            },
+            { gains: 0, losses: 0, base: 0 }
+          )
+          const net = totals.gains - totals.losses
+          const pct = totals.base > 0 ? (net / totals.base) * 100 : 0
+          const gainsPct = totals.base > 0 ? (totals.gains / totals.base) * 100 : 0
+          const lossesPct = totals.base > 0 ? (totals.losses / totals.base) * 100 : 0
+          const totalCount = activePositions.length
+          const gainCount = activePositions.filter((p) => p.pnl >= 0).length
+          const lossCount = totalCount - gainCount
 
-        <div className="positions-table" style={{ width: '100%', overflowX: 'auto' }}>
+          return (
+            <div className="positions-summary">
+              <div className="summary-item">
+                <span className="summary-label">Ganancias ({gainCount}):</span>
+                <span className="summary-value" style={{ color: '#26a69a', fontWeight: 700 }}>
+                  +${totals.gains.toFixed(4)} ({gainsPct.toFixed(2)}%)
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Pérdidas ({lossCount}):</span>
+                <span className="summary-value" style={{ color: '#ef5350', fontWeight: 700 }}>
+                  -${totals.losses.toFixed(4)} (-{lossesPct.toFixed(2)}%)
+                </span>
+              </div>
+              <div className="summary-item">
+                <span className="summary-label">Neto ({totalCount}):</span>
+                <span
+                  className="summary-value"
+                  style={{ color: net >= 0 ? '#26a69a' : '#ef5350', fontWeight: 800 }}>
+                  {net >= 0 ? '+' : ''}${net.toFixed(4)} ({pct >= 0 ? '+' : ''}
+                  {pct.toFixed(2)}%)
+                </span>
+              </div>
+            </div>
+          )
+        })()}
+
+        <div
+          className="positions-table"
+          style={{ width: '100%', overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Bot</th>
+                <th style={{ textAlign: 'left' }}>Status</th>
                 <th style={{ textAlign: 'left' }}>Entrada</th>
                 <th style={{ textAlign: 'left' }}>Actual</th>
                 <th style={{ textAlign: 'left' }}>PnL Neto</th>
@@ -189,7 +253,10 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
             </thead>
             <tbody>
               {activePositions.map((p) => (
-                <tr key={p.id} style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <tr
+                  key={`${p.botType || p.bot_type}:${p.id}`}
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <td>{getBotName((p as any).botType || p.bot_type)}</td>
                   <td>
                     <span
                       className="bot-icon"
@@ -202,27 +269,23 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
                         borderRadius: 4,
                         background: p.bot_on ? '#1b5e20' : '#b71c1c',
                         color: '#fff',
-                        fontSize: 12,
-                        marginRight: 6
+                        fontSize: 12
                       }}
                       title={p.bot_on ? 'Encendido' : 'Apagado'}>
                       {getBotIcon(p.botType)}
-                    </span>{' '}
-                    {getBotName(p.botType)}{' '}
-                    {p.is_synthetic && <span title="Posición Sintética">🧪</span>}
-                    {p.is_plugin_bot && <span title="Bot Plug-and-Play">🔌</span>}
+                    </span>
                   </td>
                   <td>${p.entry_price.toFixed(5)}</td>
                   <td>${p.current_price.toFixed(5)}</td>
                   <td>{formatPnL(p.pnl, p.pnl_pct)}</td>
-                  <td style={{ color: getPositionColor(p.type) }}>{p.type}</td>
+                  <td style={{ color: getPositionColor(p.type, (p as any).status) }}>{p.type}</td>
                   <td>
                     <button
                       disabled={submitting}
                       onClick={() =>
                         setConfirming({
                           positionId: p.id,
-                          botType: p.botType,
+                          botType: ((p as any).botType || p.bot_type) as string,
                           entryPrice: p.entry_price,
                           currentPrice: p.current_price,
                           quantity: p.quantity,

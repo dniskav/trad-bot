@@ -1,16 +1,16 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { WebSocketContext } from '../contexts/WebSocketContext'
-import { useApiKlines, useApiMarginInfo } from '../hooks'
+import { useApiMarginInfo } from '../hooks'
 // import { useSocket } from '../hooks/useSocket'
 import Accordion from './Accordion'
 import AccountBalance from './AccountBalance'
 import ActivePositions from './ActivePositions'
 import BotSignals from './BotSignals'
 import CandlestickChart from './CandlestickChart'
-import MarginInfo from './MarginInfo'
+import { MarginInfo } from './MarginInfo'
 import PlugAndPlayBots from './PlugAndPlayBots'
-import PositionHistory from './PositionHistory'
-import Toast from './Toast'
+import { PositionHistory } from './PositionHistory'
+import { Toast } from './Toast'
 import WebSocketStatus from './WebSocketStatus'
 
 interface AppContentProps {
@@ -24,14 +24,13 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
   // Estados locales
   const [botSignals, setBotSignals] = useState<any>(null)
   const [positionHistory, setPositionHistory] = useState<any[]>([])
-  const [activePositions, setActivePositions] = useState<any[]>([])
+  const [activePositions, setActivePositions] = useState<Record<
+    string,
+    Record<string, any>
+  > | null>(null)
   const [currentPrice, setCurrentPrice] = useState<number>(0)
   const [accountBalance, setAccountBalance] = useState<any>(null)
 
-  // Debug: Log cuando cambie accountBalance
-  useEffect(() => {
-    console.log('📊 AppContent: accountBalance cambió a:', accountBalance)
-  }, [accountBalance])
   // Use margin info hook
   const { isLoading: marginLoading, error: marginError, fetchMarginInfo } = useApiMarginInfo()
 
@@ -49,12 +48,26 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     fetchData()
   }, []) // Remove fetchMarginInfo dependency to prevent infinite loop
 
-  // Debug: Log margin info data when loading is false
+  // Fetch account balance and active positions on mount
   useEffect(() => {
-    if (!marginLoading) {
-      console.log('📊 AppContent: marginError:', marginError)
+    const fetchAccountBalance = async () => {
+      try {
+        const response = await fetch('/api/position-info')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.account_balance) {
+            setAccountBalance(data.account_balance)
+          }
+          if (data.active_positions) {
+            setActivePositions(data.active_positions)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching account balance on mount:', error)
+      }
     }
-  }, [marginLoading, marginError])
+    fetchAccountBalance()
+  }, [])
 
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -77,16 +90,11 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
 
   // Contexto WebSocket (mantener para compatibilidad)
   const ctx = useContext(WebSocketContext)
-  // console.log('🔌 AppContent: ctx obtenido con useContext:', ctx) // Comentado para reducir spam
 
   // Efecto para procesar mensajes del contexto
   useEffect(() => {
-    // console.log('📨 AppContent: Efecto ejecutado, ctx:', ctx, 'lastMessage:', ctx?.lastMessage)
     if (ctx && ctx.lastMessage) {
       const data = ctx.lastMessage.message
-      // console.log('📨 AppContent: Procesando mensaje del contexto:', data)
-      // console.log('📨 AppContent: Tipo de mensaje:', data?.type)
-      // console.log('📨 AppContent: Datos del mensaje:', data?.data)
 
       // Procesar diferentes tipos de mensajes
       if (data.type === 'initial_data') {
@@ -95,18 +103,23 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
             setCurrentPrice(data.data.current_price)
           }
           if (data.data.account_balance) {
-            console.log(
-              '📨 AppContent: Estableciendo accountBalance (initial_data):',
-              data.data.account_balance
-            )
             setAccountBalance(data.data.account_balance)
           }
           if (data.data.active_positions) {
             setActivePositions(data.data.active_positions)
           }
+          // Historial: se carga únicamente desde el endpoint (no vía WS)
           if (data.data.bot_status) {
             // Los bot_status se pueden usar más adelante
-            console.log('🤖 AppContent: Bot status recibido:', data.data.bot_status)
+          }
+          if (data.data.candles) {
+            setCandlesData(data.data.candles)
+          }
+          if (data.data.indicators) {
+            setIndicatorsData(data.data.indicators)
+          }
+          if (data.data.bot_signals) {
+            setBotSignals(data.data.bot_signals)
           }
         }
       } else if (data.type === 'update') {
@@ -120,16 +133,32 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
           if (data.data.active_positions) {
             setActivePositions(data.data.active_positions)
           }
+          // Historial: se carga únicamente desde el endpoint (no vía WS)
           if (data.data.bot_status) {
-            console.log('🤖 AppContent: Bot status actualizado:', data.data.bot_status)
+          }
+          if (data.data.candles) {
+            setCandlesData(data.data.candles)
+          }
+          if (data.data.indicators) {
+            setIndicatorsData(data.data.indicators)
+          }
+          if (data.data.bot_signals) {
+            setBotSignals(data.data.bot_signals)
           }
         }
       } else if (data.type === 'bot_signals') {
         setBotSignals(data.data || [])
+      } else if (data.type === 'history_refresh') {
+        // Forzar al componente de historial a recargar usando el hook
+        // Aquí no tenemos referencia directa; el componente ya tiene botón Refrescar.
+        // Podríamos emitir un CustomEvent para que el hook o componente escuche.
+        try {
+          window.dispatchEvent(new CustomEvent('history_refresh'))
+        } catch {}
       } else if (data.type === 'position_history') {
-        setPositionHistory(data.data || [])
+        // Ignorado: el historial solo se consume por endpoint
       } else if (data.type === 'active_positions') {
-        setActivePositions(data.data || [])
+        setActivePositions(data.data || null)
       } else if (data.type === 'price' || data.type === 'price_update') {
         setCurrentPrice(data.data?.price || 0)
       } else if (data.type === 'account_balance') {
@@ -137,11 +166,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
       } else if (data.type === 'margin_info') {
         // Margin info is now handled by the hook
       } else if (data.type === 'history_stream') {
-        // Stream de historial para refresco en vivo
-        const list = Array.isArray(data.data) ? data.data : []
-        setPositionHistory(list)
-        const stats = calculateStatistics(list)
-        setHistoryStats(stats)
+        // Ignorado: el historial solo se consume por endpoint
       } else if (data.type === 'plugin_bots_realtime') {
         // Publicar en el contexto para que cualquier componente (p.ej. PlugAndPlayBots) lo consuma
         if (ctx && ctx.setPluginBotsRealtime) {
@@ -149,22 +174,13 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
         }
       } else if (data.type === 'candles') {
         setCandlesData(data.data?.candles || [])
-        console.log('📊 AppContent: setCandlesData llamado con:', data.data?.candles || [])
 
         // Procesar bot_signals si están disponibles
         if (data.data?.bot_signals) {
-          // console.log('🤖 AppContent: Procesando bot_signals:', data.data.bot_signals)
           setBotSignals(data.data.bot_signals)
 
-          // Extraer historial de posiciones si viene embebido en la carga de velas
+          // No actualizar historial desde payloads de velas
           const positionsPayload = data.data?.bot_signals?.positions
-          const historyFromPayload = positionsPayload?.history
-          if (Array.isArray(historyFromPayload)) {
-            setPositionHistory(historyFromPayload)
-            // Calcular estadísticas dinámicas por bot
-            const stats = calculateStatistics(historyFromPayload)
-            setHistoryStats(stats)
-          }
           // Extraer posiciones activas si vienen embebidas (compatibilidad)
           const activeFromPayload = positionsPayload?.active_positions
           if (activeFromPayload) {
@@ -172,12 +188,6 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
           }
         }
       } else if (data.type === 'indicators') {
-        // Datos de indicadores para el gráfico
-        // console.log(
-        //   '📈 AppContent: Datos de indicadores recibidos desde contexto:',
-        //   Object.keys(data.data || {})
-        // )
-        // console.log('📈 AppContent: Estructura de datos de indicadores desde contexto:', data.data)
         setIndicatorsData(data.data || {})
       } else if (data.type === 'error') {
         setToastMessage(data.message || 'Error desconocido')
@@ -253,14 +263,12 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
   //   if (socket.isConnected) {
   //     // Enviar mensaje real a través del WebSocket
   //     socket.send(JSON.stringify(message))
-  //     // console.log('📤 AppContent: Mensaje enviado a través del WebSocket:', message) // Comentado para reducir spam
 
   //     // También actualizar el contexto para mantener compatibilidad
   //     if (ctx) {
   //       ctx.addMessage('sent', message)
   //     }
   //   } else {
-  //     // console.warn('⚠️ AppContent: No se puede enviar mensaje, WebSocket no conectado') // Comentado para reducir spam
   //     setToastMessage('No se puede enviar mensaje: WebSocket no conectado')
   //     setShowToast(true)
   //   }
@@ -272,23 +280,9 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     // El AppSetup manejará la reconexión
   }
 
-  // Use klines hook
-  const { data: klinesData, fetchKlines } = useApiKlines()
+  // Klines vienen solo por WebSocket; eliminamos fallback REST
 
-  // Fallback: cargar velas iniciales vía REST si aún no han llegado por WS
-  useEffect(() => {
-    // Si no tenemos velas aún, intenta cargar
-    if (!candlesData || candlesData.length === 0) {
-      fetchKlines('DOGEUSDT', timeframe, 500)
-    }
-  }, [timeframe, candlesData.length, fetchKlines])
-
-  // Update candles data when klines data changes
-  useEffect(() => {
-    if (klinesData && Array.isArray(klinesData) && klinesData.length > 0) {
-      setCandlesData(klinesData)
-    }
-  }, [klinesData])
+  // No effect needed: fetchKlines ahora retorna los datos directamente
 
   return (
     <div className="app">
@@ -355,11 +349,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
             title="Posiciones Concurrentes Activas"
             defaultExpanded={true}
             storageKey="active-positions">
-            <ActivePositions
-              positions={
-                (botSignals?.positions?.active_positions as any) || (activePositions as any)
-              }
-            />
+            <ActivePositions positions={activePositions} />
           </Accordion>
 
           {/* Información de Margen */}
@@ -381,17 +371,13 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
 
           {/* Plugin Bots */}
           <Accordion title="Plugin Bots" defaultExpanded={true} storageKey="plugin-bots">
-            <PlugAndPlayBots
-              history={positionHistory}
-              activePositions={botSignals?.positions?.active_positions}
-              currentPrice={currentPrice}
-            />
+            <PlugAndPlayBots currentPrice={currentPrice} />
           </Accordion>
 
           {/* Historial de Posiciones */}
           <Accordion
             title="Historial de Posiciones"
-            defaultExpanded={false}
+            defaultExpanded={true}
             storageKey="position-history">
             <PositionHistory history={positionHistory} statistics={historyStats} />
           </Accordion>

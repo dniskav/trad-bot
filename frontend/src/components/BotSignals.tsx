@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useApiProcessInfo } from '../hooks'
-import InfoBox from './InfoBox'
+import { InfoBox } from './InfoBox'
 
 interface BotSignalsProps {
   signals: {
