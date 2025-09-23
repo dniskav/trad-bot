@@ -1,0 +1,65 @@
+.margin-info {
+}
+.margin-cards-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.margin-card {
+  background: var(--binance-dark);
+  border: 1px solid var(--binance-gray);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.margin-card.highlight {
+  border-color: var(--binance-yellow);
+  box-shadow: 0 0 10px rgba(240, 185, 11, 0.2);
+}
+.card-header {
+  background: var(--binance-gray);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.card-icon {
+  font-size: 1rem;
+}
+.card-title {
+  font-size: 0.9rem;
+}
+.card-content {
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+.margin-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.margin-label {
+  font-size: 0.75rem;
+  color: var(--binance-text);
+}
+.margin-value {
+  font-size: 0.85rem;
+  color: var(--binance-white);
+  font-weight: 600;
+}
+.margin-value.leverage {
+  color: var(--binance-yellow);
+}
+.trading-power {
+  color: var(--binance-yellow);
+  font-weight: 700;
+}
+.margin-note {
+  font-size: 0.75rem;
+  color: var(--binance-text);
+}
+.margin-warning {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
