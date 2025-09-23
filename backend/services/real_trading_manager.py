@@ -470,9 +470,9 @@ class RealTradingManager:
             return {'USDT': 0.0, 'error': 'Cliente no inicializado'}
         
         try:
-            account = self.client.get_account()
+            account_info = self.client.get_account()
             balances = {}
-            for balance in account['balances']:
+            for balance in account_info['balances']:
                 if float(balance['free']) > 0:
                     balances[balance['asset']] = float(balance['free'])
             return balances

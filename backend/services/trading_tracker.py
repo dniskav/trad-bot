@@ -94,7 +94,7 @@ class TradingTracker:
                 margin_account = binance_client.get_margin_account()
                 
                 if detailed_logging:
-                    # logger.info(f"🔍 DEBUG: Margin account keys: {list(margin_account.keys())}")
+                    # logger.info(f"🔍 DEBUG: Margin get_margin_account keys: {list(margin_account.keys())}")
                     # Solo mostrar assets con balance > 0
                     relevant_assets = [asset for asset in margin_account.get('userAssets', []) 
                                      if float(asset.get('free', 0)) > 0 or float(asset.get('locked', 0)) > 0]
@@ -254,13 +254,13 @@ class TradingTracker:
                 'conservative': {},
                 'aggressive': {}
             }
-            account = self.persistence.get_account()
+            account_data = self.persistence.get_account()
             status = self.persistence.get_bot_status()
 
             self.bot_status = status or {'conservative': False, 'aggressive': False}
-            self.initial_balance = account.get('initial_balance', self.initial_balance)
-            self.current_balance = account.get('current_balance', self.current_balance)
-            self.total_pnl = account.get('total_pnl', self.total_pnl)
+            self.initial_balance = account_data.get('initial_balance', self.initial_balance)
+            self.current_balance = account_data.get('current_balance', self.current_balance)
+            self.total_pnl = account_data.get('total_pnl', self.total_pnl)
 
             logger.info(f"📂 (Nuevo formato) Historial cargado: {len(self.position_history)} posiciones")
             logger.info(f"🤖 (Nuevo formato) Estado bots: {self.bot_status}")

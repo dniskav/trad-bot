@@ -34,7 +34,7 @@ class BotRegistry:
         self.bots: Dict[str, BaseBot] = {}
         self.bot_classes: Dict[str, Type[BaseBot]] = {}
         self.logger = logging.getLogger(__name__)
-        self.bots_directory = Path(__file__).parent / "bots"
+        self.bots_directory = Path(__file__).parent.parent / "bots"
         
         # Crear directorio de bots si no existe
         self.bots_directory.mkdir(exist_ok=True)
@@ -48,7 +48,7 @@ class BotRegistry:
     def _load_existing_bots(self):
         """Carga bots existentes del sistema"""
         # Cargar bots hardcodeados existentes
-        self._load_legacy_bots()
+        # self._load_legacy_bots()  # DESHABILITADO temporalmente
         
         # Cargar bots dinámicos del directorio bots/
         self._load_dynamic_bots()
@@ -57,8 +57,8 @@ class BotRegistry:
         """Carga bots legacy (conservative y aggressive)"""
         try:
             # Importar y registrar bot conservador
-            from sma_cross_bot import generate_signal as conservative_signal
-            from aggressive_scalping_bot import generate_signal as aggressive_signal
+            from bots.sma_cross_bot import generate_signal as conservative_signal
+            from bots.aggressive_scalping_bot import generate_signal as aggressive_signal
             
             # Crear configuraciones para bots legacy
             conservative_config = BotConfig(
@@ -106,6 +106,10 @@ class BotRegistry:
         
         for bot_file in self.bots_directory.glob("*.py"):
             if bot_file.name.startswith("__"):
+                continue
+            
+            # Excluir archivos que no son bots plug-and-play
+            if bot_file.name in ['aggressive_scalping_bot.py', 'sma_cross_bot.py']:
                 continue
             
             try:
@@ -241,7 +245,14 @@ class BotRegistry:
             return False
         
         try:
+            # Log antes de iniciar
+            mode_text = "sintético" if bot.config.synthetic_mode else "real"
+            self.logger.info(f"🚀 Iniciando bot {bot_name} en modo {mode_text}")
+            
             bot.start()
+            
+            # Log después de iniciar
+            self.logger.info(f"✅ Bot {bot_name} iniciado exitosamente en modo {mode_text}")
             return True
         except Exception as e:
             self.logger.error(f"❌ Error iniciando bot {bot_name}: {e}")
@@ -263,7 +274,13 @@ class BotRegistry:
             return False
         
         try:
+            # Log antes de detener
+            self.logger.info(f"🛑 Deteniendo bot {bot_name}")
+            
             bot.stop()
+            
+            # Log después de detener
+            self.logger.info(f"✅ Bot {bot_name} detenido exitosamente")
             return True
         except Exception as e:
             self.logger.error(f"❌ Error deteniendo bot {bot_name}: {e}")

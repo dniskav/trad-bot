@@ -49,10 +49,7 @@ async def get_position_info():
         from services.position_service import get_position_info_for_frontend
         position_info = get_position_info_for_frontend(current_price)
         
-        return {
-            "status": "success",
-            "data": position_info
-        }
+        return position_info
     except Exception as e:
         logger.error(f"Error getting position info: {e}")
         return {"status": "error", "message": str(e)}
@@ -282,8 +279,4 @@ async def close_position(payload: dict):
             "message": str(e)
         })
 
-# Alias compat: permitir /api/positions/close desde el frontend
-@router.post("/api/positions/close")
-@router.post("/api/positions/close/")
-async def close_position_api(payload: dict):
-    return await close_position(payload)
+# Alias removido - el router ya se monta con prefijo /api

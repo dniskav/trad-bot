@@ -6,7 +6,7 @@ Ejemplo de bot plug-and-play
 
 import numpy as np
 from typing import List, Tuple
-from bot_interface import BaseBot, BotConfig, MarketData, TradingSignal, SignalType
+from services.bot_interface import BaseBot, BotConfig, MarketData, TradingSignal, SignalType
 
 class MACDBot(BaseBot):
     """

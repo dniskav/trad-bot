@@ -31,6 +31,15 @@ from websocket import manager as ws_manager
 uvicorn_logger = logging.getLogger("uvicorn.access")
 uvicorn_logger.setLevel(logging.WARNING)
 
+# Application logger
+logger = logging.getLogger("server")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="SMA Cross Trading Bot API", 
@@ -53,7 +62,7 @@ manager = ws_manager.ConnectionManager()
 
 # Initialize services
 real_trading_manager = RealTradingManager()
-trading_tracker = TradingTracker()
+trading_tracker = TradingTracker(real_trading_manager.client)
 
 # Set dependencies for API modules
 if hasattr(health, 'set_dependencies'):
@@ -62,7 +71,7 @@ trading.set_dependencies(trading_tracker)
 positions.set_dependencies(real_trading_manager, trading_tracker, bot_registry)
 bots.set_dependencies(real_trading_manager, trading_tracker)
 orders.set_dependencies(trading_tracker)
-klines.set_dependencies(real_trading_manager)
+# klines no necesita dependencias - usa Binance directamente
 metrics.set_dependencies(real_trading_manager, trading_tracker)
 
 # Set dependencies for services
@@ -78,27 +87,232 @@ app.include_router(orders.router, prefix="/api", tags=["orders"])
 app.include_router(klines.router, prefix="/api", tags=["klines"])
 app.include_router(metrics.router, prefix="/api", tags=["metrics"])
 
+# Import and register margin router
+from api import margin
+app.include_router(margin.router, prefix="/api", tags=["margin"])
+
 # WebSocket endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
+    logger.info("WebSocket client connected")
+    
     try:
+        # Send initial data
+        await send_initial_data(websocket)
+        
+        # Start background task for periodic updates
+        asyncio.create_task(periodic_data_updates(websocket))
+        
+        # Listen for client messages
         while True:
-            # Keep connection alive
-            await asyncio.sleep(1)
+            try:
+                # Wait for client message with timeout
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                await handle_client_message(websocket, data)
+            except asyncio.TimeoutError:
+                # Send heartbeat to keep connection alive
+                await manager.send_personal_message(json.dumps({
+                    "type": "heartbeat",
+                    "timestamp": datetime.now().isoformat()
+                }), websocket)
+            except WebSocketDisconnect:
+                break
+                
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected by client")
-        manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
+    finally:
         manager.disconnect(websocket)
+        logger.info("WebSocket client disconnected")
+
+async def send_initial_data(websocket: WebSocket):
+    """Send initial data when client connects"""
+    try:
+        # Get current price
+        current_price = None
+        try:
+            current_price = real_trading_manager.get_current_price('DOGEUSDT')
+        except:
+            pass
+        
+        # Get position info
+        from services.position_service import get_position_info_for_frontend
+        position_info = get_position_info_for_frontend(current_price)
+        
+        # Send initial data
+        initial_data = {
+            "type": "initial_data",
+            "timestamp": datetime.now().isoformat(),
+            "data": {
+                "current_price": current_price,
+                "active_positions": position_info.get("active_positions", {}),
+                "account_balance": position_info.get("account_balance", {}),
+                "bot_status": position_info.get("bot_status", {})
+            }
+        }
+        
+        await manager.send_personal_message(json.dumps(initial_data), websocket)
+        logger.info("Initial data sent to WebSocket client")
+        
+    except Exception as e:
+        logger.error(f"Error sending initial data: {e}")
+
+async def periodic_data_updates(websocket: WebSocket):
+    """Send periodic updates every 5 seconds"""
+    while True:
+        try:
+            await asyncio.sleep(5)  # Update every 5 seconds
+            
+            # Check if connection is still alive
+            if websocket not in manager.active_connections:
+                break
+                
+            # Get current price
+            current_price = None
+            try:
+                current_price = real_trading_manager.get_current_price('DOGEUSDT')
+            except:
+                pass
+            
+            # Execute bot trading loop
+            try:
+                from services.bot_interface import MarketData
+                market_data = MarketData(
+                    symbol="DOGEUSDT",
+                    interval="1m",
+                    current_price=current_price or 0.0,
+                    closes=[current_price or 0.0] * 10,  # Simular datos históricos
+                    highs=[current_price or 0.0] * 10,
+                    lows=[current_price or 0.0] * 10,
+                    volumes=[1000] * 10,
+                    timestamps=[int(datetime.now().timestamp())] * 10
+                )
+                bot_signals = bot_registry.analyze_all_bots(market_data)
+                
+                # Log simplificado: nombre, status, precio y confianza
+                for bot_name, signal in bot_signals.items():
+                    if signal and 'signal_type' in signal:
+                        signal_type = signal.get('signal_type', 'HOLD')
+                        confidence = signal.get('confidence', 0.0)
+                        
+                        # Log del bot y status
+                        logger.info(f"🤖 {bot_name}: {signal_type}")
+                        
+                        # Log del precio
+                        logger.info(f"💰 Precio: ${current_price or 0.0:.5f}")
+                        
+                        # Log de la confianza
+                        logger.info(f"📊 Confianza: {confidence:.1%}")
+            except Exception as e:
+                logger.error(f"Error in bot trading loop: {e}")
+            
+            # Get updated position info
+            from services.position_service import get_position_info_for_frontend
+            position_info = get_position_info_for_frontend(current_price)
+            
+            # Send update
+            update_data = {
+                "type": "update",
+                "timestamp": datetime.now().isoformat(),
+                "data": {
+                    "current_price": current_price,
+                    "active_positions": position_info.get("active_positions", {}),
+                    "account_balance": position_info.get("account_balance", {}),
+                    "bot_status": position_info.get("bot_status", {})
+                }
+            }
+            
+            await manager.send_personal_message(json.dumps(update_data), websocket)
+            
+        except Exception as e:
+            logger.error(f"Error in periodic updates: {e}")
+            break
+
+async def handle_client_message(websocket: WebSocket, message: str):
+    """Handle messages from client"""
+    try:
+        data = json.loads(message)
+        message_type = data.get("type")
+        
+        if message_type == "ping":
+            # Respond to ping
+            await manager.send_personal_message(json.dumps({
+                "type": "pong",
+                "timestamp": datetime.now().isoformat()
+            }), websocket)
+            
+        elif message_type == "request_update":
+            # Send immediate update
+            await send_initial_data(websocket)
+            
+        else:
+            logger.warning(f"Unknown message type: {message_type}")
+            
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON received from client")
+    except Exception as e:
+        logger.error(f"Error handling client message: {e}")
 
 # Legacy endpoints (to be moved to api/ modules)
 # These will be moved to their respective api/ modules
 
-# TODO: Move remaining endpoints from server_simple.py to appropriate api/ modules
-# TODO: Add WebSocket handlers for real-time data
-# TODO: Add background tasks for data synchronization
+# WebSocket handlers for real-time data implemented above
+
+async def background_trading_loop():
+    """Background task to execute bot trading loop every 5 seconds"""
+    while True:
+        try:
+            await asyncio.sleep(5)  # Wait 5 seconds
+            
+            # Get current price
+            current_price = None
+            try:
+                current_price = real_trading_manager.get_current_price('DOGEUSDT')
+            except:
+                pass
+            
+            # Execute bot trading loop
+            try:
+                from services.bot_interface import MarketData
+                market_data = MarketData(
+                    symbol="DOGEUSDT",
+                    interval="1m",
+                    current_price=current_price or 0.0,
+                    closes=[current_price or 0.0] * 10,  # Simular datos históricos
+                    highs=[current_price or 0.0] * 10,
+                    lows=[current_price or 0.0] * 10,
+                    volumes=[1000] * 10,
+                    timestamps=[int(datetime.now().timestamp())] * 10
+                )
+                bot_signals = bot_registry.analyze_all_bots(market_data)
+                # Log simplificado: nombre, status, precio y confianza
+                for bot_name, signal in bot_signals.items():
+                    if signal and 'signal_type' in signal:
+                        signal_type = signal.get('signal_type', 'HOLD')
+                        confidence = signal.get('confidence', 0.0)
+                        
+                        # Log del bot y status
+                        logger.info(f"🤖 {bot_name}: {signal_type}")
+                        
+                        # Log del precio
+                        logger.info(f"💰 Precio: ${current_price or 0.0:.5f}")
+                        
+                        # Log de la confianza
+                        logger.info(f"📊 Confianza: {confidence:.1%}")
+            except Exception as e:
+                logger.error(f"Error in background trading loop: {e}")
+                
+        except Exception as e:
+            logger.error(f"Error in background trading loop: {e}")
+            await asyncio.sleep(5)
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background tasks on server startup"""
+    asyncio.create_task(background_trading_loop())
+    logger.info("🚀 Background trading loop started")
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)

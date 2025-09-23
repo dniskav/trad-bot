@@ -7,7 +7,7 @@ import logging
 import datetime
 
 from binance.um_futures import UMFutures  # Cliente oficial USDT-M Futures
-from metrics_logger import MetricsLogger, Trade
+from utils.metrics_logger import MetricsLogger, Trade
 
 # ------------------ CONFIG / PARÁMETROS OPTIMIZADOS ------------------
 load_dotenv()

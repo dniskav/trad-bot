@@ -116,12 +116,18 @@ class BaseBot(ABC):
         
         self.is_active = True
         self.start_time = datetime.now()
-        self.logger.info(f"🚀 Bot {self.config.name} iniciado")
+        
+        # Log detallado del inicio del bot
+        mode_text = "sintético" if self.config.synthetic_mode else "real"
+        self.logger.info(f"🚀 Bot {self.config.name} starting, synthetic: {self.config.synthetic_mode}")
+        self.logger.info(f"📊 Bot {self.config.name} iniciado en modo {mode_text}")
+        self.logger.info(f"💰 Balance inicial: ${self.synthetic_balance:.2f}" if self.config.synthetic_mode else "💰 Modo real activado")
     
     def stop(self):
         """Detiene el bot"""
         self.is_active = False
         self.start_time = None
+        self.logger.info(f"🛑 Bot {self.config.name} stopping")
         self.logger.info(f"🛑 Bot {self.config.name} detenido")
     
     def get_status(self) -> Dict[str, Any]:
@@ -213,6 +219,9 @@ class BaseBot(ABC):
         """
         if not self.config.synthetic_mode:
             return None
+            
+        # Log antes de abrir posición
+        self.logger.info(f"📈 Bot {self.config.name} intentando abrir posición {signal.signal_type.value} a precio ${current_price:.4f}")
             
         # Calcular tamaño de posición
         position_size = self.config.position_size

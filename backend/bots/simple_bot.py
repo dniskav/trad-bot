@@ -4,7 +4,7 @@ Bot simple de ejemplo para testing con lógica completa de trading
 """
 
 from typing import List
-from bot_interface import BaseBot, BotConfig, MarketData, TradingSignal, SignalType
+from services.bot_interface import BaseBot, BotConfig, MarketData, TradingSignal, SignalType
 
 class SimpleBot(BaseBot):
     """
