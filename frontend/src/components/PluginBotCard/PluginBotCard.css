@@ -1,0 +1,155 @@
+.plugin-bot-card {
+  background: var(--binance-dark);
+  border: 1px solid var(--binance-gray);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  margin-bottom: 12px;
+}
+.plugin-bot-card.active {
+  border-color: var(--binance-yellow);
+  box-shadow: 0 0 10px rgba(240, 185, 11, 0.3);
+}
+.plugin-bot-card.inactive {
+  border-color: var(--binance-gray);
+  opacity: 0.8;
+}
+.plugin-bot-card-header {
+  background: var(--binance-gray);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.plugin-bot-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.plugin-bot-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.plugin-bot-icon {
+  font-size: 1.1rem;
+}
+.plugin-bot-name {
+  color: var(--binance-white);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.plugin-bot-status {
+  font-size: 0.8rem;
+}
+.synthetic-badge {
+  background: var(--binance-yellow);
+  color: var(--binance-black);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.plugin-bot-description {
+  font-size: 0.75rem;
+  color: var(--binance-text);
+  line-height: 1.2;
+}
+.plugin-bot-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plugin-synthetic-toggle {
+  padding: 4px 8px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 40px;
+}
+.plugin-bot-toggle {
+  padding: 6px 12px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 50px;
+}
+.plugin-bot-toggle.active {
+  background-color: #ef4444;
+  border-color: #ef4444;
+  color: white;
+}
+.plugin-bot-toggle.inactive {
+  background-color: #22c55e;
+  border-color: #22c55e;
+  color: white;
+}
+.plugin-bot-card-content {
+  padding: 12px;
+}
+.plugin-bot-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.plugin-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.plugin-metric-label {
+  font-size: 0.65rem;
+  color: var(--binance-text);
+  font-weight: 500;
+}
+.plugin-metric-value {
+  font-size: 0.75rem;
+  color: var(--binance-white);
+  font-weight: 600;
+}
+.bot-signal {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--binance-gray);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.signal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.signal-label {
+  font-size: 0.75rem;
+  color: var(--binance-text);
+  font-weight: 500;
+}
+.signal-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.signal-reasoning {
+  font-size: 0.75rem;
+  color: var(--binance-text);
+}
+.signal-confidence {
+  font-size: 0.75rem;
+  color: var(--binance-yellow);
+  font-weight: 600;
+}
