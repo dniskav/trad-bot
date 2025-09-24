@@ -80,6 +80,8 @@ class BaseBot(ABC):
         self.synthetic_positions = []  # Posiciones sintéticas activas
         self.synthetic_balance = 1000.0  # Balance inicial para modo synthetic
         self.start_time: Optional[datetime] = None  # Tiempo de inicio del bot
+        # Tarifa de comisión (aprox Binance taker). Puede sobreescribirse desde config.custom_params
+        self.fee_rate = 0.0015
 
     @abstractmethod
     def analyze_market(self, market_data: MarketData) -> TradingSignal:
@@ -248,13 +250,47 @@ class BaseBot(ABC):
             f"📈 Bot {self.config.name} intentando abrir posición {signal.signal_type.value} a precio ${current_price:.4f}"
         )
 
-        # Calcular tamaño de posición
-        position_size = self.config.position_size
-        if signal.signal_type == SignalType.BUY:
-            quantity = (self.synthetic_balance * 0.1) / current_price  # 10% del balance
-        else:
-            quantity = (self.synthetic_balance * 0.1) / current_price  # 10% del balance
+        # Tarifa configurable desde custom_params si existe
+        try:
+            if self.config.custom_params and "fee_rate" in self.config.custom_params:
+                self.fee_rate = float(self.config.custom_params["fee_rate"])  # type: ignore
+        except Exception:
+            pass
 
+        # Calcular tamaño de posición (usar % de balance para mantener realismo)
+        # Parámetros de sizing (configurables):
+        # - target_fraction: fracción objetivo del balance (por defecto 1%)
+        # - min_bound_ratio: mínimo proporcional (0.5% del balance) con piso absoluto 0.5 USDT
+        # - max_bound_ratio: máximo proporcional (1.5% del balance) con piso absoluto 1.5 USDT
+        target_fraction = 0.01
+        try:
+            if (
+                self.config.custom_params
+                and "target_fraction" in self.config.custom_params
+            ):
+                target_fraction = float(self.config.custom_params["target_fraction"])  # type: ignore
+        except Exception:
+            pass
+
+        balance = max(float(self.synthetic_balance), 0.0)
+        min_bound = max(0.005 * balance, 0.5)
+        max_bound = max(0.015 * balance, 1.5)
+
+        # Notional objetivo y clamp a [min_bound, max_bound]
+        desired_notional = balance * target_fraction
+        notional_budget = min(max(desired_notional, min_bound), max_bound)
+
+        # Si el balance no alcanza para el mínimo (incluyendo comisión), evitar abrir
+        if balance <= 0 or notional_budget <= 0:
+            self.logger.warning("⚠️ Balance synthetic insuficiente para abrir posición")
+            return None
+
+        quantity = notional_budget / max(current_price, 1e-8)
+
+        # Comisiones de apertura (aprox. taker)
+        fee_open = current_price * quantity * self.fee_rate
+
+        # Registrar posición
         position = {
             "id": f"synthetic_{len(self.synthetic_positions) + 1}",
             "bot_name": self.config.name,
@@ -267,7 +303,16 @@ class BaseBot(ABC):
             "is_synthetic": True,
             "timestamp": signal.metadata.get("timestamp") if signal.metadata else None,
             "reasoning": signal.reasoning,
+            # Datos financieros para liquidación
+            "notional": notional_budget,
+            "fee_open": fee_open,
+            "min_bound": min_bound,
+            "max_bound": max_bound,
         }
+
+        # Descontar del balance: notional + fee de apertura
+        self.synthetic_balance -= notional_budget + fee_open
+        self.synthetic_balance = max(self.synthetic_balance, 0.0)
 
         # Asignar SL/TP por defecto si la señal no los trae (por ejemplo ±0.5%)
         try:
@@ -302,7 +347,7 @@ class BaseBot(ABC):
 
         self.synthetic_positions.append(position)
         self.logger.info(
-            f"📊 Posición sintética abierta: {signal.signal_type.value} a ${current_price:.5f}"
+            f"📊 Posición sintética abierta: {signal.signal_type.value} a ${current_price:.5f} | qty={quantity:.6f} | fee_open=${fee_open:.5f} | balance=${self.synthetic_balance:.2f}"
         )
 
         return position
@@ -352,25 +397,42 @@ class BaseBot(ABC):
                     close_price = position["take_profit"]
 
             if should_close:
-                # Calcular PnL
+                # Calcular PnL bruto
                 if position["signal_type"] == "BUY":
-                    pnl = (close_price - position["entry_price"]) * position["quantity"]
+                    pnl_gross = (close_price - position["entry_price"]) * position[
+                        "quantity"
+                    ]
                 else:
-                    pnl = (position["entry_price"] - close_price) * position["quantity"]
+                    pnl_gross = (position["entry_price"] - close_price) * position[
+                        "quantity"
+                    ]
 
-                # Actualizar balance sintético
-                self.synthetic_balance += pnl
+                # Comisiones de cierre
+                fee_close = close_price * position["quantity"] * self.fee_rate
+
+                # Recuperar notional y fee de apertura
+                notional = float(position.get("notional", 0.0))
+                fee_open = float(position.get("fee_open", 0.0))
+
+                # PnL neto = bruto - comisiones
+                pnl_net = pnl_gross - fee_open - fee_close
+
+                # Al cerrar: devolver notional y sumar PnL neto
+                self.synthetic_balance += notional + pnl_net
 
                 # Marcar posición como cerrada
                 position["status"] = "closed"
                 position["close_price"] = close_price
                 position["close_reason"] = close_reason
-                position["pnl"] = pnl
+                position["pnl"] = pnl_gross
+                position["pnl_net"] = pnl_net
+                position["fee_open"] = fee_open
+                position["fee_close"] = fee_close
                 position["close_time"] = int(datetime.now().timestamp())
 
                 closed_positions.append(position)
                 self.logger.info(
-                    f"🔒 Posición sintética cerrada: {close_reason} - PnL: ${pnl:.2f}"
+                    f"🔒 Posición sintética cerrada: {close_reason} | pnl_gross=${pnl_gross:.5f} | fees=${(fee_open+fee_close):.5f} | pnl_net=${pnl_net:.5f} | balance=${self.synthetic_balance:.2f}"
                 )
                 # Remover de activas
                 try:

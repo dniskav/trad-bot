@@ -29,6 +29,256 @@ def set_dependencies(rtm, tt, br, wsm=None):
     ws_manager = wsm
 
 
+@router.post("/test/open")
+async def test_open_position(payload: dict):
+    """Abre una posición synthetic usando reglas básicas de un bot PnP.
+
+    Body JSON: { "bot_type": "simplebot", "side": "BUY"|"SELL", "qty"?: number }
+    """
+    try:
+        if trading_tracker is None:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Tracker no inicializado"},
+            )
+
+        bot_type = payload.get("bot_type") or "simplebot"
+        side = (payload.get("side") or "BUY").upper()
+        qty = payload.get("qty")
+
+        # Precio actual
+        try:
+            price = real_trading_manager.get_current_price("DOGEUSDT")
+        except Exception:
+            price = None
+        if not price:
+            return JSONResponse(
+                status_code=500, content={"status": "error", "message": "No price"}
+            )
+
+        # Si se especifica amount_usdt, convertir a qty
+        amount_usdt = payload.get("amount_usdt")
+        if amount_usdt is not None and qty is None:
+            try:
+                amount_usdt = float(amount_usdt)
+                qty = amount_usdt / float(price)
+            except Exception:
+                return JSONResponse(
+                    status_code=400,
+                    content={"status": "error", "message": "amount_usdt inválido"},
+                )
+        if qty is None:
+            qty = 10.0
+        qty = float(qty)
+
+        # Forzar estado HOLD para permitir apertura en pruebas
+        try:
+            if hasattr(trading_tracker, "last_signals"):
+                trading_tracker.last_signals[bot_type] = "HOLD"
+        except Exception:
+            pass
+
+        # Snapshot antes
+        before = trading_tracker.persistence.get_account_synth() or {}
+
+        # Abrir posición vía tracker (ajusta balances synthetic)
+        trading_tracker.update_position(bot_type, side, float(price), quantity=qty)
+
+        # Snapshot después
+        after = trading_tracker.persistence.get_account_synth() or {}
+
+        # Detectar rechazo silencioso (sin cambios en balances/locks)
+        def _num(v):
+            try:
+                return float(v)
+            except Exception:
+                return 0.0
+
+        keys = [
+            "usdt_balance",
+            "doge_balance",
+            "usdt_locked",
+            "doge_locked",
+            "current_balance",
+            "total_balance_usdt",
+        ]
+        no_change = all(
+            abs(_num(after.get(k)) - _num(before.get(k))) < 1e-9 for k in keys
+        )
+        if no_change:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": "Operación rechazada por saldo insuficiente o bloqueo",
+                    "data": {"requested_qty": qty, "price": price},
+                },
+            )
+
+        return {
+            "status": "success",
+            "data": {
+                "bot_type": bot_type,
+                "side": side,
+                "price": price,
+                "qty": qty,
+                "account_synth": after,
+            },
+        }
+    except Exception as e:
+        logger.error(f"test_open_position error: {e}")
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(e)}
+        )
+
+
+@router.post("/test/close")
+async def test_close_position(payload: dict):
+    """Cierra una posición synthetic a precio de mercado actual.
+
+    Body JSON: { "bot_type": "simplebot", "position_id": "..." }
+    """
+    try:
+        bot_type = payload.get("bot_type")
+        position_id = payload.get("position_id")
+        if not bot_type or not position_id:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "Faltan bot_type y position_id"},
+            )
+
+        # Reusar el endpoint de cierre existente internamente
+        result = await close_position(
+            {"bot_type": bot_type, "position_id": position_id}
+        )
+        return result
+    except Exception as e:
+        logger.error(f"test_close_position error: {e}")
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(e)}
+        )
+
+
+@router.post("/test/reset-synth-account")
+async def test_reset_synth_account(payload: dict = None):
+    """Resetea los saldos synthetic a 500 USDT + 500 USDT en DOGE."""
+    try:
+        if trading_tracker is None:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Tracker no inicializado"},
+            )
+        price = None
+        try:
+            price = real_trading_manager.get_current_price("DOGEUSDT")
+        except Exception:
+            pass
+        if not price:
+            price = 0.24
+        usdt_balance = 500.0
+        doge_balance = round(500.0 / float(price), 6)
+        total_usdt = usdt_balance + doge_balance * float(price)
+        trading_tracker.persistence.set_account_synth(
+            {
+                "initial_balance": total_usdt,
+                "current_balance": total_usdt,
+                "total_pnl": 0.0,
+                "usdt_balance": usdt_balance,
+                "doge_balance": doge_balance,
+                "doge_price": float(price),
+                "total_balance_usdt": total_usdt,
+            }
+        )
+        return {
+            "status": "success",
+            "data": {"account_synth": trading_tracker.persistence.get_account_synth()},
+        }
+    except Exception as e:
+        logger.error(f"test_reset_synth_account error: {e}")
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(e)}
+        )
+
+
+@router.post("/test/reset-active")
+async def test_reset_active_positions(payload: dict = None):
+    """Resetea active_positions (memoria y disco)."""
+    try:
+        if trading_tracker is None:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Tracker no inicializado"},
+            )
+
+        # Construir estructura vacía con bots conocidos
+        empty = {"conservative": {}, "aggressive": {}}
+        try:
+            all_bots = bot_registry.get_all_bots()
+            for name in all_bots.keys():
+                if name not in empty:
+                    empty[name] = {}
+        except Exception:
+            pass
+
+        # Memoria
+        trading_tracker.active_positions = empty.copy()
+        # Disco
+        trading_tracker.persistence.set_active_positions(empty)
+
+        return {
+            "status": "success",
+            "data": {
+                "active_positions": trading_tracker.persistence.get_active_positions()
+            },
+        }
+    except Exception as e:
+        logger.error(f"test_reset_active_positions error: {e}")
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(e)}
+        )
+
+
+@router.post("/test/reset-history")
+async def test_reset_history(payload: dict = None):
+    """Resetea el historial (memoria y disco)."""
+    try:
+        if trading_tracker is None:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Tracker no inicializado"},
+            )
+
+        # Memoria
+        trading_tracker.position_history = []
+        # Disco
+        trading_tracker.persistence.set_history([])
+
+        return {"status": "success", "data": {"history": []}}
+    except Exception as e:
+        logger.error(f"test_reset_history error: {e}")
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(e)}
+        )
+
+
+@router.post("/test/reset-all")
+async def test_reset_all(payload: dict = None):
+    """Resetea saldos synthetic, active_positions e history en un solo paso."""
+    try:
+        # Reset balances
+        await test_reset_synth_account({})
+        # Reset active positions
+        await test_reset_active_positions({})
+        # Reset history
+        await test_reset_history({})
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"test_reset_all error: {e}")
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(e)}
+        )
+
+
 @router.get("/position")
 async def get_position():
     """Get current trading position"""
@@ -157,8 +407,10 @@ async def close_position(payload: dict):
                 },
             )
 
-        # Si es posición sintética, cerrarla desde el bot plug-and-play
-        if position_id.startswith("SYNTH_"):
+        # Si es posición sintética (bots PnP) o id synthetic, cerrarla desde el bot plug-and-play
+        if (
+            bot_type and bot_type not in ["conservative", "aggressive"]
+        ) or position_id.startswith("SYNTH_"):
             try:
                 # Cerrar posición sintética usando trading_tracker (fuente de verdad en PnP)
                 if not trading_tracker:
@@ -376,21 +628,27 @@ async def close_position(payload: dict):
                 )
                 pnl_net = pnl_gross - estimated_exit_fee
 
-                # Actualizar historial a través del tracker
-                if hasattr(trading_tracker, "close_order") and order_id:
-                    trading_tracker.close_order(
-                        order_id=order_id,
-                        close_price=close_price,
-                        fees_paid=estimated_exit_fee,
+                # Utilidad común de cierre
+                try:
+                    from services.close_utils import close_synth_position
+
+                    result = close_synth_position(
+                        trading_tracker=trading_tracker,
+                        real_trading_manager=real_trading_manager,
+                        bot_registry=bot_registry,
+                        bot_type=bot_type,
+                        position_id=str(position_key or position_id),
+                        current_price=close_price,
+                        reason="Manual",
+                    )
+                except Exception as e:
+                    logger.error(f"close_synth_position error: {e}")
+                    return JSONResponse(
+                        status_code=500,
+                        content={"status": "error", "message": str(e)},
                     )
 
-                # Remover de activas en tracker si existe
-                if hasattr(trading_tracker, "remove_active_position") and position_key:
-                    try:
-                        trading_tracker.remove_active_position(bot_type, position_key)
-                    except Exception:
-                        pass
-                # Remover de la lista del bot si existe allí
+                # Remover de la lista interna del bot si existe allí
                 try:
                     bot = bot_registry.get_bot(bot_type)
                     if bot and getattr(bot, "synthetic_positions", None):
@@ -421,15 +679,7 @@ async def close_position(payload: dict):
                         )
                 except Exception:
                     pass
-                return {
-                    "status": "success",
-                    "data": {
-                        "bot_type": bot_type,
-                        "position_id": position_id,
-                        "pnl": pnl_net,
-                        "exit_price": close_price,
-                    },
-                }
+                return {"status": "success", "data": result}
             except Exception as e:
                 logger.error(f"💥 Error closing synthetic position {position_id}: {e}")
                 return JSONResponse(

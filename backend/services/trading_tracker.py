@@ -86,6 +86,36 @@ class TradingTracker:
             "demo": {"stop_loss": 0.037, "take_profit": 0.019},  # 3.7% SL, 1.9% TP
         }
 
+        # Inicializar saldo synthetic por defecto (500 USDT + 500 USDT en DOGE) si está vacío
+        try:
+            acc_syn = self.persistence.get_account_synth() or {}
+            needs_init = (
+                float(acc_syn.get("usdt_balance", 0.0)) == 0.0
+                and float(acc_syn.get("doge_balance", 0.0)) == 0.0
+                and float(acc_syn.get("current_balance", 0.0)) == 0.0
+            )
+            if needs_init:
+                doge_price = self._get_current_doge_price() or 0.24
+                usdt_balance = 500.0
+                doge_balance = round(500.0 / doge_price, 6)
+                total_usdt = usdt_balance + doge_balance * doge_price
+                self.persistence.set_account_synth(
+                    {
+                        "initial_balance": total_usdt,
+                        "current_balance": total_usdt,
+                        "total_pnl": 0.0,
+                        "usdt_balance": usdt_balance,
+                        "doge_balance": doge_balance,
+                        "doge_price": doge_price,
+                        "total_balance_usdt": total_usdt,
+                    }
+                )
+                logger.info(
+                    f"💼 Synthetic account inicializada: USDT={usdt_balance:.2f}, DOGE={doge_balance} @ {doge_price:.5f}"
+                )
+        except Exception as _e:
+            pass
+
     def _get_balance_from_binance(self, binance_client, detailed_logging=False):
         """Función común para obtener balance desde Binance (inicial o actual)"""
         if not binance_client:
@@ -294,7 +324,15 @@ class TradingTracker:
                 "conservative": {},
                 "aggressive": {},
             }
-            account_data = self.persistence.get_account()
+            # Synthetic tracker debe leer su propia cuenta
+            try:
+                account_data = self.persistence.get_account_synth()
+            except Exception:
+                account_data = {
+                    "initial_balance": self.initial_balance,
+                    "current_balance": self.current_balance,
+                    "total_pnl": self.total_pnl,
+                }
             status = self.persistence.get_bot_status()
 
             self.bot_status = status or {"conservative": False, "aggressive": False}
@@ -448,11 +486,30 @@ class TradingTracker:
             # Usar el servicio de persistencia
             self.persistence.set_history(self.position_history)
             self.persistence.set_active_positions(self.active_positions)
-            self.persistence.set_account(
+            # Actualizar snapshot synthetic sin sobrescribir balances/locks
+            try:
+                acc_syn = self.persistence.get_account_synth() or {}
+            except Exception:
+                acc_syn = {}
+            doge_price = self._get_current_doge_price()
+            usdt_balance = float(acc_syn.get("usdt_balance", 0.0))
+            doge_balance = float(acc_syn.get("doge_balance", 0.0))
+            usdt_locked = float(acc_syn.get("usdt_locked", 0.0))
+            doge_locked = float(acc_syn.get("doge_locked", 0.0))
+            total_balance_usdt = usdt_balance + (doge_balance * doge_price)
+            self.persistence.set_account_synth(
                 {
-                    "initial_balance": self.initial_balance,
-                    "current_balance": self.current_balance,
-                    "total_pnl": self.total_pnl,
+                    "initial_balance": float(
+                        acc_syn.get("initial_balance", self.initial_balance)
+                    ),
+                    "current_balance": total_balance_usdt,
+                    "total_pnl": float(acc_syn.get("total_pnl", self.total_pnl)),
+                    "usdt_balance": usdt_balance,
+                    "doge_balance": doge_balance,
+                    "usdt_locked": usdt_locked,
+                    "doge_locked": doge_locked,
+                    "doge_price": doge_price,
+                    "total_balance_usdt": total_balance_usdt,
                 }
             )
             self.persistence.set_bot_status(self.bot_status)
@@ -536,7 +593,19 @@ class TradingTracker:
         self, bot_type: str, signal: str, current_price: float, quantity: float = 1.0
     ):
         """Actualiza las posiciones de un bot (soporta múltiples posiciones)"""
-
+        # Asegurar estructura para bots PnP
+        if bot_type not in self.positions:
+            self.positions[bot_type] = {}
+            try:
+                if (
+                    hasattr(self, "active_positions")
+                    and bot_type not in self.active_positions
+                ):
+                    self.active_positions[bot_type] = {}
+            except Exception:
+                pass
+        if bot_type not in self.last_signals:
+            self.last_signals[bot_type] = "HOLD"
         # Si el bot cambió de señal de HOLD a BUY/SELL, abrir nueva posición
         if signal in ["BUY", "SELL"] and self.last_signals[bot_type] == "HOLD":
 
@@ -570,6 +639,38 @@ class TradingTracker:
             logger.info(
                 f"🚀 {bot_type.upper()} - Nueva posición {signal} a ${current_price:.4f} (ID: {position_id})"
             )
+
+            # Ajustar balances synthetic si el bot es plug-and-play (no legacy)
+            if bot_type not in ["conservative", "aggressive"]:
+                self.adjust_synth_balances(
+                    side=signal,
+                    action="open",
+                    price=current_price,
+                    quantity=quantity,
+                    fee=entry_fee,
+                )
+
+            # Registrar también en active_positions y persistir snapshot
+            try:
+                if not hasattr(self, "active_positions"):
+                    self.active_positions = {"conservative": {}, "aggressive": {}}
+                if bot_type not in self.active_positions:
+                    self.active_positions[bot_type] = {}
+                self.active_positions[bot_type][position_id] = {
+                    "signal_type": signal,
+                    "entry_price": current_price,
+                    "quantity": quantity,
+                    "entry_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "current_price": current_price,
+                    "stop_loss": stop_loss,
+                    "take_profit": take_profit,
+                    "status": "open",
+                    "is_synthetic": bot_type not in ["conservative", "aggressive"],
+                }
+                # Persistir en archivo
+                self.persistence.set_active_positions(self.active_positions)
+            except Exception as _e:
+                pass
 
         # Si el bot cambió a HOLD, cerrar todas las posiciones abiertas
         elif signal == "HOLD" and self.last_signals[bot_type] in ["BUY", "SELL"]:
@@ -635,8 +736,28 @@ class TradingTracker:
                 # Actualizar saldo de cuenta
                 self.update_balance(position["pnl_net"])
 
+                # Ajustar balances synthetic en cierre si aplica
+                if bot_type not in ["conservative", "aggressive"]:
+                    self.adjust_synth_balances(
+                        side=position["signal_type"],
+                        action="close",
+                        price=current_price,
+                        quantity=position["quantity"],
+                        fee=exit_fee,
+                    )
+
                 # Remover posición activa
                 del self.positions[bot_type][position_id]
+
+                # Remover de active_positions y persistir snapshot
+                try:
+                    if hasattr(self, "active_positions") and position_id in (
+                        self.active_positions.get(bot_type, {}) or {}
+                    ):
+                        del self.active_positions[bot_type][position_id]
+                        self.persistence.set_active_positions(self.active_positions)
+                except Exception:
+                    pass
 
         # Si tenemos posiciones abiertas, actualizar precios y PnL
         if self.positions[bot_type]:
@@ -694,52 +815,175 @@ class TradingTracker:
         else:
             balance_change_pct = 0.0
 
-        # Obtener balances específicos de Binance si está disponible
+        # Para synthetic: tomar balances desde persistencia (no desde Binance)
         usdt_balance = 0.0
         doge_balance = 0.0
-
-        if hasattr(self, "binance_client") and self.binance_client:
-            try:
-                # Verificar si estamos usando margin trading
-                leverage = int(os.getenv("LEVERAGE", "1"))
-
-                if leverage > 1:
-                    # Usar cuenta de margen
-                    margin_account = self.binance_client.get_margin_account()
-
-                    # Buscar balances en la cuenta de margen
-                    for asset in margin_account.get("userAssets", []):
-                        if asset["asset"] == "USDT":
-                            usdt_balance = float(asset["free"]) + float(asset["locked"])
-                        elif asset["asset"] == "DOGE":
-                            doge_balance = float(asset["free"]) + float(asset["locked"])
-                else:
-                    # Usar cuenta spot normal
-                    account_info = self.binance_client.get_account()
-                    balances = {
-                        balance["asset"]: float(balance["free"])
-                        for balance in account_info["balances"]
-                    }
-                    usdt_balance = balances.get("USDT", 0.0)
-                    doge_balance = balances.get("DOGE", 0.0)
-
-            except Exception as e:
-                logger.warning(f"⚠️ No se pudo obtener balance de Binance: {e}")
+        try:
+            acc_syn = self.persistence.get_account_synth() or {}
+            usdt_balance = float(acc_syn.get("usdt_balance", 0.0))
+            doge_balance = float(acc_syn.get("doge_balance", 0.0))
+        except Exception:
+            pass
 
         # Obtener precio actual de DOGE
         doge_price = self._get_current_doge_price()
 
-        return {
-            "initial_balance": self.initial_balance,
-            "current_balance": self.current_balance,
-            "total_pnl": self.total_pnl,
+        total_balance_usdt = usdt_balance + (doge_balance * doge_price)
+        # Leer locks existentes para exponer snapshot completo
+        try:
+            acc_syn_full = self.persistence.get_account_synth() or {}
+        except Exception:
+            acc_syn_full = {}
+
+        payload = {
+            "initial_balance": float(
+                acc_syn_full.get("initial_balance", self.initial_balance)
+            ),
+            "current_balance": total_balance_usdt,
+            "total_pnl": float(acc_syn_full.get("total_pnl", self.total_pnl)),
             "balance_change_pct": balance_change_pct,
             "is_profitable": self.current_balance > self.initial_balance,
             "usdt_balance": usdt_balance,
             "doge_balance": doge_balance,
-            "total_balance_usdt": usdt_balance + (doge_balance * doge_price),
+            "usdt_locked": float(acc_syn_full.get("usdt_locked", 0.0)),
+            "doge_locked": float(acc_syn_full.get("doge_locked", 0.0)),
+            "total_balance_usdt": total_balance_usdt,
             "doge_price": doge_price,
         }
+
+        # Persistir solo precio y totales; preservar balances y locks existentes
+        try:
+            self.persistence.set_account_synth(
+                {
+                    "initial_balance": payload["initial_balance"],
+                    "current_balance": payload["current_balance"],
+                    "total_pnl": payload["total_pnl"],
+                    "usdt_balance": usdt_balance,
+                    "doge_balance": doge_balance,
+                    "usdt_locked": float(acc_syn_full.get("usdt_locked", 0.0)),
+                    "doge_locked": float(acc_syn_full.get("doge_locked", 0.0)),
+                    "doge_price": doge_price,
+                    "total_balance_usdt": total_balance_usdt,
+                }
+            )
+        except Exception:
+            pass
+
+        return payload
+
+    # --- Synthetic account helpers ---
+    def _persist_synth_account(
+        self, usdt_balance: float, doge_balance: float, doge_price: float
+    ) -> None:
+        total_usdt = usdt_balance + (doge_balance * doge_price)
+        try:
+            self.persistence.set_account_synth(
+                {
+                    "initial_balance": self.initial_balance,
+                    "current_balance": total_usdt,
+                    "total_pnl": self.total_pnl,
+                    "usdt_balance": usdt_balance,
+                    "doge_balance": doge_balance,
+                    "doge_price": doge_price,
+                    "total_balance_usdt": total_usdt,
+                }
+            )
+        except Exception:
+            pass
+
+    def adjust_synth_balances(
+        self, *, side: str, action: str, price: float, quantity: float, fee: float = 0.0
+    ) -> None:
+        """Adjust synthetic USDT/DOGE balances on open/close.
+
+        action: 'open' or 'close'
+        side: 'BUY' or 'SELL'
+        """
+        try:
+            acc = self.persistence.get_account_synth() or {}
+            usdt = float(acc.get("usdt_balance", 0.0))
+            doge = float(acc.get("doge_balance", 0.0))
+            usdt_locked = float(acc.get("usdt_locked", 0.0))
+            doge_locked = float(acc.get("doge_locked", 0.0))
+            doge_price = self._get_current_doge_price()
+
+            side = str(side).upper()
+            action = str(action).lower()
+            value = float(price) * float(quantity)
+
+            try:
+                logger.info(
+                    f"[synth_balances][before] action={action} side={side} price={price:.6f} qty={quantity:.6f} fee={fee:.6f} | "
+                    f"usdt={usdt:.6f} doge={doge:.6f} usdt_locked={usdt_locked:.6f} doge_locked={doge_locked:.6f}"
+                )
+            except Exception:
+                pass
+
+            if action == "open":
+                if side == "BUY":
+                    # Rechazar si no hay USDT suficiente
+                    if usdt < value + fee:
+                        return
+                    # Gastar USDT y bloquear DOGE comprado
+                    usdt -= value + fee
+                    doge_locked += quantity
+                else:  # SELL
+                    # Rechazar si no hay DOGE suficiente
+                    if doge < quantity:
+                        return
+                    # Vender DOGE disponible y bloquear los fondos recibidos como DOGE a recomprar
+                    doge -= quantity
+                    usdt_locked += value - fee if (value - fee) > 0 else 0.0
+            else:  # close
+                if side == "BUY":
+                    # Cierre de BUY: vender DOGE bloqueado y acreditar USDT neto
+                    if doge_locked < quantity:
+                        quantity = doge_locked
+                    doge_locked = max(0.0, doge_locked - quantity)
+                    usdt += value - fee
+                else:  # SELL
+                    # Cierre de SELL: recomprar DOGE usando USDT bloqueado
+                    need = value + fee
+                    if usdt_locked < need:
+                        # Si por redondeo no alcanza, usar disponible
+                        deficit = need - usdt_locked
+                        usdt_locked = 0.0
+                        if usdt < deficit:
+                            return
+                        usdt -= deficit
+                    else:
+                        usdt_locked -= need
+                    doge += quantity
+
+            # Clamp y persistencia con bloqueos
+            usdt = max(0.0, usdt)
+            doge = max(0.0, doge)
+            total_usdt = usdt + doge * doge_price
+            try:
+                try:
+                    logger.info(
+                        f"[synth_balances][after] action={action} side={side} | "
+                        f"usdt={usdt:.6f} doge={doge:.6f} usdt_locked={usdt_locked:.6f} doge_locked={doge_locked:.6f} total_usdt={total_usdt:.6f} doge_price={doge_price:.6f}"
+                    )
+                except Exception:
+                    pass
+                self.persistence.set_account_synth(
+                    {
+                        "initial_balance": float(acc.get("initial_balance", 0.0)),
+                        "current_balance": total_usdt,
+                        "total_pnl": float(acc.get("total_pnl", 0.0)),
+                        "usdt_balance": usdt,
+                        "doge_balance": doge,
+                        "usdt_locked": usdt_locked,
+                        "doge_locked": doge_locked,
+                        "doge_price": doge_price,
+                        "total_balance_usdt": total_usdt,
+                    }
+                )
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     def _get_current_doge_price(self) -> float:
         """Obtiene el precio actual de DOGE en USDT"""
@@ -1043,16 +1287,54 @@ class TradingTracker:
                 target = order
                 break
         else:
-            # Si no está en historial (nuevo flujo), crear registro desde active_positions mínimo
+            # Si no está en historial (nuevo flujo), intentar poblar desde active_positions
+            bot_found = None
+            pos_found = None
+            try:
+                for bname, positions in (self.active_positions or {}).items():
+                    if not isinstance(positions, dict):
+                        continue
+                    if order_id in positions:
+                        bot_found = bname
+                        pos_found = positions[order_id]
+                        break
+                    for k, pos in positions.items():
+                        pid = str(
+                            pos.get("order_id")
+                            or pos.get("id")
+                            or pos.get("position_id")
+                            or k
+                        )
+                        if pid == order_id:
+                            bot_found = bname
+                            pos_found = pos
+                            break
+                    if pos_found:
+                        break
+            except Exception:
+                pos_found = None
+
             target = {
                 "order_id": order_id,
                 "position_id": order_id,
-                "bot_type": "unknown",
+                "bot_type": str(bot_found or "unknown"),
                 "symbol": "DOGEUSDT",
-                "side": "BUY",
-                "quantity": 0,
-                "entry_price": 0,
-                "entry_time": datetime.now(),
+                "side": str(
+                    (pos_found or {}).get("signal_type")
+                    or (pos_found or {}).get("type")
+                    or "BUY"
+                ).upper(),
+                "quantity": float(
+                    (pos_found or {}).get("quantity")
+                    or (pos_found or {}).get("qty")
+                    or 0.0
+                ),
+                "entry_price": float(
+                    (pos_found or {}).get("entry_price")
+                    or (pos_found or {}).get("entry")
+                    or 0.0
+                ),
+                "entry_time": (pos_found or {}).get("entry_time") or datetime.now(),
             }
             self.position_history.append(target)
 

@@ -329,19 +329,83 @@ def get_position_info_for_frontend(current_price=None):
                 "uptime": getattr(bot, "uptime", 0),
                 "start_time": getattr(bot, "start_time", None),
                 "positions_count": len(getattr(bot, "synthetic_positions", [])),
+                "synthetic_balance": getattr(bot, "synthetic_balance", None),
             }
+
+        # Construir balances separados: real (Binance) y sintético (tracker)
+        account_balance_synthetic = tracker_data.get("account_balance", {}) or {}
+        # Asegurar campos completos para synthetic
+        if account_balance_synthetic is not None:
+            doge_price = account_balance_synthetic.get("doge_price")
+            if not doge_price:
+                try:
+                    doge_price = real_trading_manager.get_current_price("DOGEUSDT")
+                except Exception:
+                    doge_price = 0.0
+            usdt_bal = float(account_balance_synthetic.get("usdt_balance", 0.0))
+            doge_bal = float(account_balance_synthetic.get("doge_balance", 0.0))
+            total_usdt = usdt_bal + (doge_bal * float(doge_price or 0.0))
+            account_balance_synthetic.setdefault("usdt_balance", usdt_bal)
+            account_balance_synthetic.setdefault("doge_balance", doge_bal)
+            account_balance_synthetic.setdefault("doge_price", doge_price or 0.0)
+            account_balance_synthetic.setdefault("total_balance_usdt", total_usdt)
+
+        account_balance_real = {}
+        try:
+            # Obtener balances en vivo del gestor real
+            rb = real_trading_manager.get_account_balance() or {}
+            usdt_real = float(rb.get("USDT", 0.0))
+            doge_real = float(rb.get("DOGE", 0.0))
+            # Precio actual de DOGE para conversión
+            try:
+                doge_price = real_trading_manager.get_current_price("DOGEUSDT")
+            except Exception:
+                doge_price = 0.0
+            if not doge_price:
+                # Fallback a indicadores si no hay precio directo
+                try:
+                    from services.technical_indicators import (
+                        calculate_technical_indicators,
+                    )
+
+                    data = calculate_technical_indicators("DOGEUSDT", "1m", 2)
+                    candles = data.get("candles") or []
+                    if candles:
+                        doge_price = candles[-1].get("close") or 0.0
+                except Exception:
+                    doge_price = 0.0
+            total_real_usdt = usdt_real + (doge_real * doge_price)
+            account_balance_real = {
+                "initial_balance": 0.0,  # no trackeado históricamente para real
+                "current_balance": total_real_usdt,
+                "total_pnl": 0.0,  # desconocido para real (no trackeado)
+                "balance_change_pct": 0.0,
+                "is_profitable": False,
+                "usdt_balance": usdt_real,
+                "doge_balance": doge_real,
+                "total_balance_usdt": total_real_usdt,
+                "doge_price": doge_price,
+            }
+        except Exception:
+            account_balance_real = {}
 
         return {
             "active_positions": formatted_positions,
             "history": formatted_history,
             "statistics": tracker_data.get("statistics", {}),
-            "account_balance": tracker_data.get("account_balance", {}),
+            "account_balance": account_balance_synthetic,
+            "account_balance_real": account_balance_real,
+            "account_balance_synthetic": account_balance_synthetic,
             "bot_status": complete_bot_status,
             "margin_info": (
                 real_trading_manager.get_margin_level()
                 if real_trading_manager.leverage > 1
                 else None
             ),
+            "accounts_snapshot": {
+                "real": trading_tracker.persistence.get_account_real(),
+                "synthetic": trading_tracker.persistence.get_account_synth(),
+            },
         }
     except Exception as e:
         logger.error(f"Error in get_position_info_for_frontend: {e}")

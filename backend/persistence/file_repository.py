@@ -13,7 +13,8 @@ class FilePersistenceRepository(PersistencePort):
         self.base_dir = base_dir
         self.history_path = os.path.join(base_dir, "history.json")
         self.active_path = os.path.join(base_dir, "active_positions.json")
-        self.account_path = os.path.join(base_dir, "account.json")
+        self.account_real_path = os.path.join(base_dir, "account.json")
+        self.account_synth_path = os.path.join(base_dir, "account_synth.json")
         self.bot_status_path = os.path.join(base_dir, "bot_status.json")
         self.bot_configs_path = os.path.join(base_dir, "bot_configs.json")
 
@@ -49,23 +50,55 @@ class FilePersistenceRepository(PersistencePort):
     def save_active_positions(self, active: Dict[str, Dict[str, Any]]) -> None:
         self._safe_write(self.active_path, active)
 
-    # ------------- account -------------
-    def load_account(self) -> Dict[str, Any]:
-        return self._read_json(self.account_path, {
-            "initial_balance": 0.0,
-            "current_balance": 0.0,
-            "total_pnl": 0.0,
-            "last_updated": datetime.now().isoformat()
-        })
+    # ------------- account (real) -------------
+    def load_account_real(self) -> Dict[str, Any]:
+        return self._read_json(
+            self.account_real_path,
+            {
+                "initial_balance": 0.0,
+                "current_balance": 0.0,
+                "total_pnl": 0.0,
+                "usdt_balance": 0.0,
+                "doge_balance": 0.0,
+                "doge_price": 0.0,
+                "total_balance_usdt": 0.0,
+                "last_updated": datetime.now().isoformat(),
+            },
+        )
 
-    def save_account(self, account: Dict[str, Any]) -> None:
+    def save_account_real(self, account: Dict[str, Any]) -> None:
         if "last_updated" not in account:
             account["last_updated"] = datetime.now().isoformat()
-        self._safe_write(self.account_path, account)
+        self._safe_write(self.account_real_path, account)
+
+    # ------------- account (synthetic) -------------
+    def load_account_synth(self) -> Dict[str, Any]:
+        return self._read_json(
+            self.account_synth_path,
+            {
+                "initial_balance": 0.0,
+                "current_balance": 0.0,
+                "total_pnl": 0.0,
+                "usdt_balance": 0.0,
+                "doge_balance": 0.0,
+                "usdt_locked": 0.0,
+                "doge_locked": 0.0,
+                "doge_price": 0.0,
+                "total_balance_usdt": 0.0,
+                "last_updated": datetime.now().isoformat(),
+            },
+        )
+
+    def save_account_synth(self, account: Dict[str, Any]) -> None:
+        if "last_updated" not in account:
+            account["last_updated"] = datetime.now().isoformat()
+        self._safe_write(self.account_synth_path, account)
 
     # ---------- bot status ------------
     def load_bot_status(self) -> Dict[str, bool]:
-        return self._read_json(self.bot_status_path, {"conservative": False, "aggressive": False})
+        return self._read_json(
+            self.bot_status_path, {"conservative": False, "aggressive": False}
+        )
 
     def save_bot_status(self, status: Dict[str, bool]) -> None:
         self._safe_write(self.bot_status_path, status)
@@ -76,5 +109,3 @@ class FilePersistenceRepository(PersistencePort):
 
     def save_bot_configs(self, configs: Dict[str, Dict[str, Any]]) -> None:
         self._safe_write(self.bot_configs_path, configs)
-
-

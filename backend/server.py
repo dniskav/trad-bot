@@ -292,6 +292,60 @@ async def periodic_data_updates(websocket: WebSocket):
                     )
                     logger.info("📊 Using simulated market data (fallback)")
 
+                # 1) Actualizar y persistir estados de cuenta (cada ~3s)
+                try:
+                    doge_price = float(current_price or 0.0)
+                    if doge_price:
+                        # Real: leer balances directamente de Binance
+                        try:
+                            balances = real_trading_manager.get_account_balance() or {}
+                            usdt_real = float(balances.get("USDT", 0.0))
+                            doge_real = float(balances.get("DOGE", 0.0))
+                            total_real_usdt = usdt_real + (doge_real * doge_price)
+                            trading_tracker.persistence.set_account_real(
+                                {
+                                    "initial_balance": 0.0,
+                                    "current_balance": total_real_usdt,
+                                    "total_pnl": 0.0,
+                                    "usdt_balance": usdt_real,
+                                    "doge_balance": doge_real,
+                                    "doge_price": doge_price,
+                                    "total_balance_usdt": total_real_usdt,
+                                }
+                            )
+                        except Exception:
+                            pass
+
+                        # Synthetic: actualizar solo precio y totales; preservar balances y locks
+                        try:
+                            acc_syn = (
+                                trading_tracker.persistence.get_account_synth() or {}
+                            )
+                            usdt_syn = float(acc_syn.get("usdt_balance", 0.0))
+                            doge_syn = float(acc_syn.get("doge_balance", 0.0))
+                            usdt_locked = float(acc_syn.get("usdt_locked", 0.0))
+                            doge_locked = float(acc_syn.get("doge_locked", 0.0))
+                            total_syn_usdt = usdt_syn + (doge_syn * doge_price)
+                            trading_tracker.persistence.set_account_synth(
+                                {
+                                    "initial_balance": float(
+                                        acc_syn.get("initial_balance", 0.0)
+                                    ),
+                                    "current_balance": total_syn_usdt,
+                                    "total_pnl": float(acc_syn.get("total_pnl", 0.0)),
+                                    "usdt_balance": usdt_syn,
+                                    "doge_balance": doge_syn,
+                                    "usdt_locked": usdt_locked,
+                                    "doge_locked": doge_locked,
+                                    "doge_price": doge_price,
+                                    "total_balance_usdt": total_syn_usdt,
+                                }
+                            )
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
                 # Reconciliar SL/TP para posiciones sintéticas usando active_positions del tracker
                 try:
                     all_bots = bot_registry.get_all_bots()
@@ -338,6 +392,19 @@ async def periodic_data_updates(websocket: WebSocket):
                                 or fs_active.get(position_id)
                                 or {}
                             )
+
+                            # Verificar si la posición ya está cerrada
+                            is_closed = (
+                                pos.get("status") == "closed"
+                                or pos.get("is_closed") == True
+                                or pos.get("close_reason") is not None
+                                or pos.get("close_price") is not None
+                            )
+
+                            if is_closed:
+                                # Saltar posiciones ya cerradas
+                                continue
+
                             stype = str(
                                 pos.get("signal_type") or pos.get("type") or ""
                             ).upper()
@@ -361,39 +428,26 @@ async def periodic_data_updates(websocket: WebSocket):
                                     close_price = tp
                             if reason and close_price is not None:
                                 try:
-                                    order_id = str(
-                                        pos.get("order_id")
-                                        or pos.get("id")
-                                        or pos.get("position_id")
-                                        or position_id
+                                    # Usar util unificada para cierre synthetic (ajusta balances, history y active_positions)
+                                    from services.close_utils import (
+                                        close_synth_position,
                                     )
-                                    trading_tracker.close_order(
-                                        order_id=order_id,
-                                        close_price=float(close_price),
-                                        fees_paid=0.0,
+
+                                    _ = close_synth_position(
+                                        trading_tracker=trading_tracker,
+                                        real_trading_manager=real_trading_manager,
+                                        bot_registry=bot_registry,
+                                        bot_type=bot_name,
+                                        position_id=str(
+                                            pos.get("order_id")
+                                            or pos.get("id")
+                                            or pos.get("position_id")
+                                            or position_id
+                                        ),
+                                        current_price=float(close_price),
+                                        reason=reason,
                                     )
-                                    # Marcar la posición como cerrada en active_positions (flag) en vez de eliminarla
-                                    try:
-                                        updated = dict(pos)
-                                        updated.update(
-                                            {
-                                                "status": "closed",
-                                                "is_closed": True,
-                                                "close_reason": reason,
-                                                "close_price": float(close_price),
-                                                "close_time": int(
-                                                    datetime.now().timestamp()
-                                                ),
-                                            }
-                                        )
-                                        trading_tracker.update_active_position(
-                                            bot_name, position_id, updated
-                                        )
-                                    except Exception:
-                                        # Si falla la actualización, remover como fallback
-                                        trading_tracker.remove_active_position(
-                                            bot_name, position_id
-                                        )
+
                                     logger.info(
                                         f"🔒 Reconciliador SL/TP cerró {bot_name} {position_id} por {reason} a ${close_price}"
                                     )
@@ -589,6 +643,18 @@ async def periodic_data_updates(websocket: WebSocket):
                             continue
             except Exception as e:
                 logger.warning(f"Failed to update active positions snapshot: {e}")
+
+                # 2) Sincronizar cierres reales con Binance (cada ~3s)
+                try:
+                    real_trading_manager.sync_with_binance_orders(trading_tracker)
+                    real_trading_manager.sync_history_with_binance_orders(
+                        trading_tracker
+                    )
+                    real_trading_manager.update_all_orders_status(trading_tracker)
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to sync real orders with Binance (continuing): {e}"
+                    )
 
             # Get updated position info (best-effort)
             try:
