@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useUniqueId } from '../../hooks/useUniqueId'
 
 interface BotControlProps {
   botType: 'conservative' | 'aggressive'
@@ -7,6 +8,7 @@ interface BotControlProps {
 }
 
 const BotControl: React.FC<BotControlProps> = ({ botType, isActive, onToggle }) => {
+  const uniqueId = useUniqueId(`bot-${botType}`)
   const [loading, setLoading] = useState(false)
 
   const handleToggle = async () => {
@@ -62,7 +64,11 @@ const BotControl: React.FC<BotControlProps> = ({ botType, isActive, onToggle }) 
         <span className="bot-icon">{getBotIcon()}</span>
         <span className="bot-name">{getBotName()}</span>
       </div>
-      <button className={getButtonClass()} onClick={handleToggle} disabled={loading}>
+      <button
+        id={`${uniqueId}-toggle`}
+        className={getButtonClass()}
+        onClick={handleToggle}
+        disabled={loading}>
         {getButtonText()}
       </button>
     </div>

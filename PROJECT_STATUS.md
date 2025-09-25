@@ -73,6 +73,7 @@ Sistema de trading automatizado con bots plug-and-play, frontend React, y backen
 
 - **Símbolo**: DOGEUSDT
 - **Intervalo**: 1m
+- **Cuenta**: Margin (modo real)
 - **Leverage**: 3x
 - **Max Position Size**: 1.5 USDT
 - **Max Daily Loss**: 5 USDT
@@ -184,6 +185,7 @@ trading_bot/
 # Optimizar rendimiento de bots
 # Agregar más métricas de performance
 # Implementar backtesting automático
+# Reconciliar posiciones reales (Margin) contra Binance y cerrar faltantes
 ```
 
 ### 3. Funcionalidades Avanzadas (Prioridad Baja)

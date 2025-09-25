@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 interface TimeframeSelectorProps {
   selectedTimeframe: string
@@ -34,6 +34,33 @@ const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
   selectedTimeframe,
   onTimeframeChange
 }) => {
+  // Generar un ID único para este componente para evitar duplicados
+  const componentId = useMemo(() => `tf-${Math.random().toString(36).substr(2, 9)}`, [])
+
+  // Estado local para persistencia
+  const [localTimeframe, setLocalTimeframe] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('timeframe-selector') || selectedTimeframe
+    }
+    return selectedTimeframe
+  })
+
+  // Sincronizar con el prop cuando cambie
+  useEffect(() => {
+    setLocalTimeframe(selectedTimeframe)
+  }, [selectedTimeframe])
+
+  // Función para manejar el cambio de timeframe
+  const handleTimeframeChange = (timeframe: string) => {
+    setLocalTimeframe(timeframe)
+    // Guardar en localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('timeframe-selector', timeframe)
+    }
+    // Llamar al callback del padre
+    onTimeframeChange(timeframe)
+  }
+
   return (
     <div className="timeframe-selector">
       <div className="timeframe-header">
@@ -43,8 +70,9 @@ const TimeframeSelector: React.FC<TimeframeSelectorProps> = ({
         {TIMEFRAMES.map((timeframe) => (
           <button
             key={timeframe.value}
-            className={`timeframe-btn ${selectedTimeframe === timeframe.value ? 'active' : ''}`}
-            onClick={() => onTimeframeChange(timeframe.value)}
+            id={`${componentId}-timeframe-${timeframe.value}`}
+            className={`timeframe-btn ${localTimeframe === timeframe.value ? 'active' : ''}`}
+            onClick={() => handleTimeframeChange(timeframe.value)}
             title={`${timeframe.label} - ${timeframe.category}${
               timeframe.value === '1m' ? ' (Mínimo)' : ''
             }`}>

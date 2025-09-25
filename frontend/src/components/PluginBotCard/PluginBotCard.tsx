@@ -1,8 +1,8 @@
 import React from 'react'
+import { InfoBox } from '../InfoBox'
 import BotSignal from './BotSignal'
 import './PluginBotCard.css'
 import type { PluginBotCardProps } from './types'
-import { InfoBox } from '../InfoBox'
 
 const PluginBotCard: React.FC<PluginBotCardProps> = ({
   botName,
@@ -50,7 +50,11 @@ const PluginBotCard: React.FC<PluginBotCardProps> = ({
             <span className="plugin-metric-label">Saldo:</span>
             <span className="plugin-metric-value">
               {botInfo.synthetic_mode
-                ? `$${botInfo.synthetic_balance_usdt} USDT`
+                ? `$${
+                    (botInfo as any).synthetic_balance ??
+                    (botInfo as any).synthetic_balance_usdt ??
+                    0
+                  } USDT`
                 : botInfo.positions_count}
             </span>
           </div>

@@ -1,9 +1,12 @@
-import React, { useContext, useState } from 'react'
+import React, { useContext, useMemo, useState } from 'react'
 import { WebSocketContext } from '../contexts/WebSocketContext'
 import { useSocket } from '../hooks/useSocket'
 
 const WebSocketTest: React.FC = () => {
   console.log('🧪 WebSocketTest: Componente montado')
+
+  // Generar un ID único para este componente
+  const componentId = useMemo(() => `ws-${Math.random().toString(36).substr(2, 9)}`, [])
 
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<string[]>([])
@@ -12,7 +15,7 @@ const WebSocketTest: React.FC = () => {
   const ctx = useContext(WebSocketContext)
 
   const socket = useSocket({
-    url: 'ws://localhost:8000/ws?interval=1m',
+    url: 'ws://127.0.0.1:8200/ws?interval=1m',
     autoConnect: false, // Deshabilitado para evitar bucles
     reconnectInterval: 3000,
     maxReconnectAttempts: 3,
@@ -195,6 +198,7 @@ const WebSocketTest: React.FC = () => {
         <h3>Enviar mensaje:</h3>
         <div style={{ display: 'flex', gap: '10px' }}>
           <input
+            id={`${componentId}-message-input`}
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}

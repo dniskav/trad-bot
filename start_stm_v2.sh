@@ -7,4 +7,4 @@ export PYTHONPATH="$(pwd)"
 
 echo "🚀 Iniciando STM..."
 echo "PYTHONPATH: $PYTHONPATH"
-python -m backend.v0_2.stm.app
+python3 -m backend.v0_2.stm.app

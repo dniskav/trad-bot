@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useApiTradingHistory } from '../../hooks'
 import { HistoryItem } from '../HistoryItem'
 import type { PositionHistoryProps } from './types'
 
 const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }) => {
+  // Generar un ID único para este componente para evitar duplicados
+  const componentId = useMemo(() => `ph-${Math.random().toString(36).substr(2, 9)}`, [])
+
   const [selectedBot, setSelectedBot] = useState<string>(() => {
     if (typeof window === 'undefined') return 'all'
     return window.localStorage.getItem('ph_filter_bot') || 'all'
@@ -21,6 +24,8 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
   const [fullHistory, setFullHistory] = useState<any[] | null>(null)
 
   const { fetchTradingHistory, isLoading } = useApiTradingHistory()
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
 
   // Filtros avanzados
   const [filterEstado, setFilterEstado] = useState<'all' | 'open' | 'closed'>(() => {
@@ -245,8 +250,9 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           <span className="stat-title">{title}</span>
         </div>
         <div className="filter-group">
-          <label>Modo:</label>
+          <label htmlFor={`${componentId}-filter-modo`}>Modo:</label>
           <select
+            id={`${componentId}-filter-modo`}
             value={filterModo}
             onChange={(e) => {
               setFilterModo(e.target.value as any)
@@ -308,13 +314,7 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           .map((botKey) => (
             <StatCard
               key={botKey}
-              title={
-                botKey === 'conservative'
-                  ? 'Conservador'
-                  : botKey === 'aggressive'
-                  ? 'Agresivo'
-                  : botKey
-              }
+              title={botKey}
               stats={statistics[botKey]}
               icon={getBotIcon(botKey)}
             />
@@ -326,25 +326,25 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
       {/* Filtros */}
       <div className="history-filters">
         <div className="filter-group">
-          <label>Bot:</label>
-          <select value={selectedBot} onChange={(e) => setSelectedBot(e.target.value as any)}>
+          <label htmlFor={`${componentId}-filter-bot`}>Bot:</label>
+          <select
+            id={`${componentId}-filter-bot`}
+            value={selectedBot}
+            onChange={(e) => setSelectedBot(e.target.value as any)}>
             <option value="all">Todos</option>
             {Object.keys(statistics)
               .filter((k) => k !== 'overall')
               .map((botKey) => (
                 <option key={botKey} value={botKey}>
-                  {botKey === 'conservative'
-                    ? 'Conservador'
-                    : botKey === 'aggressive'
-                    ? 'Agresivo'
-                    : botKey}
+                  {botKey}
                 </option>
               ))}
           </select>
         </div>
         <div className="filter-group">
-          <label>Estado:</label>
+          <label htmlFor={`${componentId}-filter-estado`}>Estado:</label>
           <select
+            id={`${componentId}-filter-estado`}
             value={filterEstado}
             onChange={(e) => {
               setFilterEstado(e.target.value as any)
@@ -356,8 +356,9 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           </select>
         </div>
         <div className="filter-group">
-          <label>Tipo:</label>
+          <label htmlFor={`${componentId}-filter-tipo`}>Tipo:</label>
           <select
+            id={`${componentId}-filter-tipo`}
             value={filterTipo}
             onChange={(e) => {
               setFilterTipo(e.target.value as any)
@@ -369,8 +370,9 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           </select>
         </div>
         <div className="filter-group">
-          <label>Cierre:</label>
+          <label htmlFor={`${componentId}-filter-cierre`}>Cierre:</label>
           <select
+            id={`${componentId}-filter-cierre`}
             value={filterCierre}
             onChange={(e) => {
               setFilterCierre(e.target.value as any)
@@ -382,8 +384,9 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           </select>
         </div>
         <div className="filter-group">
-          <label>Resultado:</label>
+          <label htmlFor={`${componentId}-filter-resultado`}>Resultado:</label>
           <select
+            id={`${componentId}-filter-resultado`}
             value={filterResultado}
             onChange={(e) => {
               setFilterResultado(e.target.value as any)
@@ -405,11 +408,19 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
               disabled={isLoading}>
               {isLoading ? 'Cargando…' : 'Refrescar'}
             </button>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              style={{ background: '#b91c1c', color: '#fff' }}>
+              Reset
+            </button>
           </div>
         </div>
         <div className="filter-group">
-          <label>Ordenar por:</label>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+          <label htmlFor={`${componentId}-filter-sort`}>Ordenar por:</label>
+          <select
+            id={`${componentId}-filter-sort`}
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}>
             <option value="date">Fecha</option>
             <option value="pnl">PnL</option>
           </select>
@@ -438,8 +449,9 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           </div>
         </div>
         <div className="filter-group">
-          <label>Tamaño:</label>
+          <label htmlFor={`${componentId}-filter-page-size`}>Tamaño:</label>
           <select
+            id={`${componentId}-filter-page-size`}
             value={pageSize}
             onChange={(e) => {
               const next = parseInt(e.target.value)
@@ -461,6 +473,27 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
 
       {/* Lista de posiciones */}
       <div className="history-list">
+        {/* Encabezados de columnas */}
+        {sortedHistory.length > 0 && (
+          <div
+            className="history-header"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1.2fr 1.2fr 0.8fr 1fr 0.8fr 2fr 1fr',
+              gap: 8,
+              padding: '6px 10px',
+              fontSize: 12,
+              opacity: 0.8
+            }}>
+            <span>Bot</span>
+            <span>e · s</span>
+            <span>Estado</span>
+            <span>PnL</span>
+            <span>Tipo</span>
+            <span>Fechas</span>
+            <span>Motivo</span>
+          </div>
+        )}
         {sortedHistory.length === 0 ? (
           <div className="no-history">
             <p>No hay posiciones en el historial</p>
@@ -476,6 +509,57 @@ const PositionHistory: React.FC<PositionHistoryProps> = ({ history, statistics }
           ))
         )}
       </div>
+
+      {showResetConfirm && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowResetConfirm(false)
+          }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999 }}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#1e1e1e',
+              color: '#fff',
+              maxWidth: 420,
+              margin: '10% auto',
+              padding: 16,
+              borderRadius: 8,
+              boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
+            }}>
+            <h4>Confirmar reset</h4>
+            <p>Vas a resetear por completo el historial. Esta acción no se puede deshacer.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button disabled={isResetting} onClick={() => setShowResetConfirm(false)}>
+                Cancelar
+              </button>
+              <button
+                disabled={isResetting}
+                onClick={async () => {
+                  setIsResetting(true)
+                  try {
+                    await fetch('/api/test/reset-history', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' }
+                    })
+                    const items = await fetchTradingHistory(1, 10000)
+                    if (Array.isArray(items)) setFullHistory(items)
+                    setShowResetConfirm(false)
+                  } catch (e) {
+                    console.error('Reset history failed', e)
+                  } finally {
+                    setIsResetting(false)
+                  }
+                }}
+                style={{ background: '#b71c1c', color: '#fff' }}>
+                Sí, resetear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

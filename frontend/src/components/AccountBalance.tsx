@@ -1,22 +1,29 @@
 import React from 'react'
+import { BalanceRow } from './BalanceRow'
+import { BalanceStatus } from './BalanceStatus'
+
+interface AccountBalanceViewModel {
+  initial_balance: number
+  current_balance: number
+  total_pnl: number
+  balance_change_pct: number
+  is_profitable: boolean
+  usdt_balance: number
+  doge_balance: number
+  total_balance_usdt: number
+  invested?: number
+}
 
 interface AccountBalanceProps {
-  balance: {
-    initial_balance: number
-    current_balance: number
-    total_pnl: number
-    balance_change_pct: number
-    is_profitable: boolean
-    usdt_balance: number
-    doge_balance: number
-    total_balance_usdt: number
-  }
+  balance: AccountBalanceViewModel
+  secondaryTitle?: string
   currentPrice?: number
   symbol?: string
 }
 
 const AccountBalance: React.FC<AccountBalanceProps> = ({
   balance,
+  secondaryTitle,
   currentPrice,
   symbol = 'DOGEUSDT'
 }) => {
@@ -81,51 +88,92 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
     )
   }
 
+  const handleResetSynth = async () => {
+    try {
+      await fetch('/api/account/synth/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      // WS periodic update will refresh values shortly
+    } catch (e) {
+      console.error('Failed to reset synthetic account', e)
+    }
+  }
+
   return (
     <div className="account-balance">
       <div className="balance-header">
         <span className="balance-icon">{getBalanceIcon()}</span>
-        <span className="balance-title">Saldo de Cuenta</span>
+        <span className="balance-title">
+          Saldo de Cuenta{secondaryTitle ? ` · ${secondaryTitle}` : ''}
+        </span>
       </div>
 
       <div className="balance-cards-container">
         {/* Card 1: Balance Principal */}
         <div className="balance-card">
-          <div className="card-header">
-            <span className="card-icon">💰</span>
+          <div
+            className="card-header"
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="card-icon">🧪</span>
             <span className="card-title">Balance</span>
+            {secondaryTitle === 'Synthetic' && (
+              <button
+                title="Resetear balance synthetic"
+                onClick={handleResetSynth}
+                style={{
+                  marginLeft: 'auto',
+                  background: '#374151',
+                  color: '#f3f4f6',
+                  border: '1px solid #4b5563',
+                  borderRadius: 6,
+                  padding: '4px 8px',
+                  cursor: 'pointer'
+                }}>
+                Reset
+              </button>
+            )}
           </div>
           <div className="card-content">
-            <div className="balance-row">
-              <span className="balance-label">Saldo Inicial:</span>
-              <span className="balance-value initial">
-                {formatCurrency(balance.initial_balance)}
-              </span>
-            </div>
+            <BalanceRow
+              label="Saldo Inicial:"
+              value={formatCurrency(balance.initial_balance)}
+              valueType="default"
+            />
 
-            <div className="balance-row">
-              <span className="balance-label">Saldo Actual:</span>
-              <span className="balance-value current" style={{ color: getBalanceColor() }}>
-                {formatCurrency(balance.current_balance)}
-              </span>
-            </div>
+            <BalanceRow
+              label="Saldo Actual:"
+              value={formatCurrency(balance.current_balance)}
+              valueType="current"
+              color={getBalanceColor()}
+            />
 
-            <div className="balance-row">
-              <span className="balance-label">USDT Disponible:</span>
-              <span className="balance-value usdt">{formatCurrency(balance.usdt_balance)}</span>
-            </div>
+            <BalanceRow
+              label="USDT Disponible:"
+              value={formatCurrency(balance.usdt_balance)}
+              valueType="default"
+            />
 
-            <div className="balance-row">
-              <span className="balance-label">DOGE Disponible:</span>
-              <span className="balance-value doge">{formatDoge(balance.doge_balance)} DOGE</span>
-            </div>
+            <BalanceRow
+              label="DOGE Disponible:"
+              value={`${formatDoge(balance.doge_balance)} DOGE`}
+              valueType="default"
+            />
 
-            <div className="balance-row">
-              <span className="balance-label">Total en USDT:</span>
-              <span className="balance-value total-usdt">
-                {formatCurrency(balance.total_balance_usdt)}
-              </span>
-            </div>
+            {balance.invested !== undefined && (
+              <BalanceRow
+                label="Invertido:"
+                value={formatCurrency(balance.invested)}
+                valueType="default"
+                color="#3b82f6"
+              />
+            )}
+
+            <BalanceRow
+              label="Total en USDT:"
+              value={formatCurrency(balance.total_balance_usdt)}
+              valueType="default"
+            />
           </div>
         </div>
 
@@ -136,40 +184,43 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
             <span className="card-title">Precios & PnL</span>
           </div>
           <div className="card-content">
-            <div className="balance-row">
-              <span className="balance-label">Precio Actual ({symbol}):</span>
-              <span className="balance-value current-price">
-                {currentPrice ? `$${currentPrice.toFixed(5)}` : 'Calculando...'}
-              </span>
-            </div>
+            <BalanceRow
+              label={`Precio Actual (${symbol}):`}
+              value={currentPrice ? `$${currentPrice.toFixed(5)}` : 'Calculando...'}
+              valueType="default"
+            />
 
-            <div className="balance-row">
-              <span className="balance-label">1 USD = DOGE:</span>
-              <span className="balance-value doge-rate">
-                {currentPrice ? `${formatDoge(1 / currentPrice)} DOGE` : 'Calculando...'}
-              </span>
-            </div>
+            <BalanceRow
+              label="1 USD = DOGE:"
+              value={currentPrice ? `${formatDoge(1 / currentPrice)} DOGE` : 'Calculando...'}
+              valueType="doge-rate"
+            />
 
-            <div className="balance-row">
-              <span className="balance-label">PnL Total:</span>
-              <span className="balance-value pnl" style={{ color: getBalanceColor() }}>
-                {formatCurrency(balance.total_pnl)}
-              </span>
-            </div>
+            <BalanceRow
+              label="PnL Total:"
+              value={formatCurrency(balance.total_pnl)}
+              valueType="pnl"
+              color={getBalanceColor()}
+            />
 
-            <div className="balance-row">
-              <span className="balance-label">Cambio:</span>
-              <span className="balance-value change" style={{ color: getBalanceColor() }}>
-                {formatPercentage(balance.balance_change_pct)}
-              </span>
-            </div>
+            <BalanceRow
+              label="Cambio:"
+              value={formatPercentage(balance.balance_change_pct)}
+              valueType="change"
+              color={getBalanceColor()}
+            />
 
-            <div className="balance-row">
-              <span className="balance-label">Estado:</span>
-              <span className="balance-value status" style={{ color: getBalanceColor() }}>
-                {balance.is_profitable ? '🟢 Rentable' : '🔴 En Pérdida'}
-              </span>
-            </div>
+            <BalanceRow
+              label="Estado:"
+              value={
+                <BalanceStatus
+                  totalPnl={balance.total_pnl}
+                  balanceChangePct={balance.balance_change_pct}
+                  isProfitable={balance.is_profitable}
+                />
+              }
+              valueType="status"
+            />
           </div>
         </div>
       </div>

@@ -1,12 +1,13 @@
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useCallback, useContext, useEffect, useState } from 'react'
 import { WebSocketContext } from '../contexts/WebSocketContext'
 import { useApiMarginInfo } from '../hooks'
 // import { useSocket } from '../hooks/useSocket'
-import Accordion from './Accordion'
+import { Accordion } from './Accordion'
 import AccountBalance from './AccountBalance'
 import ActivePositions from './ActivePositions'
 import BotSignals from './BotSignals'
 import CandlestickChart from './CandlestickChart'
+import ErrorBoundary from './ErrorBoundary'
 import { MarginInfo } from './MarginInfo'
 import PlugAndPlayBots from './PlugAndPlayBots'
 import { PositionHistory } from './PositionHistory'
@@ -19,7 +20,10 @@ interface AppContentProps {
 }
 
 const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange }) => {
-  // console.log('🚀 AppContent: Componente montado') // Comentado para reducir spam
+  // Debug: Contador de montajes (comentado para evitar spam)
+  // const mountCount = React.useRef(0)
+  // mountCount.current += 1
+  // console.log(`🚀 AppContent: Montaje #${mountCount.current}`)
 
   // Estados locales
   const [botSignals, setBotSignals] = useState<any>(null)
@@ -48,26 +52,60 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     fetchData()
   }, []) // Remove fetchMarginInfo dependency to prevent infinite loop
 
-  // Fetch account balance and active positions on mount
-  useEffect(() => {
-    const fetchAccountBalance = async () => {
+  // Singleton para evitar llamadas duplicadas
+  const fetchPromise = React.useRef<Promise<any> | null>(null)
+
+  // Fetch account balance from new endpoint (only once)
+  const fetchAccountBalance = useCallback(async () => {
+    if (accountBalance) {
+      return // Skip if already loaded
+    }
+
+    // Si ya hay una llamada en progreso, esperar a que termine
+    if (fetchPromise.current) {
       try {
-        const response = await fetch('/api/position-info')
-        if (response.ok) {
-          const data = await response.json()
-          if (data.account_balance) {
-            setAccountBalance(data.account_balance)
-          }
-          if (data.active_positions) {
-            setActivePositions(data.active_positions)
-          }
-        }
+        const data = await fetchPromise.current
+        setAccountBalance(data)
+        return
       } catch (error) {
-        console.error('Error fetching account balance on mount:', error)
+        console.error('Error waiting for existing fetch:', error)
+        return
       }
     }
+
+    // Crear nueva promesa de fetch
+    fetchPromise.current = fetch('/api/account/synth')
+      .then(async (response) => {
+        if (response.ok) {
+          const data = await response.json()
+          setAccountBalance(data)
+          return data
+        }
+        throw new Error('Failed to fetch account balance')
+      })
+      .catch((error) => {
+        console.error('Error fetching account balance:', error)
+        throw error
+      })
+      .finally(() => {
+        fetchPromise.current = null // Limpiar la promesa
+      })
+
+    try {
+      await fetchPromise.current
+    } catch (error) {
+      // Error ya manejado arriba
+    }
+  }, [accountBalance])
+
+  useEffect(() => {
     fetchAccountBalance()
-  }, [])
+  }, [fetchAccountBalance])
+
+  // Debug: Detectar cambios en props (comentado para evitar spam)
+  // useEffect(() => {
+  //   console.log('🔍 AppContent: Props cambiaron:', { timeframe })
+  // }, [timeframe])
 
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -80,7 +118,8 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     aggressive: {},
     overall: {}
   })
-  // (Opcional) Posiciones activas por bot podrían usarse más adelante
+  // Estado para forzar re-montado del chart
+  const [chartRemountKey, setChartRemountKey] = useState(0)
 
   // Hook useSocket para enviar mensajes (reutiliza la instancia existente)
   // const socket = useSocket({
@@ -280,6 +319,11 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     // El AppSetup manejará la reconexión
   }
 
+  // Función estable para cerrar el toast
+  const handleToastClose = useCallback(() => {
+    setShowToast(false)
+  }, [])
+
   // Klines vienen solo por WebSocket; eliminamos fallback REST
   // Sembrar 1000 velas desde Binance REST y calcular indicadores
   useEffect(() => {
@@ -446,18 +490,32 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
           </Accordion>
 
           {/* Gráfico de Velas */}
-          <Accordion title="Gráfico de Velas" defaultExpanded={true} storageKey="candlestick-chart">
-            <CandlestickChart
-              symbol="DOGEUSDT"
-              timeframe={timeframe}
-              signals={botSignals}
-              candlesData={candlesData}
-              indicatorsData={indicatorsData}
-              onTimeframeChange={handleTimeframeChange}
-              live
-              binanceSymbol="DOGEUSDT"
-              binanceInterval={timeframe}
-            />
+          <Accordion
+            title="Gráfico de Velas"
+            defaultExpanded={true}
+            storageKey="candlestick-chart"
+            onExpand={() => {
+              // Forzar re-montado del chart cuando se expande
+              setChartRemountKey((prev) => prev + 1)
+            }}
+            onCollapse={() => {
+              // Opcional: limpiar recursos cuando se colapsa
+              console.log('Chart collapsed')
+            }}>
+            <ErrorBoundary>
+              <CandlestickChart
+                key={chartRemountKey} // Forzar re-montado
+                symbol="DOGEUSDT"
+                timeframe={timeframe}
+                signals={botSignals}
+                candlesData={candlesData}
+                indicatorsData={indicatorsData}
+                onTimeframeChange={handleTimeframeChange}
+                live
+                binanceSymbol="DOGEUSDT"
+                binanceInterval={timeframe}
+              />
+            </ErrorBoundary>
           </Accordion>
 
           {/* Plugin Bots */}
@@ -477,7 +535,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
 
       {/* Toast para notificaciones */}
       {showToast && (
-        <Toast message={toastMessage} type="info" onClose={() => setShowToast(false)} />
+        <Toast message={toastMessage} type="info" duration={2000} onClose={handleToastClose} />
       )}
     </div>
   )

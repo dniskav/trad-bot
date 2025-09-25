@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useApiProcessInfo } from '../hooks'
+import { useUniqueId } from '../hooks/useUniqueId'
 import { InfoBox } from './InfoBox'
 
 interface BotSignalsProps {
@@ -17,6 +18,8 @@ interface BotSignalsProps {
 }
 
 const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
+  const uniqueId = useUniqueId('bot-signals')
+
   // TODOS LOS HOOKS DEBEN IR AL INICIO - ANTES DE CUALQUIER RETURN CONDICIONAL
   const [botStatus, setBotStatus] = useState({
     conservative: false,
@@ -287,6 +290,7 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
               </div>
               <div className="bot-header-right">
                 <button
+                  id={`${uniqueId}-conservative-toggle`}
                   className={`bot-toggle-button ${botStatus.conservative ? 'active' : 'inactive'}`}
                   onClick={() => handleBotToggleDirect('conservative')}
                   title={botStatus.conservative ? 'Desactivar bot' : 'Activar bot'}>
@@ -344,6 +348,7 @@ const BotSignals: React.FC<BotSignalsProps> = ({ signals }) => {
               </div>
               <div className="bot-header-right">
                 <button
+                  id={`${uniqueId}-aggressive-toggle`}
                   className={`bot-toggle-button ${botStatus.aggressive ? 'active' : 'inactive'}`}
                   onClick={() => handleBotToggleDirect('aggressive')}
                   title={botStatus.aggressive ? 'Desactivar bot' : 'Activar bot'}>

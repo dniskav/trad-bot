@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import ReactDOM from 'react-dom'
 
 interface ActivePosition {
   id: string
@@ -32,6 +33,7 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
     side: 'BUY' | 'SELL'
   }>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [bulkClosing, setBulkClosing] = useState<string | null>(null)
   if (!positions) {
     return (
       <div className="active-positions">
@@ -49,7 +51,16 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
       Object.entries(botPositions).forEach(([key, anyPos]) => {
         const pos: any = anyPos || {}
 
-        // Incluir también posiciones cerradas para debugging (no filtrar)
+        // Omitir posiciones cerradas
+        const statusStr = String(pos.status || '').toLowerCase()
+        const isClosed =
+          statusStr === 'closed' ||
+          Boolean(pos.is_closed) ||
+          pos.close_reason != null ||
+          pos.close_price != null
+        if (isClosed) {
+          return
+        }
 
         const id = String(pos.id || pos.position_id || key)
         const type = String(pos.type || pos.signal_type || 'BUY').toUpperCase() as 'BUY' | 'SELL'
@@ -122,6 +133,33 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
     } finally {
       setSubmitting(false)
       setConfirming(null)
+    }
+  }
+
+  const requestBulkClose = async (criteria: 'profit' | 'loss' | 'all') => {
+    setBulkClosing(criteria)
+    try {
+      const res = await fetch(`${API_BASE}/api/positions/close-bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ criteria })
+      })
+      const json = await res.json()
+      if (json.status === 'success') {
+        const message =
+          `✅ Cierre masivo completado:\n` +
+          `• Posiciones cerradas: ${json.closed_count}\n` +
+          `• PnL total: $${json.total_pnl.toFixed(4)}\n` +
+          `• Criterio: ${criteria}`
+        alert(message)
+      } else {
+        alert(`Error: ${json.message || 'No se pudo realizar el cierre masivo'}`)
+      }
+    } catch (error) {
+      console.error('Error en cierre masivo:', error)
+      alert('Error de red al realizar cierre masivo')
+    } finally {
+      setBulkClosing(null)
     }
   }
 
@@ -213,25 +251,91 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
           return (
             <div className="positions-summary">
               <div className="summary-item">
-                <span className="summary-label">Ganancias ({gainCount}):</span>
-                <span className="summary-value" style={{ color: '#26a69a', fontWeight: 700 }}>
-                  +${totals.gains.toFixed(4)} ({gainsPct.toFixed(2)}%)
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div>
+                    <span className="summary-label">Ganancias ({gainCount}):</span>
+                    <span className="summary-value" style={{ color: '#26a69a', fontWeight: 700 }}>
+                      +${totals.gains.toFixed(4)} ({gainsPct.toFixed(2)}%)
+                    </span>
+                  </div>
+                  {gainCount > 0 && (
+                    <button
+                      onClick={() => requestBulkClose('profit')}
+                      disabled={bulkClosing === 'profit'}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '0.8em',
+                        background: '#26a69a',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: bulkClosing === 'profit' ? 'not-allowed' : 'pointer',
+                        opacity: bulkClosing === 'profit' ? 0.6 : 1,
+                        width: 'fit-content'
+                      }}>
+                      {bulkClosing === 'profit' ? 'Cerrando...' : 'Cerrar Ganancias'}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Pérdidas ({lossCount}):</span>
-                <span className="summary-value" style={{ color: '#ef5350', fontWeight: 700 }}>
-                  -${totals.losses.toFixed(4)} (-{lossesPct.toFixed(2)}%)
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div>
+                    <span className="summary-label">Pérdidas ({lossCount}):</span>
+                    <span className="summary-value" style={{ color: '#ef5350', fontWeight: 700 }}>
+                      -${totals.losses.toFixed(4)} (-{lossesPct.toFixed(2)}%)
+                    </span>
+                  </div>
+                  {lossCount > 0 && (
+                    <button
+                      onClick={() => requestBulkClose('loss')}
+                      disabled={bulkClosing === 'loss'}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '0.8em',
+                        background: '#ef5350',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: bulkClosing === 'loss' ? 'not-allowed' : 'pointer',
+                        opacity: bulkClosing === 'loss' ? 0.6 : 1,
+                        width: 'fit-content'
+                      }}>
+                      {bulkClosing === 'loss' ? 'Cerrando...' : 'Cerrar Pérdidas'}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="summary-item">
-                <span className="summary-label">Neto ({totalCount}):</span>
-                <span
-                  className="summary-value"
-                  style={{ color: net >= 0 ? '#26a69a' : '#ef5350', fontWeight: 800 }}>
-                  {net >= 0 ? '+' : ''}${net.toFixed(4)} ({pct >= 0 ? '+' : ''}
-                  {pct.toFixed(2)}%)
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div>
+                    <span className="summary-label">Neto ({totalCount}):</span>
+                    <span
+                      className="summary-value"
+                      style={{ color: net >= 0 ? '#26a69a' : '#ef5350', fontWeight: 800 }}>
+                      {net >= 0 ? '+' : ''}${net.toFixed(4)} ({pct >= 0 ? '+' : ''}
+                      {pct.toFixed(2)}%)
+                    </span>
+                  </div>
+                  {totalCount > 0 && (
+                    <button
+                      onClick={() => requestBulkClose('all')}
+                      disabled={bulkClosing === 'all'}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '0.8em',
+                        background: '#666',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: bulkClosing === 'all' ? 'not-allowed' : 'pointer',
+                        opacity: bulkClosing === 'all' ? 0.6 : 1,
+                        width: 'fit-content'
+                      }}>
+                      {bulkClosing === 'all' ? 'Cerrando...' : 'Cerrar Todas'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )
@@ -247,8 +351,11 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
                 <th style={{ textAlign: 'left' }}>Status</th>
                 <th style={{ textAlign: 'left' }}>Entrada</th>
                 <th style={{ textAlign: 'left' }}>Actual</th>
+                <th style={{ textAlign: 'left' }}>Cantidad</th>
+                <th style={{ textAlign: 'left' }}>Valor</th>
                 <th style={{ textAlign: 'left' }}>PnL Neto</th>
                 <th style={{ textAlign: 'left' }}>Estado</th>
+                <th style={{ textAlign: 'left' }}>Acción</th>
               </tr>
             </thead>
             <tbody>
@@ -267,21 +374,24 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
                         width: 20,
                         height: 20,
                         borderRadius: 4,
-                        background: p.bot_on ? '#1b5e20' : '#b71c1c',
+                        background: (p as any).bot_on !== false ? '#1b5e20' : '#b71c1c',
                         color: '#fff',
                         fontSize: 12
                       }}
-                      title={p.bot_on ? 'Encendido' : 'Apagado'}>
+                      title={(p as any).bot_on !== false ? "Encendido" : "Apagado"}>
                       {getBotIcon(p.botType)}
                     </span>
                   </td>
                   <td>${p.entry_price.toFixed(5)}</td>
                   <td>${p.current_price.toFixed(5)}</td>
+                  <td>{p.quantity.toFixed(4)}</td>
+                  <td>${(p.current_price * p.quantity).toFixed(2)}</td>
                   <td>{formatPnL(p.pnl, p.pnl_pct)}</td>
                   <td style={{ color: getPositionColor(p.type, (p as any).status) }}>{p.type}</td>
                   <td>
                     <button
                       disabled={submitting}
+                      title="Cerrar posición"
                       onClick={() =>
                         setConfirming({
                           positionId: p.id,
@@ -291,7 +401,15 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
                           quantity: p.quantity,
                           side: p.type
                         })
-                      }>
+                      }
+                      style={{
+                        background: '#374151',
+                        color: '#e5e7eb',
+                        border: '1px solid #4b5563',
+                        borderRadius: 6,
+                        padding: '4px 8px',
+                        cursor: 'pointer'
+                      }}>
                       Cerrar
                     </button>
                   </td>
@@ -301,56 +419,62 @@ const ActivePositions: React.FC<ActivePositionsProps> = ({ positions }) => {
           </table>
         </div>
 
-        {confirming && (
-          <div
-            className="modal-overlay"
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)' }}>
+        {confirming &&
+          ReactDOM.createPortal(
             <div
-              className="modal"
-              style={{
-                background: '#1e1e1e',
-                color: '#fff',
-                maxWidth: 420,
-                margin: '10% auto',
-                padding: 16,
-                borderRadius: 8,
-                boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
-              }}>
-              <h4>Confirmar cierre</h4>
-              <p>
-                Vas a cerrar la posición <strong>{confirming.positionId}</strong> de{' '}
-                <strong>{getBotName(confirming.botType)}</strong>.
-              </p>
-              <p>
-                Entrada ${confirming.entryPrice.toFixed(5)} · Actual $
-                {confirming.currentPrice.toFixed(5)} · Cantidad {confirming.quantity.toFixed(4)}
-              </p>
-              <p>
-                PnL estimado neto (incluye comisión):{' '}
-                <strong>
-                  $
-                  {estimateNetPnl(
-                    confirming.side,
-                    confirming.entryPrice,
-                    confirming.currentPrice,
-                    confirming.quantity
-                  ).toFixed(5)}
-                </strong>
-              </p>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button disabled={submitting} onClick={() => setConfirming(null)}>
-                  Cancelar
-                </button>
-                <button
-                  disabled={submitting}
-                  onClick={() => requestClose(confirming.botType, confirming.positionId)}
-                  style={{ background: '#b71c1c', color: '#fff' }}>
-                  Sí, cerrar ahora
-                </button>
+              className="modal-overlay"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setConfirming(null)
+              }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999 }}>
+              <div
+                className="modal"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: '#1e1e1e',
+                  color: '#fff',
+                  maxWidth: 420,
+                  margin: '10% auto',
+                  padding: 16,
+                  borderRadius: 8,
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.4)'
+                }}>
+                <h4>Confirmar cierre</h4>
+                <p>
+                  Vas a cerrar la posición <strong>{confirming.positionId}</strong> de{' '}
+                  <strong>{getBotName(confirming.botType)}</strong>.
+                </p>
+                <p>
+                  Entrada ${confirming.entryPrice.toFixed(5)} · Actual $
+                  {confirming.currentPrice.toFixed(5)} · Cantidad {confirming.quantity.toFixed(4)}
+                </p>
+                <p>
+                  PnL estimado neto (incluye comisión):{' '}
+                  <strong>
+                    $
+                    {estimateNetPnl(
+                      confirming.side,
+                      confirming.entryPrice,
+                      confirming.currentPrice,
+                      confirming.quantity
+                    ).toFixed(5)}
+                  </strong>
+                </p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button disabled={submitting} onClick={() => setConfirming(null)}>
+                    Cancelar
+                  </button>
+                  <button
+                    disabled={submitting}
+                    onClick={() => requestClose(confirming.botType, confirming.positionId)}
+                    style={{ background: '#b71c1c', color: '#fff' }}>
+                    Sí, cerrar ahora
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            </div>,
+            document.body
+          )}
       </div>
     </div>
   )
