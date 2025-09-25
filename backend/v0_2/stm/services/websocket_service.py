@@ -1,9 +1,9 @@
 import asyncio
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from backend.shared.logger import get_logger
-from services.account_service import update_price
+from ..services.account_service import update_price
 
 log = get_logger("stm.websocket_service")
 
@@ -36,7 +36,7 @@ class WebSocketService:
     def __init__(self):
         self.manager = ConnectionManager()
 
-    async def send_test_message(self, payload: dict | None = None) -> dict:
+    async def send_test_message(self, payload: Optional[dict] = None) -> dict:
         """Send a test message via WebSocket to all connected clients"""
         msg = {
             "type": "test_message",

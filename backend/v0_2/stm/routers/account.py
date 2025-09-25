@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from backend.shared.logger import get_logger
-from services.account_service import AccountService
+from ..services.account_service import AccountService
 
 router = APIRouter(prefix="/account", tags=["account"])
 log = get_logger("stm.account")

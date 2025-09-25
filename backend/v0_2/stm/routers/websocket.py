@@ -1,6 +1,7 @@
+from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from backend.shared.logger import get_logger
-from services.websocket_service import WebSocketService
+from ..services.websocket_service import WebSocketService
 
 router = APIRouter(tags=["websocket"])
 log = get_logger("stm.websocket")
@@ -8,7 +9,7 @@ ws_service = WebSocketService()
 
 
 @router.post("/ws/test")
-async def ws_send_test(payload: dict | None = None):
+async def ws_send_test(payload: Optional[dict] = None):
     """Send a test message via WebSocket to all connected clients"""
     return await ws_service.send_test_message(payload)
 

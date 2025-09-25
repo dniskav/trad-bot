@@ -1,9 +1,10 @@
 import asyncio
 import json
+import ssl
 import websockets
 from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
-from services.account_service import update_price
+from .account_service import update_price
 
 log = get_logger("stm.binance_service")
 SYMBOL = env_str("STM_SYMBOL", "dogeusdt").lower()
@@ -18,9 +19,17 @@ class BinanceService:
     async def bookticker_loop(self) -> None:
         """Connect to Binance WebSocket and track price updates"""
         url = f"wss://stream.binance.com:9443/ws/{self.symbol}@bookTicker"
+
+        # Create SSL context that doesn't verify certificates
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
         while True:
             try:
-                async with websockets.connect(url, ping_interval=20) as ws:
+                async with websockets.connect(
+                    url, ping_interval=20, ssl=ssl_context
+                ) as ws:
                     log.info(
                         f"🔌 Conectado a Binance bookTicker: {self.symbol.upper()}"
                     )
