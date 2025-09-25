@@ -74,6 +74,11 @@ kill_server_processes() {
     pkill -f "uvicorn.*8200" 2>/dev/null
     pkill -f "python.*server.py" 2>/dev/null
     
+    # Matar procesos de v0.2
+    pkill -f "backend.v0_2.stm.app" 2>/dev/null
+    pkill -f "backend.v0_2.server.app" 2>/dev/null
+    pkill -f "python.*app.py" 2>/dev/null
+    
     # Matar procesos de trading bot
     pkill -f "trading.*bot" 2>/dev/null
     pkill -f "real_trading_manager" 2>/dev/null
@@ -109,6 +114,10 @@ cleanup_python_processes() {
     pkill -f "bot.*agresivo" 2>/dev/null
     pkill -f "bot.*conservador" 2>/dev/null
     
+    # Procesos de v0.2
+    pkill -f "backend.v0_2" 2>/dev/null
+    pkill -f "python.*app.py" 2>/dev/null
+    
     sleep 1
     echo "✅ Limpieza completada"
 }
@@ -137,8 +146,10 @@ main() {
         echo "🎉 ¡Puertos liberados exitosamente!"
         echo ""
         echo "💡 Ahora puedes iniciar el servidor con:"
-        echo "   ./start_server.sh --start"
+        echo "   ./start_stm_v2.sh"
+        echo "   ./start_server_v2.sh"
         echo "   o"
+        echo "   ./start_server.sh --start"
         echo "   ./start_server.sh --foreground"
         echo ""
     else

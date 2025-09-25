@@ -50,6 +50,11 @@ kill_processes "aggressive_scalping_bot" "bot agresivo"
 kill_processes "sma_cross_bot" "bot SMA cross"
 kill_processes "conservative_scalping_bot" "bot conservador"
 
+# Limpiar procesos de v0.2
+kill_processes "backend.v0_2.stm.app" "STM v0.2"
+kill_processes "backend.v0_2.server.app" "Server v0.2"
+kill_processes "python.*app.py" "Python app.py"
+
 # Limpiar otros procesos Python relacionados
 kill_processes "python.*trading" "Python trading"
 kill_processes "python.*bot" "Python bots"
