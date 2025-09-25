@@ -100,3 +100,31 @@ class STMService:
             return {"status": "error", "message": str(e), "code": e.code}
         except Exception as e:
             return {"status": "error", "message": str(e), "code": 500}
+
+    async def get_account_synth(self) -> dict:
+        """Get synthetic account data from STM"""
+        try:
+            with urllib.request.urlopen(f"{STM_HTTP}/account/synth", timeout=5) as resp:
+                data = resp.read().decode()
+                return json.loads(data)
+        except urllib.error.HTTPError as e:
+            return {"status": "error", "message": str(e), "code": e.code}
+        except Exception as e:
+            return {"status": "error", "message": str(e), "code": 500}
+
+    async def reset_account_synth(self) -> dict:
+        """Reset synthetic account via STM"""
+        try:
+            req = urllib.request.Request(
+                f"{STM_HTTP}/account/synth/reset",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = resp.read().decode()
+                return json.loads(data)
+        except urllib.error.HTTPError as e:
+            return {"status": "error", "message": str(e), "code": e.code}
+        except Exception as e:
+            return {"status": "error", "message": str(e), "code": 500}
