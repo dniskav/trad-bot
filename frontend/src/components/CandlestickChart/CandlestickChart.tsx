@@ -62,6 +62,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const volumeContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
   const seriesRef = useRef<any>(null)
+  const seriesInitializedRef = useRef<boolean>(false)
   const smaFastRef = useRef<any>(null)
   const smaSlowRef = useRef<any>(null)
   const [candleData, setCandleData] = useState<CandlestickData[]>([])
@@ -121,7 +122,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   }
 
   useEffect(() => {
-    if (!live && propCandlesData && Array.isArray(propCandlesData) && propCandlesData.length > 0) {
+    if (propCandlesData && Array.isArray(propCandlesData) && propCandlesData.length > 0) {
       const formattedData: CandlestickData[] = propCandlesData.map((candle: any) => ({
         time: (candle.time / 1000) as any,
         open: candle.open,
@@ -131,13 +132,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       }))
       setCandleData(formattedData)
     }
-  }, [propCandlesData, live])
+  }, [propCandlesData, timeframe])
 
   useEffect(() => {
-    if (!live && propIndicatorsData) {
+    if (propIndicatorsData) {
       setIndicators(propIndicatorsData)
     }
-  }, [propIndicatorsData, live])
+  }, [propIndicatorsData, timeframe])
 
   useEffect(() => {
     if (!live || !binanceMsg) return
@@ -170,7 +171,10 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
           // Animación óptima: update si existe, setData si es nueva
           if (seriesRef.current) {
-            if (idx >= 0) {
+            if (!seriesInitializedRef.current) {
+              seriesRef.current.setData(trimmed)
+              seriesInitializedRef.current = true
+            } else if (idx >= 0) {
               seriesRef.current.update(newCandle)
             } else {
               seriesRef.current.setData(trimmed)
@@ -318,6 +322,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
       chartRef.current = chart
       seriesRef.current = series
+      seriesInitializedRef.current = false
       smaFastRef.current = smaFast
       smaSlowRef.current = smaSlow
 
@@ -343,6 +348,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   useEffect(() => {
     if (seriesRef.current && candleData.length > 0) {
       seriesRef.current.setData(candleData)
+      seriesInitializedRef.current = true
     }
   }, [candleData])
 
@@ -533,6 +539,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
             <div className="legend-item">
               <div className="legend-marker" style={{ backgroundColor: '#9b59b6' }}></div>
               <span>Volumen</span>
+              <span style={{ marginLeft: 8, opacity: 0.8 }}>({timeframe})</span>
             </div>
           </>
         )}
