@@ -31,7 +31,7 @@ class WebSocketSingleton {
   private error: string | null = null
   private lastMessage: any = null
   private reconnectAttempts: number = 0
-  private url: string = 'ws://localhost:8000/ws'
+  private url: string = 'ws://127.0.0.1:8200/ws'
   private autoConnect: boolean = true
   private reconnectInterval: number = 3000
   private maxReconnectAttempts: number = 5
@@ -57,7 +57,7 @@ class WebSocketSingleton {
   configure(options: UseSocketOptions = {}) {
     if (this.ws === null) {
       // Solo configurar si no hay conexión existente
-      this.url = options.url || 'ws://localhost:8000/ws'
+      this.url = options.url || 'ws://127.0.0.1:8200/ws'
       this.autoConnect = options.autoConnect !== false
       this.reconnectInterval = options.reconnectInterval || 3000
       this.maxReconnectAttempts = options.maxReconnectAttempts || 5

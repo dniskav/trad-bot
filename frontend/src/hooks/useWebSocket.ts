@@ -8,7 +8,7 @@ interface UseWebSocketReturn {
 }
 
 export const useWebSocket = (
-  url: string = 'ws://localhost:8000/ws',
+  url: string = 'ws://127.0.0.1:8200/ws',
   onMessage?: (message: any) => void
 ): UseWebSocketReturn => {
   const [isConnected, setIsConnected] = useState(false)

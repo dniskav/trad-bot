@@ -57,8 +57,6 @@ export function useBinanceSocket(options: BinanceSocketOptions = {}): BinanceSoc
         // Normalize messages into { type, data }
         if (payload?.stream?.includes('@kline_')) {
           const msg = { type: 'binance.kline', data: payload.data }
-          // Debug: verificar llegada de kline
-          console.debug('[Binance WS] kline', msg)
           setLastMessage(msg)
         } else if (payload?.stream?.endsWith('@bookTicker')) {
           const msg = { type: 'binance.bookTicker', data: payload.data }
