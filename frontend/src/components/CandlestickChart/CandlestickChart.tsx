@@ -168,9 +168,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           else next.push(newCandle)
           const trimmed = next.slice(-500)
 
-          // Forzar redibujo completo para comprobar animación
+          // Animación óptima: update si existe, setData si es nueva
           if (seriesRef.current) {
-            seriesRef.current.setData(trimmed)
+            if (idx >= 0) {
+              seriesRef.current.update(newCandle)
+            } else {
+              seriesRef.current.setData(trimmed)
+            }
           }
 
           const closes = trimmed.map((c) => c.close)
@@ -334,7 +338,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     } catch (error) {
       console.error('❌ CandlestickChart: Error creando gráfico:', error)
     }
-  }, [timeframe, candleData, indicators])
+  }, [timeframe])
 
   useEffect(() => {
     if (seriesRef.current && candleData.length > 0) {
