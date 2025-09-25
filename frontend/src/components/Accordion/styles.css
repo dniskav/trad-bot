@@ -1,0 +1,51 @@
+.accordion {
+  background: var(--binance-dark);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid var(--binance-gray);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  user-select: none;
+}
+
+.accordion-header:hover {
+  background: var(--binance-gray);
+}
+
+.accordion-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+}
+
+.accordion-icon {
+  font-size: 1.2rem;
+}
+
+.accordion-toggle {
+  font-size: 0.8rem;
+  color: var(--binance-yellow);
+  transition: transform 0.2s ease;
+}
+
+.accordion-content {
+  padding: 0 1rem 1rem 1rem;
+  border-top: 1px solid var(--binance-gray);
+}
+
+/* Estados de expansión */
+.accordion.expanded .accordion-toggle {
+  transform: rotate(180deg);
+}
