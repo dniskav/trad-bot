@@ -281,8 +281,95 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
   }
 
   // Klines vienen solo por WebSocket; eliminamos fallback REST
+  // Sembrar 1000 velas desde Binance REST y calcular indicadores
+  useEffect(() => {
+    const controller = new AbortController()
+    const symbol = 'DOGEUSDT'
+    const interval = timeframe
 
-  // No effect needed: fetchKlines ahora retorna los datos directamente
+    const computeSMA = (values: number[], period: number): (number | null)[] => {
+      const result: (number | null)[] = []
+      let sum = 0
+      for (let i = 0; i < values.length; i++) {
+        sum += values[i]
+        if (i >= period) sum -= values[i - period]
+        if (i >= period - 1) result.push(sum / period)
+        else result.push(null)
+      }
+      return result
+    }
+
+    const computeRSI = (closes: number[], period: number = 14): (number | null)[] => {
+      const rsi: (number | null)[] = new Array(closes.length).fill(null)
+      if (closes.length < period + 1) return rsi
+      const gains: number[] = []
+      const losses: number[] = []
+      for (let i = 1; i < closes.length; i++) {
+        const change = closes[i] - closes[i - 1]
+        gains.push(Math.max(change, 0))
+        losses.push(Math.max(-change, 0))
+      }
+      let avgGain = 0
+      let avgLoss = 0
+      for (let i = 0; i < period; i++) {
+        avgGain += gains[i]
+        avgLoss += losses[i]
+      }
+      avgGain /= period
+      avgLoss /= period
+      const firstRsiIndex = period
+      rsi[firstRsiIndex] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
+      for (let i = firstRsiIndex + 1; i < closes.length; i++) {
+        const gain = gains[i - 1]
+        const loss = losses[i - 1]
+        avgGain = (avgGain * (period - 1) + gain) / period
+        avgLoss = (avgLoss * (period - 1) + loss) / period
+        rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss)
+      }
+      return rsi
+    }
+
+    const fetchKlines = async () => {
+      try {
+        const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=1000`
+        const res = await fetch(url, { signal: controller.signal })
+        if (!res.ok) return
+        const arr = await res.json()
+        if (!Array.isArray(arr)) return
+
+        // Binance klines format: [ openTime, open, high, low, close, volume, closeTime, ... ]
+        const candles = arr.map((k: any[]) => ({
+          time: Number(k[0]),
+          open: Number(k[1]),
+          high: Number(k[2]),
+          low: Number(k[3]),
+          close: Number(k[4])
+        }))
+
+        const closes = candles.map((c: any) => Number(c.close))
+        const timesMs = candles.map((c: any) => Number(c.time))
+        const volumes = arr.map((k: any[]) => Number(k[5]))
+
+        const smaFast = computeSMA(closes, 8)
+        const smaSlow = computeSMA(closes, 21)
+        const rsi = computeRSI(closes, 14)
+
+        setCandlesData(candles)
+        setIndicatorsData({
+          sma_fast: smaFast.map((v) => (v === null ? NaN : Number(v))),
+          sma_slow: smaSlow.map((v) => (v === null ? NaN : Number(v))),
+          rsi: rsi.map((v) => (v === null ? NaN : Number(v))),
+          volume: volumes,
+          timestamps: timesMs
+        })
+      } catch (e) {
+        // Silenciar por ahora; podemos agregar UI de error si es necesario
+      }
+    }
+
+    fetchKlines()
+    return () => controller.abort()
+  }, [timeframe])
 
   return (
     <div className="app">
@@ -366,6 +453,9 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
               candlesData={candlesData}
               indicatorsData={indicatorsData}
               onTimeframeChange={handleTimeframeChange}
+              live
+              binanceSymbol="DOGEUSDT"
+              binanceInterval={timeframe}
             />
           </Accordion>
 
