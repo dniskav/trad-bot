@@ -13,12 +13,22 @@ interface WebSocketContextType {
   isConnecting: boolean
   error: string | null
 
+  // Estado de conexión Binance
+  binanceIsConnected: boolean
+  binanceIsConnecting: boolean
+  binanceError: string | null
+
   // Mensajes
   messages: WebSocketMessage[]
   lastMessage: WebSocketMessage | null
 
   // Funciones para actualizar el estado
   updateConnectionState: (state: {
+    isConnected?: boolean
+    isConnecting?: boolean
+    error?: string | null
+  }) => void
+  updateBinanceConnectionState: (state: {
     isConnected?: boolean
     isConnecting?: boolean
     error?: string | null
@@ -51,6 +61,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Estado de conexión Binance
+  const [binanceIsConnected, setBinanceIsConnected] = useState(false)
+  const [binanceIsConnecting, setBinanceIsConnecting] = useState(false)
+  const [binanceError, setBinanceError] = useState<string | null>(null)
+
   // Mensajes
   const [messages, setMessages] = useState<WebSocketMessage[]>([])
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
@@ -67,6 +82,17 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     if (state.isConnected !== undefined) setIsConnected(state.isConnected)
     if (state.isConnecting !== undefined) setIsConnecting(state.isConnecting)
     if (state.error !== undefined) setError(state.error)
+  }
+
+  // Función para actualizar el estado de conexión de Binance
+  const updateBinanceConnectionState = (state: {
+    isConnected?: boolean
+    isConnecting?: boolean
+    error?: string | null
+  }) => {
+    if (state.isConnected !== undefined) setBinanceIsConnected(state.isConnected)
+    if (state.isConnecting !== undefined) setBinanceIsConnecting(state.isConnecting)
+    if (state.error !== undefined) setBinanceError(state.error)
   }
 
   // Función para agregar mensajes
@@ -94,12 +120,18 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     isConnecting,
     error,
 
+    // Estado Binance
+    binanceIsConnected,
+    binanceIsConnecting,
+    binanceError,
+
     // Mensajes
     messages,
     lastMessage,
 
     // Funciones
     updateConnectionState,
+    updateBinanceConnectionState,
     addMessage,
     clearMessages,
 
