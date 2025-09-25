@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { WebSocketContext } from '../contexts/WebSocketContext'
+import { useBinanceSocket } from '../hooks/useBinanceSocket'
 import { useSocket } from '../hooks/useSocket'
 
 interface AppSetupProps {
@@ -16,7 +17,7 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
 
   // Hook useSocket para manejar la conexión WebSocket
   const socket = useSocket({
-    url: 'ws://localhost:8000/ws?interval=1m',
+    url: 'ws://127.0.0.1:8200/ws?interval=1m',
     autoConnect: true, // Conectar automáticamente
     reconnectInterval: 3000,
     maxReconnectAttempts: 5,
@@ -25,7 +26,7 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
 
       // Actualizar contexto con mensaje recibido
       if (ctx) {
-        ctx.addMessage('received', data)
+        ctx.addMessage('received', { ...data, __source: 'server' })
       }
 
       // También procesar los datos aquí para que estén disponibles globalmente
@@ -57,6 +58,36 @@ const AppSetup: React.FC<AppSetupProps> = ({ children }) => {
       }
     }
   })
+
+  // Hook para Binance WS directo (kline + bookTicker)
+  const binance = useBinanceSocket({ symbol: 'dogeusdt', interval: '1m' })
+
+  // Publicar mensajes de Binance en el contexto con formato unificado
+  useEffect(() => {
+    if (!ctx || !binance.lastMessage) return
+
+    const msg = binance.lastMessage
+    if (msg.type === 'binance.kline') {
+      ctx.addMessage('received', {
+        type: 'candles',
+        data: { kline: msg.data },
+        __source: 'binance'
+      })
+    } else if (msg.type === 'binance.bookTicker') {
+      const price = Number(msg.data?.a || msg.data?.b || 0)
+      ctx.addMessage('received', { type: 'price_update', data: { price }, __source: 'binance' })
+    }
+  }, [binance.lastMessage])
+
+  // Actualizar estado visual de conexión Binance
+  useEffect(() => {
+    if (!ctx) return
+    ctx.updateBinanceConnectionState({
+      isConnected: binance.isConnected,
+      isConnecting: binance.isConnecting,
+      error: binance.error
+    })
+  }, [binance.isConnected, binance.isConnecting, binance.error])
 
   // Función para iniciar la conexión manualmente
   const handleConnect = () => {
