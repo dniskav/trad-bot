@@ -6,7 +6,7 @@ import {
   HistogramSeries,
   LineSeries
 } from 'lightweight-charts'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useBinanceSocket } from '../../hooks/useBinanceSocket'
 import Accordion from '../Accordion'
 import type { CandlestickChartProps, TechnicalIndicators } from './types'
@@ -58,6 +58,49 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   binanceSymbol,
   binanceInterval
 }) => {
+  // Generar un ID único para este componente para evitar duplicados
+  const componentId = useMemo(() => `chart-${Math.random().toString(36).substr(2, 9)}`, [])
+
+  // Estado local para persistencia del timeframe
+  const [localTimeframe, setLocalTimeframe] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('candlestick-timeframe') || timeframe
+    }
+    return timeframe
+  })
+
+  // Sincronizar con el prop cuando cambie
+  useEffect(() => {
+    setLocalTimeframe(timeframe)
+  }, [timeframe])
+
+  // Función para manejar el cambio de timeframe
+  const handleTimeframeChange = (newTimeframe: string) => {
+    setLocalTimeframe(newTimeframe)
+    // Guardar en localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('candlestick-timeframe', newTimeframe)
+    }
+    // Llamar al callback del padre
+    if (onTimeframeChange) {
+      onTimeframeChange(newTimeframe)
+    }
+  }
+
+  // Función para obtener información detallada de los indicadores
+  const getIndicatorsInfo = () => {
+    if (!indicators) return null
+
+    const availableIndicators = []
+    if (indicators.sma_fast && indicators.sma_fast.length > 0) availableIndicators.push('SMA')
+    if (indicators.rsi && indicators.rsi.length > 0) availableIndicators.push('RSI')
+    if (indicators.volume && indicators.volume.length > 0) availableIndicators.push('Volumen')
+    if (indicators.macd && indicators.macd.macd && indicators.macd.macd.length > 0)
+      availableIndicators.push('MACD')
+
+    return availableIndicators.length > 0 ? availableIndicators.join(', ') : null
+  }
+
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const rsiContainerRef = useRef<HTMLDivElement>(null)
   const volumeContainerRef = useRef<HTMLDivElement>(null)
@@ -157,13 +200,27 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
   useEffect(() => {
     if (propCandlesData && Array.isArray(propCandlesData) && propCandlesData.length > 0) {
-      const formattedData: CandlestickData[] = propCandlesData.map((candle: any) => ({
-        time: (candle.time / 1000) as any,
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close
-      }))
+      const formattedData: CandlestickData[] = propCandlesData
+        .map((candle: any) => ({
+          time: (candle.time / 1000) as any,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close
+        }))
+        .filter((candle) => {
+          // Validar que el tiempo sea válido y no sea NaN
+          const time = candle.time as number
+          return !isNaN(time) && isFinite(time) && time > 0
+        })
+        .sort((a, b) => (a.time as number) - (b.time as number)) // Ordenar por tiempo ascendente
+
+      console.log('📊 CandlestickChart: Datos procesados:', {
+        original: propCandlesData.length,
+        filtered: formattedData.length,
+        timeframe
+      })
+
       setCandleData(formattedData)
     }
   }, [propCandlesData, timeframe])
@@ -420,11 +477,37 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         Array.isArray(indicators.timestamps)
       ) {
         const smaFastData: LineData[] = indicators.sma_fast
-          .map((value, index) => ({ time: (indicators.timestamps[index] / 1000) as any, value }))
-          .filter((item) => item.value !== null && item.value !== undefined && !isNaN(item.value))
+          .map((value, index) => ({
+            time: (indicators.timestamps[index] / 1000) as any,
+            value
+          }))
+          .filter((item) => {
+            const time = item.time as number
+            return (
+              item.value !== null &&
+              item.value !== undefined &&
+              !isNaN(item.value) &&
+              !isNaN(time) &&
+              isFinite(time) &&
+              time > 0
+            )
+          })
         const smaSlowData: LineData[] = indicators.sma_slow
-          .map((value, index) => ({ time: (indicators.timestamps[index] / 1000) as any, value }))
-          .filter((item) => item.value !== null && item.value !== undefined && !isNaN(item.value))
+          .map((value, index) => ({
+            time: (indicators.timestamps[index] / 1000) as any,
+            value
+          }))
+          .filter((item) => {
+            const time = item.time as number
+            return (
+              item.value !== null &&
+              item.value !== undefined &&
+              !isNaN(item.value) &&
+              !isNaN(time) &&
+              isFinite(time) &&
+              time > 0
+            )
+          })
         smaFastRef.current.setData(smaFastData)
         smaSlowRef.current.setData(smaSlowData)
       }
@@ -476,16 +559,33 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         })
 
         const macdData: LineData[] = macd
-          .map((v, i) => ({ time: (indicators.timestamps[i] / 1000) as any, value: v as number }))
-          .filter((p) => Number.isFinite(p.value))
+          .map((v, i) => ({
+            time: (indicators.timestamps[i] / 1000) as any,
+            value: v as number
+          }))
+          .filter((p) => {
+            const time = p.time as number
+            return Number.isFinite(p.value) && !isNaN(time) && isFinite(time) && time > 0
+          })
         const signalData: LineData[] = signal
-          .map((v, i) => ({ time: (indicators.timestamps[i] / 1000) as any, value: v as number }))
-          .filter((p) => Number.isFinite(p.value))
-        const histData = histogram.map((v, i) => ({
-          time: (indicators.timestamps[i] / 1000) as any,
-          value: Number.isFinite(v as number) ? (v as number) : 0,
-          color: (v as number) >= 0 ? '#26a69a' : '#ef5350'
-        }))
+          .map((v, i) => ({
+            time: (indicators.timestamps[i] / 1000) as any,
+            value: v as number
+          }))
+          .filter((p) => {
+            const time = p.time as number
+            return Number.isFinite(p.value) && !isNaN(time) && isFinite(time) && time > 0
+          })
+        const histData = histogram
+          .map((v, i) => ({
+            time: (indicators.timestamps[i] / 1000) as any,
+            value: Number.isFinite(v as number) ? (v as number) : 0,
+            color: (v as number) >= 0 ? '#26a69a' : '#ef5350'
+          }))
+          .filter((p) => {
+            const time = p.time as number
+            return !isNaN(time) && isFinite(time) && time > 0
+          })
 
         macdLine.setData(macdData)
         signalLine.setData(signalData)
@@ -560,8 +660,21 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           title: 'RSI'
         })
         const rsiData: LineData[] = indicators.rsi
-          .map((value, index) => ({ time: (indicators.timestamps[index] / 1000) as any, value }))
-          .filter((item) => item.value !== null && item.value !== undefined && !isNaN(item.value))
+          .map((value, index) => ({
+            time: (indicators.timestamps[index] / 1000) as any,
+            value
+          }))
+          .filter((item) => {
+            const time = item.time as number
+            return (
+              item.value !== null &&
+              item.value !== undefined &&
+              !isNaN(item.value) &&
+              !isNaN(time) &&
+              isFinite(time) &&
+              time > 0
+            )
+          })
         rsiSeries.setData(rsiData)
         const handleResize = () => {
           if (rsiContainerRef.current) {
@@ -605,11 +718,23 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           color: '#9b59b6',
           title: 'Volume'
         })
-        const volumeData = indicators.volume.map((value, index) => ({
-          time: (indicators.timestamps[index] / 1000) as any,
-          value,
-          color: value > 0 ? '#26a69a' : '#ef5350'
-        }))
+        const volumeData = indicators.volume
+          .map((value, index) => ({
+            time: (indicators.timestamps[index] / 1000) as any,
+            value,
+            color: value > 0 ? '#26a69a' : '#ef5350'
+          }))
+          .filter((item) => {
+            const time = item.time as number
+            return (
+              item.value !== null &&
+              item.value !== undefined &&
+              !isNaN(item.value) &&
+              !isNaN(time) &&
+              isFinite(time) &&
+              time > 0
+            )
+          })
         volumeSeries.setData(volumeData)
         const handleResize = () => {
           if (volumeContainerRef.current) {
@@ -639,14 +764,16 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         </h3>
         <div className="chart-info">
           <span>{candleData.length > 0 ? 'Real Data' : 'Test Data'}</span>
-          <span>•</span>
-          <span>{candleData.length > 0 ? `${candleData.length} candles` : '20 candles'}</span>
-          <span>•</span>
-          <span>Props: {propCandlesData?.length || 0} velas recibidas</span>
-          {indicators && (
+          {live && (
             <>
               <span>•</span>
-              <span>Indicadores: SMA, RSI, Volumen</span>
+              <span style={{ color: '#26a69a' }}>Live: {binanceSymbol?.toUpperCase()}</span>
+            </>
+          )}
+          {getIndicatorsInfo() && (
+            <>
+              <span>•</span>
+              <span>Indicadores: {getIndicatorsInfo()}</span>
             </>
           )}
           {signals && signals.length > 0 && (
@@ -657,6 +784,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           )}
           <span>•</span>
           <button
+            id={`${componentId}-volume-toggle`}
             className="timeframe-btn"
             onClick={() => setVolumeType((t) => (t === 'quote' ? 'base' : 'quote'))}
             title="Alternar tipo de volumen (quote/base)">
@@ -674,8 +802,9 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
             {TIMEFRAMES.map((tf) => (
               <button
                 key={tf.value}
-                className={`timeframe-btn ${timeframe === tf.value ? 'active' : ''}`}
-                onClick={() => onTimeframeChange(tf.value)}
+                id={`${componentId}-timeframe-${tf.value}`}
+                className={`timeframe-btn ${localTimeframe === tf.value ? 'active' : ''}`}
+                onClick={() => handleTimeframeChange(tf.value)}
                 title={`${tf.label} - ${tf.category}${tf.value === '1m' ? ' (Mínimo)' : ''}`}>
                 {tf.label}
               </button>
