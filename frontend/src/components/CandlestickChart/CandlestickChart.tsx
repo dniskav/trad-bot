@@ -8,7 +8,7 @@ import {
 } from 'lightweight-charts'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useBinanceSocket } from '../../hooks/useBinanceSocket'
-import Accordion from '../Accordion'
+import { Accordion } from '../Accordion'
 import type { CandlestickChartProps, TechnicalIndicators } from './types'
 
 const TIMEFRAMES = [
