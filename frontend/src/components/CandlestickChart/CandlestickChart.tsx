@@ -162,12 +162,16 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
         setCandleData((prev) => {
           const next = [...prev]
-          const idx = next.findIndex(
-            (c) => (c.time as number) === Math.floor((startMs as number) / 1000)
-          )
+          const targetTime = Math.floor((startMs as number) / 1000)
+          const idx = next.findIndex((c) => (c.time as number) === targetTime)
           if (idx >= 0) next[idx] = newCandle
           else next.push(newCandle)
           const trimmed = next.slice(-500)
+
+          // Forzar redibujo completo para comprobar animación
+          if (seriesRef.current) {
+            seriesRef.current.setData(trimmed)
+          }
 
           const closes = trimmed.map((c) => c.close)
           const timesMs = trimmed.map((c) => ((c.time as number) * 1000) as number)
@@ -204,6 +208,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           borderColor: '#485c7b',
           borderVisible: true,
           visible: true,
+          rightOffset: 15,
           tickMarkFormatter: (time: any) => {
             const date = new Date(time * 1000)
             if (timeframe === '1m' || timeframe === '3m' || timeframe === '5m') {
