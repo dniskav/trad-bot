@@ -1,7 +1,7 @@
 import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from backend.shared.logger import get_logger
-from services.websocket_manager import WebSocketManager
+from ..services.websocket_manager import WebSocketManager
 
 router = APIRouter(tags=["websocket"])
 log = get_logger("server.websocket")

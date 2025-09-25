@@ -1,5 +1,6 @@
 import asyncio
 import json
+import ssl
 import websockets
 from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
@@ -20,9 +21,16 @@ class BinanceService:
         """Connect to Binance bookTicker WebSocket and broadcast data"""
         url = f"wss://stream.binance.com:9443/ws/{SYMBOL}@bookTicker"
 
+        # Create SSL context that doesn't verify certificates
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
         while True:
             try:
-                async with websockets.connect(url, ping_interval=20) as ws:
+                async with websockets.connect(
+                    url, ping_interval=20, ssl=ssl_context
+                ) as ws:
                     log.info(
                         f"🔌 (server) Conectado a Binance bookTicker: {SYMBOL.upper()}"
                     )
@@ -57,9 +65,16 @@ class BinanceService:
         """Connect to Binance kline WebSocket and broadcast data"""
         url = f"wss://stream.binance.com:9443/ws/{SYMBOL}@kline_{interval}"
 
+        # Create SSL context that doesn't verify certificates
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
         while True:
             try:
-                async with websockets.connect(url, ping_interval=20) as ws:
+                async with websockets.connect(
+                    url, ping_interval=20, ssl=ssl_context
+                ) as ws:
                     log.info(
                         f"🔌 (server) Conectado a Binance kline {interval}: {SYMBOL.upper()}"
                     )

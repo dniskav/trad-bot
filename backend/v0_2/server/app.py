@@ -5,11 +5,11 @@ from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
 
 # Import routers
-from routers import health, websocket, socket
-from services.websocket_manager import WebSocketManager
-from services.binance_service import BinanceService
-from services.stm_service import STMService
-from middlewares.logging import log_requests_middleware
+from .routers import health, websocket, socket
+from .services.websocket_manager import WebSocketManager
+from .services.binance_service import BinanceService
+from .services.stm_service import STMService
+from .middlewares.logging import log_requests_middleware
 
 log = get_logger("server.v0.2")
 SYMBOL = env_str("SERVER_SYMBOL", "dogeusdt").lower()
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     asyncio.create_task(stm_service.heartbeat_loop())
     asyncio.create_task(binance_service.bookticker_loop())
-    asyncio.create_task(binance_service.kline_loop(SYMBOL, interval="1m"))
+    asyncio.create_task(binance_service.kline_loop(interval="1m"))
 
     log.info("🚀 Server v0.2 services initialized")
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from backend.shared.logger import get_logger
-from services.stm_service import STMService
+from ..services.stm_service import STMService
 
 router = APIRouter(prefix="/socket", tags=["socket"])
 log = get_logger("server.socket")
