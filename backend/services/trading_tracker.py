@@ -486,31 +486,10 @@ class TradingTracker:
             # Usar el servicio de persistencia
             self.persistence.set_history(self.position_history)
             self.persistence.set_active_positions(self.active_positions)
-            # Actualizar snapshot synthetic sin sobrescribir balances/locks
-            try:
-                acc_syn = self.persistence.get_account_synth() or {}
-            except Exception:
-                acc_syn = {}
-            doge_price = self._get_current_doge_price()
-            usdt_balance = float(acc_syn.get("usdt_balance", 0.0))
-            doge_balance = float(acc_syn.get("doge_balance", 0.0))
-            usdt_locked = float(acc_syn.get("usdt_locked", 0.0))
-            doge_locked = float(acc_syn.get("doge_locked", 0.0))
-            total_balance_usdt = usdt_balance + (doge_balance * doge_price)
-            self.persistence.set_account_synth(
-                {
-                    "initial_balance": float(
-                        acc_syn.get("initial_balance", self.initial_balance)
-                    ),
-                    "current_balance": total_balance_usdt,
-                    "total_pnl": float(acc_syn.get("total_pnl", self.total_pnl)),
-                    "usdt_balance": usdt_balance,
-                    "doge_balance": doge_balance,
-                    "usdt_locked": usdt_locked,
-                    "doge_locked": doge_locked,
-                    "doge_price": doge_price,
-                    "total_balance_usdt": total_balance_usdt,
-                }
+            # NO sobrescribir account_synth - ya fue persistido por adjust_synth_balances
+            print(f"🔧 [DEBUG] Saltando sobrescritura de account_synth en save_history")
+            logger.info(
+                f"🔧 [DEBUG] Saltando sobrescritura de account_synth en save_history"
             )
             self.persistence.set_bot_status(self.bot_status)
 
@@ -641,13 +620,30 @@ class TradingTracker:
             )
 
             # Ajustar balances synthetic si el bot es plug-and-play (no legacy)
+            print(
+                f"🔧 [DEBUG] Verificando condición: bot_type={bot_type}, no es legacy: {bot_type not in ['conservative', 'aggressive']}"
+            )
+            logger.info(
+                f"🔧 [DEBUG] Verificando condición: bot_type={bot_type}, no es legacy: {bot_type not in ['conservative', 'aggressive']}"
+            )
             if bot_type not in ["conservative", "aggressive"]:
+                print(f"🔧 [DEBUG] Bloqueando saldo para apertura de {bot_type}")
+                logger.info(f"🔧 [DEBUG] Bloqueando saldo para apertura de {bot_type}")
+
+                # Paso 1: Bloquear saldo
                 self.adjust_synth_balances(
                     side=signal,
                     action="open",
                     price=current_price,
                     quantity=quantity,
                     fee=entry_fee,
+                )
+            else:
+                print(
+                    f"🔧 [DEBUG] Saltando adjust_synth_balances para bot legacy: {bot_type}"
+                )
+                logger.info(
+                    f"🔧 [DEBUG] Saltando adjust_synth_balances para bot legacy: {bot_type}"
                 )
 
             # Registrar también en active_positions y persistir snapshot
@@ -668,8 +664,29 @@ class TradingTracker:
                     "is_synthetic": bot_type not in ["conservative", "aggressive"],
                 }
                 # Persistir en archivo
+                print(f"🔧 [DEBUG] Persistiendo posiciones activas para {bot_type}")
+                logger.info(
+                    f"🔧 [DEBUG] Persistiendo posiciones activas para {bot_type}"
+                )
                 self.persistence.set_active_positions(self.active_positions)
-            except Exception as _e:
+                print(f"🔧 [DEBUG] Posiciones activas persistidas exitosamente")
+                logger.info(f"🔧 [DEBUG] Posiciones activas persistidas exitosamente")
+
+                # Paso 2: Confirmar apertura exitosa y desbloquear saldo
+                if bot_type not in ["conservative", "aggressive"]:
+                    print(f"🔧 [DEBUG] Confirmando apertura exitosa para {bot_type}")
+                    logger.info(
+                        f"🔧 [DEBUG] Confirmando apertura exitosa para {bot_type}"
+                    )
+                    self.confirm_position_opening(
+                        side=signal,
+                        value=current_price * quantity,
+                        quantity=quantity,
+                        fee=entry_fee,
+                    )
+            except Exception as e:
+                print(f"❌ [DEBUG] Error persistiendo posiciones activas: {e}")
+                logger.error(f"❌ [DEBUG] Error persistiendo posiciones activas: {e}")
                 pass
 
         # Si el bot cambió a HOLD, cerrar todas las posiciones abiertas
@@ -829,11 +846,34 @@ class TradingTracker:
         doge_price = self._get_current_doge_price()
 
         total_balance_usdt = usdt_balance + (doge_balance * doge_price)
-        # Leer locks existentes para exponer snapshot completo
+        # Leer datos existentes para obtener valores base
         try:
             acc_syn_full = self.persistence.get_account_synth() or {}
         except Exception:
             acc_syn_full = {}
+
+        # Calcular valor actual de posiciones abiertas (con PnL)
+        invested_amount = 0.0
+        if hasattr(self, "active_positions"):
+            for bot_type, positions in self.active_positions.items():
+                if isinstance(positions, dict):
+                    for pos_id, pos_data in positions.items():
+                        if pos_data.get("status") == "open":
+                            current_price = pos_data.get(
+                                "current_price", pos_data.get("entry_price", 0)
+                            )
+                            quantity = pos_data.get("quantity", 0)
+                            invested_amount += current_price * quantity
+
+        # CALCULAR DINÁMICAMENTE LOS SALDOS BLOQUEADOS
+        # Los saldos bloqueados solo deben existir si hay posiciones realmente abriéndose
+        # Si todas las posiciones están confirmadas, los locked deben ser 0.0
+        usdt_locked = float(acc_syn_full.get("usdt_locked", 0.0))
+        doge_locked = float(acc_syn_full.get("doge_locked", 0.0))
+
+        # Verificar si hay posiciones en proceso de apertura (no confirmadas)
+        # Por ahora, mantener los valores del archivo
+        # En el futuro, esto se puede expandir para detectar posiciones en proceso
 
         payload = {
             "initial_balance": float(
@@ -845,13 +885,14 @@ class TradingTracker:
             "is_profitable": self.current_balance > self.initial_balance,
             "usdt_balance": usdt_balance,
             "doge_balance": doge_balance,
-            "usdt_locked": float(acc_syn_full.get("usdt_locked", 0.0)),
-            "doge_locked": float(acc_syn_full.get("doge_locked", 0.0)),
+            "usdt_locked": usdt_locked,  # Calculado dinámicamente
+            "doge_locked": doge_locked,  # Calculado dinámicamente
             "total_balance_usdt": total_balance_usdt,
             "doge_price": doge_price,
+            "invested": invested_amount,  # Calcular dinámicamente
         }
 
-        # Persistir solo precio y totales; preservar balances y locks existentes
+        # Persistir con valores reales del archivo
         try:
             self.persistence.set_account_synth(
                 {
@@ -860,10 +901,11 @@ class TradingTracker:
                     "total_pnl": payload["total_pnl"],
                     "usdt_balance": usdt_balance,
                     "doge_balance": doge_balance,
-                    "usdt_locked": float(acc_syn_full.get("usdt_locked", 0.0)),
-                    "doge_locked": float(acc_syn_full.get("doge_locked", 0.0)),
+                    "usdt_locked": usdt_locked,  # Usar valor real del archivo
+                    "doge_locked": doge_locked,  # Usar valor real del archivo
                     "doge_price": doge_price,
                     "total_balance_usdt": total_balance_usdt,
+                    "invested": invested_amount,  # Usar el valor calculado dinámicamente
                 }
             )
         except Exception:
@@ -900,6 +942,10 @@ class TradingTracker:
         side: 'BUY' or 'SELL'
         """
         try:
+            logger.info(
+                f"🔧 [DEBUG] adjust_synth_balances llamado: side={side}, action={action}, price={price}, quantity={quantity}, fee={fee}"
+            )
+
             acc = self.persistence.get_account_synth() or {}
             usdt = float(acc.get("usdt_balance", 0.0))
             doge = float(acc.get("doge_balance", 0.0))
@@ -921,39 +967,32 @@ class TradingTracker:
 
             if action == "open":
                 if side == "BUY":
-                    # Rechazar si no hay USDT suficiente
-                    if usdt < value + fee:
+                    # Verificar saldo operativo (disponible - bloqueado)
+                    usdt_operativo = usdt - usdt_locked
+                    if usdt_operativo < value + fee:
                         return
-                    # Gastar USDT y bloquear DOGE comprado
-                    usdt -= value + fee
-                    doge_locked += quantity
+                    # Bloquear USDT durante apertura
+                    usdt_locked += value + fee
+                    # NO modificar usdt_balance aún (se hará después si es exitoso)
                 else:  # SELL
-                    # Rechazar si no hay DOGE suficiente
-                    if doge < quantity:
+                    # Verificar saldo operativo (disponible - bloqueado)
+                    doge_operativo = doge - doge_locked
+                    if doge_operativo < quantity:
                         return
-                    # Vender DOGE disponible y bloquear los fondos recibidos como DOGE a recomprar
-                    doge -= quantity
-                    usdt_locked += value - fee if (value - fee) > 0 else 0.0
+                    # Bloquear DOGE durante apertura
+                    doge_locked += quantity
+                    # NO modificar doge_balance aún (se hará después si es exitoso)
             else:  # close
                 if side == "BUY":
-                    # Cierre de BUY: vender DOGE bloqueado y acreditar USDT neto
-                    if doge_locked < quantity:
-                        quantity = doge_locked
-                    doge_locked = max(0.0, doge_locked - quantity)
-                    usdt += value - fee
+                    # Cierre de BUY: el DOGE se convierte en USDT
+                    # No necesitamos modificar balances aquí porque el dinero ya está "invertido"
+                    # El PnL se calcula en close_order y se refleja en total_pnl
+                    pass
                 else:  # SELL
-                    # Cierre de SELL: recomprar DOGE usando USDT bloqueado
-                    need = value + fee
-                    if usdt_locked < need:
-                        # Si por redondeo no alcanza, usar disponible
-                        deficit = need - usdt_locked
-                        usdt_locked = 0.0
-                        if usdt < deficit:
-                            return
-                        usdt -= deficit
-                    else:
-                        usdt_locked -= need
-                    doge += quantity
+                    # Cierre de SELL: el USDT se convierte en DOGE
+                    # No necesitamos modificar balances aquí porque el dinero ya está "invertido"
+                    # El PnL se calcula en close_order y se refleja en total_pnl
+                    pass
 
             # Clamp y persistencia con bloqueos
             usdt = max(0.0, usdt)
@@ -967,23 +1006,176 @@ class TradingTracker:
                     )
                 except Exception:
                     pass
-                self.persistence.set_account_synth(
-                    {
-                        "initial_balance": float(acc.get("initial_balance", 0.0)),
-                        "current_balance": total_usdt,
-                        "total_pnl": float(acc.get("total_pnl", 0.0)),
-                        "usdt_balance": usdt,
-                        "doge_balance": doge,
-                        "usdt_locked": usdt_locked,
-                        "doge_locked": doge_locked,
-                        "doge_price": doge_price,
-                        "total_balance_usdt": total_usdt,
-                    }
+                logger.info(
+                    f"🔧 [DEBUG] Persistiendo saldo: usdt={usdt:.6f}, doge={doge:.6f}, total={total_usdt:.6f}"
                 )
-            except Exception:
-                pass
-        except Exception:
-            pass
+                # Calcular saldo disponible real
+                initial_balance = float(acc.get("initial_balance", 1000.0))
+
+                # El saldo disponible es el dinero que NO está invertido
+                # Sumamos el dinero disponible (USDT + DOGE) menos el dinero bloqueado
+                available_usdt = usdt - usdt_locked
+                available_doge = doge - doge_locked
+                available_balance = available_usdt + (available_doge * doge_price)
+
+                # Calcular valor actual de posiciones abiertas (con PnL)
+                invested_amount = 0.0
+                if hasattr(self, "active_positions"):
+                    for bot_type, positions in self.active_positions.items():
+                        if isinstance(positions, dict):
+                            for pos_id, pos_data in positions.items():
+                                if pos_data.get("status") == "open":
+                                    current_price = pos_data.get(
+                                        "current_price", pos_data.get("entry_price", 0)
+                                    )
+                                    quantity = pos_data.get("quantity", 0)
+                                    invested_amount += current_price * quantity
+
+                # El saldo disponible real es el saldo inicial menos lo invertido
+                available_balance = initial_balance - invested_amount
+
+                account_data = {
+                    "initial_balance": initial_balance,
+                    "current_balance": available_balance,  # Solo saldo disponible
+                    "total_pnl": float(acc.get("total_pnl", 0.0)),
+                    "usdt_balance": usdt,
+                    "doge_balance": doge,
+                    "usdt_locked": usdt_locked,
+                    "doge_locked": doge_locked,
+                    "doge_price": doge_price,
+                    "total_balance_usdt": available_balance,  # Solo saldo disponible
+                    "invested": invested_amount,  # Valor actual de posiciones abiertas
+                }
+
+                print(f"🔧 [DEBUG] Datos a persistir: {account_data}")
+                logger.info(f"🔧 [DEBUG] Datos a persistir: {account_data}")
+
+                self.persistence.set_account_synth(account_data)
+
+                print(f"🔧 [DEBUG] Saldo persistido exitosamente")
+                logger.info(f"🔧 [DEBUG] Saldo persistido exitosamente")
+            except Exception as e:
+                logger.error(f"❌ [DEBUG] Error en persistencia: {e}")
+        except Exception as e:
+            logger.error(f"❌ [DEBUG] Error en adjust_synth_balances: {e}")
+
+    def confirm_position_opening(
+        self, side: str, value: float, quantity: float, fee: float = 0.0
+    ) -> None:
+        """
+        Confirma que la apertura de posición fue exitosa y desbloquea el saldo.
+        """
+        try:
+            logger.info(
+                f"🔧 [DEBUG] confirm_position_opening: side={side}, value={value}, quantity={quantity}, fee={fee}"
+            )
+
+            acc = self.persistence.get_account_synth() or {}
+            usdt = float(acc.get("usdt_balance", 0.0))
+            doge = float(acc.get("doge_balance", 0.0))
+            usdt_locked = float(acc.get("usdt_locked", 0.0))
+            doge_locked = float(acc.get("doge_locked", 0.0))
+            doge_price = self._get_current_doge_price()
+
+            side = str(side).upper()
+
+            if side == "BUY":
+                # Confirmar apertura BUY: desbloquear USDT pero NO restar del balance disponible
+                usdt_locked -= value + fee
+                # NO hacer: usdt -= value + fee (el dinero se invierte, no se pierde)
+                # El dinero se mueve de "disponible" a "invertido" automáticamente
+            else:  # SELL
+                # Confirmar apertura SELL: desbloquear DOGE pero NO restar del balance disponible
+                doge_locked -= quantity
+                # NO hacer: doge -= quantity (el dinero se invierte, no se pierde)
+                # El dinero se mueve de "disponible" a "invertido" automáticamente
+
+            # Persistir cambios
+            usdt = max(0.0, usdt)
+            doge = max(0.0, doge)
+            usdt_locked = max(0.0, usdt_locked)
+            doge_locked = max(0.0, doge_locked)
+
+            available_balance = usdt + (doge * doge_price)
+
+            # Calcular valor actual de posiciones abiertas (con PnL)
+            invested_amount = 0.0
+            if hasattr(self, "active_positions"):
+                for bot_type, positions in self.active_positions.items():
+                    if isinstance(positions, dict):
+                        for pos_id, pos_data in positions.items():
+                            if pos_data.get("status") == "open":
+                                current_price = pos_data.get(
+                                    "current_price", pos_data.get("entry_price", 0)
+                                )
+                                quantity = pos_data.get("quantity", 0)
+                                invested_amount += current_price * quantity
+
+            account_data = {
+                "initial_balance": float(acc.get("initial_balance", 1000.0)),
+                "current_balance": available_balance,  # Solo saldo disponible
+                "total_pnl": float(acc.get("total_pnl", 0.0)),
+                "usdt_balance": usdt,
+                "doge_balance": doge,
+                "usdt_locked": usdt_locked,
+                "doge_locked": doge_locked,
+                "doge_price": doge_price,
+                "total_balance_usdt": available_balance,  # Solo saldo disponible
+                "invested": invested_amount,  # Valor actual de posiciones abiertas
+            }
+
+            self.persistence.set_account_synth(account_data)
+            logger.info(f"✅ [DEBUG] Apertura confirmada y saldo desbloqueado")
+
+        except Exception as e:
+            logger.error(f"❌ [DEBUG] Error confirmando apertura: {e}")
+
+    def cancel_position_opening(
+        self, side: str, value: float, quantity: float, fee: float = 0.0
+    ) -> None:
+        """
+        Cancela la apertura de posición y desbloquea el saldo sin modificar balances.
+        """
+        try:
+            logger.info(
+                f"🔧 [DEBUG] cancel_position_opening: side={side}, value={value}, quantity={quantity}, fee={fee}"
+            )
+
+            acc = self.persistence.get_account_synth() or {}
+            usdt_locked = float(acc.get("usdt_locked", 0.0))
+            doge_locked = float(acc.get("doge_locked", 0.0))
+            doge_price = self._get_current_doge_price()
+
+            side = str(side).upper()
+
+            if side == "BUY":
+                # Cancelar BUY: solo desbloquear USDT
+                usdt_locked -= value + fee
+            else:  # SELL
+                # Cancelar SELL: solo desbloquear DOGE
+                doge_locked -= quantity
+
+            # Persistir cambios (solo locked, no balances)
+            usdt_locked = max(0.0, usdt_locked)
+            doge_locked = max(0.0, doge_locked)
+
+            account_data = {
+                "initial_balance": float(acc.get("initial_balance", 1000.0)),
+                "current_balance": float(acc.get("current_balance", 0.0)),
+                "total_pnl": float(acc.get("total_pnl", 0.0)),
+                "usdt_balance": float(acc.get("usdt_balance", 0.0)),
+                "doge_balance": float(acc.get("doge_balance", 0.0)),
+                "usdt_locked": usdt_locked,
+                "doge_locked": doge_locked,
+                "doge_price": doge_price,
+                "total_balance_usdt": float(acc.get("total_balance_usdt", 0.0)),
+            }
+
+            self.persistence.set_account_synth(account_data)
+            logger.info(f"✅ [DEBUG] Apertura cancelada y saldo desbloqueado")
+
+        except Exception as e:
+            logger.error(f"❌ [DEBUG] Error cancelando apertura: {e}")
 
     def _get_current_doge_price(self) -> float:
         """Obtiene el precio actual de DOGE en USDT"""
@@ -993,7 +1185,8 @@ class TradingTracker:
                 return float(ticker["price"])
             except Exception as e:
                 logger.warning(f"⚠️ No se pudo obtener precio de DOGE: {e}")
-        return 0.0
+        # Usar precio por defecto si no se puede obtener el precio real
+        return 0.24215
 
     def get_position_info(self, bot_type: str) -> Optional[Dict[str, Any]]:
         """Obtiene información de las posiciones actuales de un bot"""
@@ -1279,7 +1472,13 @@ class TradingTracker:
         logger.warning(f"⚠️ Orden {order_id} no encontrada en historial")
         return None
 
-    def close_order(self, order_id: str, close_price: float, fees_paid: float = 0.0):
+    def close_order(
+        self,
+        order_id: str,
+        close_price: float,
+        fees_paid: float = 0.0,
+        reason: Optional[str] = None,
+    ):
         """Cierra una orden en el historial con PnL final"""
         for order in reversed(self.position_history):
             if order["order_id"] == order_id:
@@ -1342,22 +1541,35 @@ class TradingTracker:
         target["close_price"] = close_price
         target["close_time"] = datetime.now()
         target["fees_paid"] = fees_paid
+        if reason is not None:
+            try:
+                target["close_reason"] = str(reason)
+            except Exception:
+                target["close_reason"] = reason
 
         # Calcular PnL final de forma segura
         qty = float(target.get("quantity") or 0)
         entry = float(target.get("entry_price") or 0)
         side = str(target.get("side") or "BUY").upper()
+
         if side == "BUY":
-            target["pnl"] = (close_price - entry) * qty
+            # Para BUY: Valor final del DOGE - USDT gastado (incluyendo fees)
+            usdt_spent = entry * qty + fees_paid
+            doge_value_final = close_price * qty
+            target["pnl"] = doge_value_final - usdt_spent
             target["pnl_percentage"] = (
                 ((close_price - entry) / entry) * 100 if entry else 0
             )
-        else:
-            target["pnl"] = (entry - close_price) * qty
+        else:  # SELL
+            # Para SELL: USDT recibido - Valor del DOGE vendido (incluyendo fees)
+            doge_value_sold = entry * qty
+            usdt_received = close_price * qty - fees_paid
+            target["pnl"] = usdt_received - doge_value_sold
             target["pnl_percentage"] = (
                 ((entry - close_price) / entry) * 100 if entry else 0
             )
-        target["net_pnl"] = target["pnl"] - fees_paid
+
+        target["net_pnl"] = target["pnl"]  # Ya incluye fees en el cálculo
 
         # Duración total
         if target.get("entry_time") and target.get("close_time"):

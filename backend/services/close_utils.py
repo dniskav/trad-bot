@@ -83,41 +83,35 @@ def close_synth_position(
             order_id=order_id,
             close_price=float(current_price),
             fees_paid=exit_fee,
+            reason=reason,
         )
 
     # Adjust synthetic balances
     if hasattr(trading_tracker, "adjust_synth_balances"):
-        try:
-            trading_tracker.adjust_synth_balances(
-                side=side,
-                action="close",
-                price=float(current_price),
-                quantity=qty,
-                fee=exit_fee,
-            )
-        except Exception:
-            pass
+        # Ejecutar y no silenciar errores: es crítico para liberar locks y ajustar saldos
+        trading_tracker.adjust_synth_balances(
+            side=side,
+            action="close",
+            price=float(current_price),
+            quantity=qty,
+            fee=exit_fee,
+        )
 
     # Mark as closed in active_positions and persist
-    try:
-        if bot_type not in trading_tracker.active_positions:
-            trading_tracker.active_positions[bot_type] = {}
-        closed = dict(pos)
-        closed.update(
-            {
-                "status": "closed",
-                "is_closed": True,
-                "close_reason": reason,
-                "close_price": float(current_price),
-                "close_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            }
-        )
-        trading_tracker.active_positions[bot_type][position_id] = closed
-        trading_tracker.persistence.set_active_positions(
-            trading_tracker.active_positions
-        )
-    except Exception:
-        pass
+    if bot_type not in trading_tracker.active_positions:
+        trading_tracker.active_positions[bot_type] = {}
+    closed = dict(pos)
+    closed.update(
+        {
+            "status": "closed",
+            "is_closed": True,
+            "close_reason": reason,
+            "close_price": float(current_price),
+            "close_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    )
+    trading_tracker.active_positions[bot_type][position_id] = closed
+    trading_tracker.persistence.set_active_positions(trading_tracker.active_positions)
 
     pnl_gross = (
         (float(current_price) - entry_price) * qty

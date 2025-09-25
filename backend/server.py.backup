@@ -565,80 +565,73 @@ async def periodic_data_updates(websocket: WebSocket):
                 except Exception as e:
                     logger.error(f"Error en reconciliación SL/TP: {e}")
 
-                # DESHABILITADO: Recalcular locks synthetic a partir de posiciones abiertas y persistir snapshot de cuenta
-                # Este código estaba sobrescribiendo los balances correctos calculados por adjust_synth_balances
-                # y causando inconsistencias en current_balance, usdt_locked, doge_locked e invested
-                #
-                # try:
-                #     fee_rate = float(getattr(trading_tracker, "fee_rate", 0.001))
-                #     acc_syn = trading_tracker.persistence.get_account_synth() or {}
-                #     usdt_balance_now = float(acc_syn.get("usdt_balance", 0.0))
-                #     doge_balance_now = float(acc_syn.get("doge_balance", 0.0))
-                #     doge_price_now = float(
-                #         current_price or acc_syn.get("doge_price", 0.0) or 0.0
-                #     )
-                #
-                #     total_doge_locked = 0.0
-                #     total_usdt_locked = 0.0
-                #     try:
-                #         snapshot_now = trading_tracker.active_positions or {}
-                #         for bname, positions in snapshot_now.items():
-                #             if not isinstance(positions, dict):
-                #                 continue
-                #             for _pid, p in positions.items():
-                #                 try:
-                #                     if str(p.get("status") or "open").lower() != "open":
-                #                         continue
-                #                     side = str(
-                #                         p.get("signal_type") or p.get("type") or "BUY"
-                #                     ).upper()
-                #                     qty = float(
-                #                         p.get("quantity") or p.get("qty") or 0.0
-                #                     )
-                #                     entry = float(
-                #                         p.get("entry_price")
-                #                         or p.get("entry")
-                #                         or doge_price_now
-                #                     )
-                #                     if qty <= 0:
-                #                         continue
-                #                     if side == "BUY":
-                #                         total_doge_locked += qty
-                #                     else:
-                #                         # SELL: lock USDT aproximado (valor - fee de entrada)
-                #                         val = entry * qty
-                #                         total_usdt_locked += max(
-                #                             0.0, val - (val * fee_rate)
-                #                         )
-                #                 except Exception:
-                #                     continue
-                #     except Exception:
-                #         pass
-                #
-                #     total_usdt_now = usdt_balance_now + doge_balance_now * (
-                #         doge_price_now or 0.0
-                #     )
-                #     trading_tracker.persistence.set_account_synth(
-                #         {
-                #             "initial_balance": float(
-                #                 acc_syn.get("initial_balance", 0.0)
-                #             ),
-                #             "current_balance": total_usdt_now,
-                #             "total_pnl": float(acc_syn.get("total_pnl", 0.0)),
-                #             "usdt_balance": usdt_balance_now,
-                #             "doge_balance": doge_balance_now,
-                #             "usdt_locked": total_usdt_locked,
-                #             "doge_locked": total_doge_locked,
-                #             "doge_price": doge_price_now,
-                #             "total_balance_usdt": total_usdt_now,
-                #         }
-                #     )
-                # except Exception as e:
-                #     logger.warning(f"Failed to recompute/persist synthetic locks: {e}")
+                # Recalcular locks synthetic a partir de posiciones abiertas y persistir snapshot de cuenta
+                try:
+                    fee_rate = float(getattr(trading_tracker, "fee_rate", 0.001))
+                    acc_syn = trading_tracker.persistence.get_account_synth() or {}
+                    usdt_balance_now = float(acc_syn.get("usdt_balance", 0.0))
+                    doge_balance_now = float(acc_syn.get("doge_balance", 0.0))
+                    doge_price_now = float(
+                        current_price or acc_syn.get("doge_price", 0.0) or 0.0
+                    )
 
-                logger.info(
-                    "🔧 [DEBUG] Código problemático de recálculo de balances DESHABILITADO"
-                )
+                    total_doge_locked = 0.0
+                    total_usdt_locked = 0.0
+                    try:
+                        snapshot_now = trading_tracker.active_positions or {}
+                        for bname, positions in snapshot_now.items():
+                            if not isinstance(positions, dict):
+                                continue
+                            for _pid, p in positions.items():
+                                try:
+                                    if str(p.get("status") or "open").lower() != "open":
+                                        continue
+                                    side = str(
+                                        p.get("signal_type") or p.get("type") or "BUY"
+                                    ).upper()
+                                    qty = float(
+                                        p.get("quantity") or p.get("qty") or 0.0
+                                    )
+                                    entry = float(
+                                        p.get("entry_price")
+                                        or p.get("entry")
+                                        or doge_price_now
+                                    )
+                                    if qty <= 0:
+                                        continue
+                                    if side == "BUY":
+                                        total_doge_locked += qty
+                                    else:
+                                        # SELL: lock USDT aproximado (valor - fee de entrada)
+                                        val = entry * qty
+                                        total_usdt_locked += max(
+                                            0.0, val - (val * fee_rate)
+                                        )
+                                except Exception:
+                                    continue
+                    except Exception:
+                        pass
+
+                    total_usdt_now = usdt_balance_now + doge_balance_now * (
+                        doge_price_now or 0.0
+                    )
+                    trading_tracker.persistence.set_account_synth(
+                        {
+                            "initial_balance": float(
+                                acc_syn.get("initial_balance", 0.0)
+                            ),
+                            "current_balance": total_usdt_now,
+                            "total_pnl": float(acc_syn.get("total_pnl", 0.0)),
+                            "usdt_balance": usdt_balance_now,
+                            "doge_balance": doge_balance_now,
+                            "usdt_locked": total_usdt_locked,
+                            "doge_locked": total_doge_locked,
+                            "doge_price": doge_price_now,
+                            "total_balance_usdt": total_usdt_now,
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to recompute/persist synthetic locks: {e}")
 
                 bot_analysis = bot_registry.analyze_all_bots(
                     market_data, signal_handler
@@ -650,7 +643,151 @@ async def periodic_data_updates(websocket: WebSocket):
                 # DESHABILITADO: Procesamiento legacy de señales
                 # El SignalHandler ya procesa las señales automáticamente
                 logger.info("📊 Señales procesadas automáticamente por SignalHandler")
+                        signal_type = signal.get("signal_type", "HOLD")
+                        confidence = signal.get("confidence", 0.0)
 
+                        # Log del bot y status
+                        logger.info(f"🤖 {bot_name}: {signal_type}")
+
+                        # Log del precio
+                        logger.info(f"💰 Precio: ${current_price or 0.0:.5f}")
+
+                        # Log de la confianza
+                        logger.info(f"📊 Confianza: {confidence:.1%}")
+
+                        # Ejecutar trade si la señal no es HOLD
+                        if signal_type != "HOLD":
+                            try:
+                                bot = bot_registry.get_bot(bot_name)
+                                if bot and bot.is_active:
+                                    # Crear objeto TradingSignal para el bot
+                                    from services.bot_interface import (
+                                        TradingSignal,
+                                        SignalType,
+                                    )
+
+                                    signal_obj = TradingSignal(
+                                        bot_name=bot_name,
+                                        signal_type=SignalType(signal_type),
+                                        confidence=confidence,
+                                        entry_price=current_price or 0.0,
+                                        stop_loss=signal.get("stop_loss"),
+                                        take_profit=signal.get("take_profit"),
+                                        reasoning=signal.get("reasoning", ""),
+                                        metadata=signal.get("metadata", {}),
+                                    )
+
+                                    # Ejecutar trade según el modo del bot
+                                    if bot.config.synthetic_mode:
+                                        # Modo sintético: abrir posición sintética
+                                        position = bot.open_synthetic_position(
+                                            signal_obj, current_price or 0.0
+                                        )
+                                        if position:
+                                            logger.info(
+                                                f"📈 {bot_name}: Posición sintética abierta - {signal_type} a ${current_price:.5f}"
+                                            )
+
+                                            # Crear registro en el historial para la posición sintética
+                                            try:
+                                                trading_tracker.create_order_record(
+                                                    bot_type=bot_name,
+                                                    symbol="DOGEUSDT",
+                                                    side=signal_type,
+                                                    quantity=position["quantity"],
+                                                    entry_price=position["entry_price"],
+                                                    order_id=f"SYNTH_{position['id']}",
+                                                    position_id=position["id"],
+                                                )
+                                                logger.info(
+                                                    f"📝 {bot_name}: Registro creado en historial para posición sintética {position['id']}"
+                                                )
+                                            except Exception as e:
+                                                logger.error(
+                                                    f"❌ {bot_name}: Error creando registro en historial: {e}"
+                                                )
+
+                                        # Verificar si hay posiciones sintéticas que deben cerrarse por SL/TP
+                                        closed_positions = (
+                                            bot.check_synthetic_positions(
+                                                current_price or 0.0
+                                            )
+                                        )
+                                        for closed_pos in closed_positions:
+                                            logger.info(
+                                                f"🔒 {bot_name}: Posición cerrada por {closed_pos['close_reason']} - PnL: ${closed_pos['pnl']:.2f}"
+                                            )
+
+                                        # Sincronizar posiciones sintéticas con el TradingTracker
+                                        if bot.synthetic_positions:
+                                            # Obtener posiciones abiertas
+                                            open_positions = [
+                                                pos
+                                                for pos in bot.synthetic_positions
+                                                if pos["status"] == "open"
+                                            ]
+                                            if open_positions:
+                                                # Sincronizar con el tracker
+                                                if (
+                                                    bot_name
+                                                    not in trading_tracker.active_positions
+                                                ):
+                                                    trading_tracker.active_positions[
+                                                        bot_name
+                                                    ] = {}
+
+                                                for pos in open_positions:
+                                                    position_id = pos["id"]
+                                                    trading_tracker.active_positions[
+                                                        bot_name
+                                                    ][position_id] = {
+                                                        "signal_type": pos[
+                                                            "signal_type"
+                                                        ],
+                                                        "entry_price": pos[
+                                                            "entry_price"
+                                                        ],
+                                                        "quantity": pos["quantity"],
+                                                        "entry_time": pos["timestamp"],
+                                                        "current_price": current_price
+                                                        or pos["entry_price"],
+                                                        "stop_loss": pos["stop_loss"],
+                                                        "take_profit": pos[
+                                                            "take_profit"
+                                                        ],
+                                                        "is_synthetic": True,
+                                                    }
+
+                                                # Guardar en archivo
+                                                trading_tracker.save_history()
+                                                logger.info(
+                                                    f"💾 {bot_name}: {len(open_positions)} posiciones sintéticas sincronizadas con tracker"
+                                                )
+                                    else:
+                                        # Modo real: usar RealTradingManager
+                                        from services.real_trading_manager import (
+                                            real_trading_manager,
+                                        )
+
+                                        result = real_trading_manager.place_order(
+                                            bot_type=bot_name,
+                                            signal=signal_type,
+                                            current_price=current_price or 0.0,
+                                            trading_tracker=trading_tracker,
+                                        )
+                                        if result.get("success"):
+                                            logger.info(
+                                                f"🚀 {bot_name}: Orden real ejecutada - {signal_type} a ${current_price:.5f}"
+                                            )
+                                        else:
+                                            logger.error(
+                                                f"❌ {bot_name}: Error ejecutando orden real: {result.get('error', 'Error desconocido')}"
+                                            )
+
+                            except Exception as e:
+                                logger.error(
+                                    f"❌ Error ejecutando trade para {bot_name}: {e}"
+                                )
             except Exception as e:
                 logger.error(f"Error in bot trading loop: {e}")
 
@@ -871,6 +1008,151 @@ async def background_trading_loop():
                 # DESHABILITADO: Procesamiento legacy de señales
                 # El SignalHandler ya procesa las señales automáticamente
                 logger.info("📊 Señales procesadas automáticamente por SignalHandler")
+                        signal_type = signal.get("signal_type", "HOLD")
+                        confidence = signal.get("confidence", 0.0)
+
+                        # Log del bot y status
+                        logger.info(f"🤖 {bot_name}: {signal_type}")
+
+                        # Log del precio
+                        logger.info(f"💰 Precio: ${current_price or 0.0:.5f}")
+
+                        # Log de la confianza
+                        logger.info(f"📊 Confianza: {confidence:.1%}")
+
+                        # Ejecutar trade si la señal no es HOLD
+                        if signal_type != "HOLD":
+                            try:
+                                bot = bot_registry.get_bot(bot_name)
+                                if bot and bot.is_active:
+                                    # Crear objeto TradingSignal para el bot
+                                    from services.bot_interface import (
+                                        TradingSignal,
+                                        SignalType,
+                                    )
+
+                                    signal_obj = TradingSignal(
+                                        bot_name=bot_name,
+                                        signal_type=SignalType(signal_type),
+                                        confidence=confidence,
+                                        entry_price=current_price or 0.0,
+                                        stop_loss=signal.get("stop_loss"),
+                                        take_profit=signal.get("take_profit"),
+                                        reasoning=signal.get("reasoning", ""),
+                                        metadata=signal.get("metadata", {}),
+                                    )
+
+                                    # Ejecutar trade según el modo del bot
+                                    if bot.config.synthetic_mode:
+                                        # Modo sintético: abrir posición sintética
+                                        position = bot.open_synthetic_position(
+                                            signal_obj, current_price or 0.0
+                                        )
+                                        if position:
+                                            logger.info(
+                                                f"📈 {bot_name}: Posición sintética abierta - {signal_type} a ${current_price:.5f}"
+                                            )
+
+                                            # Crear registro en el historial para la posición sintética
+                                            try:
+                                                trading_tracker.create_order_record(
+                                                    bot_type=bot_name,
+                                                    symbol="DOGEUSDT",
+                                                    side=signal_type,
+                                                    quantity=position["quantity"],
+                                                    entry_price=position["entry_price"],
+                                                    order_id=f"SYNTH_{position['id']}",
+                                                    position_id=position["id"],
+                                                )
+                                                logger.info(
+                                                    f"📝 {bot_name}: Registro creado en historial para posición sintética {position['id']}"
+                                                )
+                                            except Exception as e:
+                                                logger.error(
+                                                    f"❌ {bot_name}: Error creando registro en historial: {e}"
+                                                )
+
+                                        # Verificar si hay posiciones sintéticas que deben cerrarse por SL/TP
+                                        closed_positions = (
+                                            bot.check_synthetic_positions(
+                                                current_price or 0.0
+                                            )
+                                        )
+                                        for closed_pos in closed_positions:
+                                            logger.info(
+                                                f"🔒 {bot_name}: Posición cerrada por {closed_pos['close_reason']} - PnL: ${closed_pos['pnl']:.2f}"
+                                            )
+
+                                        # Sincronizar posiciones sintéticas con el TradingTracker
+                                        if bot.synthetic_positions:
+                                            # Obtener posiciones abiertas
+                                            open_positions = [
+                                                pos
+                                                for pos in bot.synthetic_positions
+                                                if pos["status"] == "open"
+                                            ]
+                                            if open_positions:
+                                                # Sincronizar con el tracker
+                                                if (
+                                                    bot_name
+                                                    not in trading_tracker.active_positions
+                                                ):
+                                                    trading_tracker.active_positions[
+                                                        bot_name
+                                                    ] = {}
+
+                                                for pos in open_positions:
+                                                    position_id = pos["id"]
+                                                    trading_tracker.active_positions[
+                                                        bot_name
+                                                    ][position_id] = {
+                                                        "signal_type": pos[
+                                                            "signal_type"
+                                                        ],
+                                                        "entry_price": pos[
+                                                            "entry_price"
+                                                        ],
+                                                        "quantity": pos["quantity"],
+                                                        "entry_time": pos["timestamp"],
+                                                        "current_price": current_price
+                                                        or pos["entry_price"],
+                                                        "stop_loss": pos["stop_loss"],
+                                                        "take_profit": pos[
+                                                            "take_profit"
+                                                        ],
+                                                        "is_synthetic": True,
+                                                    }
+
+                                                # Guardar en archivo
+                                                trading_tracker.save_history()
+                                                logger.info(
+                                                    f"💾 {bot_name}: {len(open_positions)} posiciones sintéticas sincronizadas con tracker"
+                                                )
+                                    else:
+                                        # Modo real: usar RealTradingManager
+                                        from services.real_trading_manager import (
+                                            real_trading_manager,
+                                        )
+
+                                        result = real_trading_manager.place_order(
+                                            bot_type=bot_name,
+                                            signal=signal_type,
+                                            current_price=current_price or 0.0,
+                                            trading_tracker=trading_tracker,
+                                        )
+                                        if result.get("success"):
+                                            logger.info(
+                                                f"🚀 {bot_name}: Orden real ejecutada - {signal_type} a ${current_price:.5f}"
+                                            )
+                                        else:
+                                            logger.error(
+                                                f"❌ {bot_name}: Error ejecutando orden real: {result.get('error', 'Error desconocido')}"
+                                            )
+
+                            except Exception as e:
+                                logger.error(
+                                    f"❌ Error ejecutando trade para {bot_name}: {e}"
+                                )
             except Exception as e:
                 logger.error(f"Error in background trading loop: {e}")
 
