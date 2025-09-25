@@ -13,6 +13,11 @@ export interface TechnicalIndicators {
   rsi: number[]
   volume: number[]
   timestamps: number[]
+  macd?: {
+    macd: number[]
+    signal: number[]
+    histogram: number[]
+  }
 }
 
 export interface CandlestickChartProps {

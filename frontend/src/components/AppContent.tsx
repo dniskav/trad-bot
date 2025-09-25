@@ -348,7 +348,8 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
 
         const closes = candles.map((c: any) => Number(c.close))
         const timesMs = candles.map((c: any) => Number(c.time))
-        const volumes = arr.map((k: any[]) => Number(k[5]))
+        // Usar quote asset volume (k[7]) en Binance REST
+        const volumes = arr.map((k: any[]) => Number(k[7]))
 
         const smaFast = computeSMA(closes, 8)
         const smaSlow = computeSMA(closes, 21)

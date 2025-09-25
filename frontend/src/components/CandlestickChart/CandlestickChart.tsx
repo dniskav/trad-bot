@@ -8,6 +8,7 @@ import {
 } from 'lightweight-charts'
 import React, { useEffect, useRef, useState } from 'react'
 import { useBinanceSocket } from '../../hooks/useBinanceSocket'
+import Accordion from '../Accordion'
 import type { CandlestickChartProps, TechnicalIndicators } from './types'
 
 const TIMEFRAMES = [
@@ -60,6 +61,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const rsiContainerRef = useRef<HTMLDivElement>(null)
   const volumeContainerRef = useRef<HTMLDivElement>(null)
+  const macdContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
   const seriesRef = useRef<any>(null)
   const seriesInitializedRef = useRef<boolean>(false)
@@ -67,6 +69,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const smaSlowRef = useRef<any>(null)
   const [candleData, setCandleData] = useState<CandlestickData[]>([])
   const [indicators, setIndicators] = useState<TechnicalIndicators | null>(null)
+  const [volumeType, setVolumeType] = useState<'quote' | 'base'>('quote')
 
   const { lastMessage: binanceMsg } = useBinanceSocket(
     live
@@ -121,6 +124,37 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     return rsi
   }
 
+  const computeEMA = (values: number[], period: number): (number | null)[] => {
+    const k = 2 / (period + 1)
+    const ema: (number | null)[] = new Array(values.length).fill(null)
+    if (values.length < period) return ema
+    // SMA inicial
+    let sum = 0
+    for (let i = 0; i < period; i++) sum += values[i]
+    let prev = sum / period
+    ema[period - 1] = prev
+    for (let i = period; i < values.length; i++) {
+      const v = values[i]
+      prev = v * k + prev * (1 - k)
+      ema[i] = prev
+    }
+    return ema
+  }
+
+  const computeMACD = (closes: number[]) => {
+    const ema12 = computeEMA(closes, 12)
+    const ema26 = computeEMA(closes, 26)
+    const macd: (number | null)[] = closes.map((_, i) =>
+      ema12[i] != null && ema26[i] != null ? (ema12[i] as number) - (ema26[i] as number) : null
+    )
+    const macdValues = macd.map((v) => (v == null ? 0 : (v as number)))
+    const signal = computeEMA(macdValues, 9)
+    const histogram: (number | null)[] = macd.map((v, i) =>
+      v != null && signal[i] != null ? (v as number) - (signal[i] as number) : null
+    )
+    return { macd, signal, histogram }
+  }
+
   useEffect(() => {
     if (propCandlesData && Array.isArray(propCandlesData) && propCandlesData.length > 0) {
       const formattedData: CandlestickData[] = propCandlesData.map((candle: any) => ({
@@ -151,7 +185,8 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         const high = Number(k.h ?? k.high)
         const low = Number(k.l ?? k.low)
         const close = Number(k.c ?? k.close)
-        const volume = Number(k.v ?? k.volume ?? 0)
+        // Usar volumen en moneda cotizada (quote) para mejor comparabilidad
+        const volume = Number(k.q ?? k.quoteVolume ?? k.v ?? k.volume ?? 0)
 
         const newCandle: CandlestickData & { volume?: number; ms?: number } = {
           time: Math.floor((startMs as number) / 1000) as any,
@@ -186,14 +221,36 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           const smaFast = computeSMA(closes, 8)
           const smaSlow = computeSMA(closes, 21)
           const rsi = computeRSI(closes, 14)
-          const volumes = trimmed.map((_, i) => (i === trimmed.length - 1 ? volume : 0))
+          const macdObj = computeMACD(closes)
+          // Mantener volúmenes previos y solo actualizar la última vela
+          const prevVolumeByTime: Record<number, number> = {}
+          if (
+            indicators &&
+            Array.isArray(indicators.timestamps) &&
+            Array.isArray(indicators.volume)
+          ) {
+            for (let i = 0; i < indicators.timestamps.length; i++) {
+              const t = indicators.timestamps[i]
+              const v = Number(indicators.volume[i] ?? 0)
+              if (Number.isFinite(t)) prevVolumeByTime[t] = v
+            }
+          }
+          const volumes = timesMs.map((t, i) => {
+            if (i === timesMs.length - 1) return volume
+            return prevVolumeByTime[t] ?? 0
+          })
 
           setIndicators({
             sma_fast: smaFast.map((v) => (v === null ? NaN : Number(v))),
             sma_slow: smaSlow.map((v) => (v === null ? NaN : Number(v))),
             rsi: rsi.map((v) => (v === null ? NaN : Number(v))),
             volume: volumes,
-            timestamps: timesMs
+            timestamps: timesMs,
+            macd: {
+              macd: macdObj.macd.map((v) => (v === null ? NaN : Number(v))) as number[],
+              signal: macdObj.signal.map((v) => (v === null ? NaN : Number(v))) as number[],
+              histogram: macdObj.histogram.map((v) => (v === null ? NaN : Number(v))) as number[]
+            }
           })
 
           return trimmed
@@ -374,6 +431,105 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     }
   }, [indicators])
 
+  // MACD sub-chart
+  useEffect(() => {
+    if (macdContainerRef.current && indicators && indicators.macd) {
+      const { macd, signal, histogram } = indicators.macd
+      if (
+        Array.isArray(macd) &&
+        Array.isArray(signal) &&
+        Array.isArray(histogram) &&
+        Array.isArray(indicators.timestamps)
+      ) {
+        const macdChart = createChart(macdContainerRef.current, {
+          width: macdContainerRef.current.clientWidth,
+          height: 200,
+          layout: { background: { type: ColorType.Solid, color: '#1e1e1e' }, textColor: '#d1d4dc' },
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+            borderColor: '#485c7b',
+            borderVisible: true
+          },
+          rightPriceScale: {
+            borderColor: '#485c7b',
+            borderVisible: true,
+            scaleMargins: { top: 0.1, bottom: 0.1 }
+          }
+        })
+
+        const macdLine = macdChart.addSeries(LineSeries, {
+          color: '#00bcd4',
+          lineWidth: 1,
+          title: 'MACD',
+          priceFormat: { type: 'price', precision: 6, minMove: 0.000001 }
+        })
+        const signalLine = macdChart.addSeries(LineSeries, {
+          color: '#e67e22',
+          lineWidth: 1,
+          title: 'Signal',
+          priceFormat: { type: 'price', precision: 6, minMove: 0.000001 }
+        })
+        const histSeries = macdChart.addSeries(HistogramSeries, {
+          title: 'Histogram',
+          priceFormat: { type: 'price', precision: 6, minMove: 0.000001 }
+        })
+
+        const macdData: LineData[] = macd
+          .map((v, i) => ({ time: (indicators.timestamps[i] / 1000) as any, value: v as number }))
+          .filter((p) => Number.isFinite(p.value))
+        const signalData: LineData[] = signal
+          .map((v, i) => ({ time: (indicators.timestamps[i] / 1000) as any, value: v as number }))
+          .filter((p) => Number.isFinite(p.value))
+        const histData = histogram.map((v, i) => ({
+          time: (indicators.timestamps[i] / 1000) as any,
+          value: Number.isFinite(v as number) ? (v as number) : 0,
+          color: (v as number) >= 0 ? '#26a69a' : '#ef5350'
+        }))
+
+        macdLine.setData(macdData)
+        signalLine.setData(signalData)
+        histSeries.setData(histData)
+
+        const handleResize = () => {
+          if (macdContainerRef.current) {
+            macdChart.applyOptions({ width: macdContainerRef.current.clientWidth })
+          }
+        }
+        window.addEventListener('resize', handleResize)
+        return () => {
+          window.removeEventListener('resize', handleResize)
+          macdChart.remove()
+        }
+      }
+    }
+  }, [indicators])
+
+  // If indicators from props do not include MACD, compute it from closes
+  useEffect(() => {
+    if (!indicators || indicators.macd) return
+    if (candleData.length === 0) return
+    const closes = candleData.map((c) => c.close)
+    const timesMs = candleData.map((c) => ((c.time as number) * 1000) as number)
+    const macdObj = computeMACD(closes)
+    setIndicators((prev) =>
+      prev
+        ? {
+            ...prev,
+            timestamps:
+              prev.timestamps && prev.timestamps.length === timesMs.length
+                ? prev.timestamps
+                : timesMs,
+            macd: {
+              macd: macdObj.macd.map((v) => (v === null ? NaN : Number(v))) as number[],
+              signal: macdObj.signal.map((v) => (v === null ? NaN : Number(v))) as number[],
+              histogram: macdObj.histogram.map((v) => (v === null ? NaN : Number(v))) as number[]
+            }
+          }
+        : prev
+    )
+  }, [candleData, indicators])
+
   useEffect(() => {
     if (rsiContainerRef.current && indicators) {
       if (
@@ -499,6 +655,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
               <span>{signals.length} signals</span>
             </>
           )}
+          <span>•</span>
+          <button
+            className="timeframe-btn"
+            onClick={() => setVolumeType((t) => (t === 'quote' ? 'base' : 'quote'))}
+            title="Alternar tipo de volumen (quote/base)">
+            Vol: {volumeType}
+          </button>
         </div>
       </div>
 
@@ -557,41 +720,52 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         )}
       </div>
 
-      <div className="chart-container">
-        <div ref={chartContainerRef} className="chart-canvas-container" />
-        {signals && signals.length > 0 && (
-          <div className="signal-overlay">
-            {signals.map((signal: any, index: number) => (
-              <div
-                key={`${signal.bot}-${signal.type}-${signal.time}-${index}`}
-                className={`signal-marker ${signal.type.toLowerCase()} ${signal.bot}`}
-                title={`${signal.bot.toUpperCase()} ${signal.type} - ${
-                  signal.reason || 'Trading Signal'
-                }`}>
-                <div className="signal-icon">{signal.type === 'BUY' ? '▲' : '▼'}</div>
-                <div className="signal-label">{signal.bot === 'conservative' ? 'C' : 'A'}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <Accordion title="Gráfico de Velas" defaultExpanded={true} storageKey="chart-candles">
+        <div className="chart-container">
+          <div ref={chartContainerRef} className="chart-canvas-container" />
+          {signals && signals.length > 0 && (
+            <div className="signal-overlay">
+              {signals.map((signal: any, index: number) => (
+                <div
+                  key={`${signal.bot}-${signal.type}-${signal.time}-${index}`}
+                  className={`signal-marker ${signal.type.toLowerCase()} ${signal.bot}`}
+                  title={`${signal.bot.toUpperCase()} ${signal.type} - ${
+                    signal.reason || 'Trading Signal'
+                  }`}>
+                  <div className="signal-icon">{signal.type === 'BUY' ? '▲' : '▼'}</div>
+                  <div className="signal-label">{signal.bot === 'conservative' ? 'C' : 'A'}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Accordion>
 
       {indicators && (
-        <div className="indicator-chart-container">
-          <div className="indicator-header">
-            <h4>RSI (Relative Strength Index)</h4>
+        <Accordion title="RSI" defaultExpanded={false} storageKey="chart-rsi">
+          <div className="indicator-chart-container">
+            <div className="indicator-canvas-container" ref={rsiContainerRef}></div>
           </div>
-          <div className="indicator-canvas-container" ref={rsiContainerRef}></div>
-        </div>
+        </Accordion>
       )}
 
       {indicators && (
-        <div className="indicator-chart-container">
-          <div className="indicator-header">
-            <h4>Volumen</h4>
+        <Accordion
+          title={`Volumen (${volumeType})`}
+          defaultExpanded={false}
+          storageKey="chart-volume">
+          <div className="indicator-chart-container">
+            <div className="indicator-canvas-container" ref={volumeContainerRef}></div>
           </div>
-          <div className="indicator-canvas-container" ref={volumeContainerRef}></div>
-        </div>
+        </Accordion>
+      )}
+
+      {indicators && indicators.macd && (
+        <Accordion title="MACD" defaultExpanded={false} storageKey="chart-macd">
+          <div className="indicator-chart-container">
+            <div className="indicator-canvas-container" ref={macdContainerRef}></div>
+          </div>
+        </Accordion>
       )}
 
       <div className="chart-footer">
