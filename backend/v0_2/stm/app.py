@@ -5,10 +5,10 @@ from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
 
 # Import routers
-from routers import health, account, socket, websocket
-from services.account_service import AccountService
-from services.binance_service import BinanceService
-from middlewares.logging import log_requests_middleware
+from .routers import health, account, socket, websocket
+from .services.account_service import AccountService
+from .services.binance_service import BinanceService
+from .middlewares.logging import log_requests_middleware
 
 log = get_logger("stm.v0.2")
 
@@ -44,3 +44,9 @@ app.include_router(websocket.router)
 
 # Add middlewares
 app.middleware("http")(log_requests_middleware)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=8100)
