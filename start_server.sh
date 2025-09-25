@@ -30,11 +30,8 @@ show_help() {
 
 # Función para verificar si el servidor está corriendo
 is_server_running() {
-    if pgrep -f "backend/server.py" > /dev/null; then
-        return 0
-    else
-        return 1
-    fi
+    local port=${SERVER_V2_PORT:-8200}
+    lsof -ti:"$port" >/dev/null 2>&1
 }
 
 # Función para detener el servidor
@@ -70,7 +67,10 @@ run_foreground() {
     fi
     
     cd backend
-    python3 server.py
+    # arrancar STM si no está en su puerto
+    STM_PORT=${STM_PORT:-8100} ./start_stm.sh &
+    # arrancar server v2 en su puerto
+    SERVER_V2_PORT=${SERVER_V2_PORT:-8200} ./start_server_v2.sh
 }
 
 # Función para ejecutar en segundo plano
@@ -84,7 +84,9 @@ run_background() {
     fi
     
     cd backend
-    nohup python3 server.py > server.log 2>&1 &
+    nohup STM_PORT=${STM_PORT:-8100} ./start_stm.sh > stm.log 2>&1 &
+    STM_PID=$!
+    nohup SERVER_V2_PORT=${SERVER_V2_PORT:-8200} ./start_server_v2.sh > server_v2.log 2>&1 &
     SERVER_PID=$!
     
     sleep 3
@@ -92,7 +94,8 @@ run_background() {
     if is_server_running; then
         echo -e "${GREEN}✅ Servidor iniciado correctamente${NC}"
         echo -e "${BLUE}📊 PID: $SERVER_PID${NC}"
-        echo -e "${BLUE}📋 Logs: backend/server.log${NC}"
+        echo -e "${BLUE}📋 Logs STM: backend/stm.log${NC}"
+        echo -e "${BLUE}📋 Logs Server v0.2: backend/server_v2.log${NC}"
         echo -e "${YELLOW}💡 Para detener: $0 --stop${NC}"
         echo -e "${YELLOW}💡 Para ver logs: $0 --logs${NC}"
     else
@@ -103,12 +106,15 @@ run_background() {
 
 # Función para mostrar logs
 show_logs() {
-    echo -e "${BLUE}📋 Mostrando logs del servidor:${NC}"
+    echo -e "${BLUE}📋 Mostrando logs:${NC}"
     echo "----------------------------------------"
-    if [ -f "backend/server.log" ]; then
-        tail -50 backend/server.log
+    if [ -f "backend/server_v2.log" ]; then
+        echo "--- Server v0.2 ---"; tail -50 backend/server_v2.log
     else
         echo -e "${YELLOW}⚠️  No se encontró el archivo de logs${NC}"
+    fi
+    if [ -f "backend/stm.log" ]; then
+        echo "--- STM ---"; tail -50 backend/stm.log
     fi
     echo "----------------------------------------"
     echo -e "${YELLOW}💡 Para ver logs en tiempo real: tail -f backend/server.log${NC}"
@@ -122,8 +128,10 @@ restart_server() {
     run_background
 }
 
-# Verificar argumentos
-case "$1" in
+# Opción por defecto: foreground
+ARG=${1:---foreground}
+
+case "$ARG" in
     --foreground)
         run_foreground
         ;;
@@ -143,8 +151,7 @@ case "$1" in
         show_help
         ;;
     *)
-        echo -e "${RED}❌ Opción desconocida: $1${NC}"
-        echo -e "${YELLOW}💡 Usa '$0 --help' para ver las opciones disponibles${NC}"
-        exit 1
+        echo -e "${YELLOW}⚠️  Opción desconocida: $ARG. Ejecutando foreground por defecto...${NC}"
+        run_foreground
         ;;
 esac

@@ -1,32 +1,67 @@
 #!/bin/bash
 
-# Script para arreglar el error "Address already in use" en el puerto 8000
+# Script para arreglar el error "Address already in use" en puertos del proyecto
 # Autor: Trading Bot Assistant
 # Fecha: $(date)
 
-echo "🔧 Arreglando error 'Address already in use' en puerto 8000..."
+# Uso: ./fix_port.sh [--stm | --server | --api | --ports "p1 p2 ..."]
+# Sin parámetros repara todos (8000, 8100, 8200)
+
+PORTS_DEFAULT=(8000 8100 8200)
+PORTS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --stm)
+      PORTS+=(8100)
+      shift ;;
+    --server)
+      PORTS+=(8200)
+      shift ;;
+    --api)
+      PORTS+=(8000)
+      shift ;;
+    --ports)
+      shift
+      # siguiente argumento con lista de puertos separados por espacio
+      for p in $1; do PORTS+=($p); done
+      shift ;;
+    *)
+      echo "⚠️  Opción desconocida: $1 (se ignorará)"; shift ;;
+  esac
+done
+
+if [[ ${#PORTS[@]} -eq 0 ]]; then
+  PORTS=(${PORTS_DEFAULT[@]})
+fi
+
+echo "🔧 Arreglando puertos: ${PORTS[*]}"
 
 # Función para mostrar procesos en el puerto 8000
 show_port_processes() {
-    echo "📋 Procesos usando el puerto 8000:"
-    lsof -ti:8000 | while read pid; do
+    for p in "${PORTS[@]}"; do
+      echo "📋 Procesos usando el puerto $p:"
+      lsof -ti:$p | while read pid; do
         if [ ! -z "$pid" ]; then
             echo "  PID: $pid - $(ps -p $pid -o comm= 2>/dev/null || echo 'Proceso no encontrado')"
         fi
+      done
     done
 }
 
 # Función para matar procesos en el puerto 8000
 kill_port_processes() {
-    echo "🛑 Matando procesos en el puerto 8000..."
-    pids=$(lsof -ti:8000)
-    if [ ! -z "$pids" ]; then
-        echo "$pids" | xargs kill -9 2>/dev/null
-        sleep 2
-        echo "✅ Procesos terminados"
-    else
-        echo "ℹ️  No hay procesos usando el puerto 8000"
-    fi
+    for p in "${PORTS[@]}"; do
+      echo "🛑 Matando procesos en el puerto $p..."
+      pids=$(lsof -ti:$p)
+      if [ ! -z "$pids" ]; then
+          echo "$pids" | xargs kill -9 2>/dev/null
+          sleep 1
+          echo "✅ Procesos terminados en $p"
+      else
+          echo "ℹ️  No hay procesos usando el puerto $p"
+      fi
+    done
 }
 
 # Función para matar procesos específicos del servidor
@@ -34,7 +69,9 @@ kill_server_processes() {
     echo "🛑 Matando procesos específicos del servidor..."
     
     # Matar procesos de uvicorn
-    pkill -f "uvicorn.*server" 2>/dev/null
+    pkill -f "uvicorn.*backend.v0_2" 2>/dev/null
+    pkill -f "uvicorn.*8100" 2>/dev/null
+    pkill -f "uvicorn.*8200" 2>/dev/null
     pkill -f "python.*server.py" 2>/dev/null
     
     # Matar procesos de trading bot
@@ -48,13 +85,15 @@ kill_server_processes() {
 
 # Función para verificar si el puerto está libre
 check_port_free() {
-    if lsof -ti:8000 >/dev/null 2>&1; then
-        echo "❌ El puerto 8000 aún está en uso"
-        return 1
-    else
-        echo "✅ El puerto 8000 está libre"
-        return 0
-    fi
+    ok=1
+    for p in "${PORTS[@]}"; do
+      if lsof -ti:$p >/dev/null 2>&1; then
+        echo "❌ El puerto $p aún está en uso"; ok=0
+      else
+        echo "✅ El puerto $p está libre"
+      fi
+    done
+    [ $ok -eq 1 ]
 }
 
 # Función para limpiar procesos Python huérfanos
@@ -77,7 +116,7 @@ cleanup_python_processes() {
 # Función principal
 main() {
     echo "=========================================="
-    echo "🔧 FIX PORT 8000 - Trading Bot"
+    echo "🔧 FIX PORTS - Trading Bot"
     echo "=========================================="
     
     # Mostrar procesos actuales
@@ -89,13 +128,13 @@ main() {
     # Matar procesos específicos del servidor
     kill_server_processes
     
-    # Matar cualquier proceso en el puerto 8000
+    # Matar cualquier proceso en los puertos declarados
     kill_port_processes
     
     # Verificar que el puerto esté libre
     if check_port_free; then
         echo ""
-        echo "🎉 ¡Puerto 8000 liberado exitosamente!"
+        echo "🎉 ¡Puertos liberados exitosamente!"
         echo ""
         echo "💡 Ahora puedes iniciar el servidor con:"
         echo "   ./start_server.sh --start"
@@ -104,9 +143,9 @@ main() {
         echo ""
     else
         echo ""
-        echo "⚠️  El puerto 8000 aún está en uso. Intenta:"
+        echo "⚠️  Algún puerto aún está en uso. Intenta:"
         echo "   1. Reiniciar tu terminal"
-        echo "   2. Ejecutar: sudo lsof -ti:8000 | xargs sudo kill -9"
+        echo "   2. Ejecutar: sudo lsof -ti:<PUERTO> | xargs sudo kill -9"
         echo "   3. Reiniciar tu computadora si es necesario"
         echo ""
     fi
