@@ -249,12 +249,12 @@ class PositionService:
                 "symbol": request.symbol,
                 "side": request.side,
                 "type": request.type,
-                "quantity": request.quantity,
+                "quantity": str(int(float(request.quantity))),
                 "price": execution_price,
                 "stopPrice": request.stopPrice,
                 "timeInForce": request.timeInForce,
                 "status": "FILLED",  # STM simulates immediate fill
-                "executedQty": request.quantity,
+                "executedQty": str(int(float(request.quantity))),
                 "cummulativeQuoteQty": str(
                     float(request.quantity) * float(execution_price)
                 ),
@@ -844,7 +844,9 @@ class PositionService:
             for pos in open_positions:
                 binance_positions.append(
                     {
-                        "positionId": pos.get("positionId"),  # Add positionId for server compatibility
+                        "positionId": pos.get(
+                            "positionId"
+                        ),  # Add positionId for server compatibility
                         "symbol": pos.get("symbol"),
                         "initialMargin": "0",
                         "maintMargin": "0",
@@ -928,7 +930,8 @@ class PositionService:
                 if (
                     pos.get("status") == "open"
                     and pos.get("symbol") == symbol
-                    and pos.get("quantity") == quantity
+                    and str(int(float(pos.get("quantity", "0"))))
+                    == str(int(float(quantity)))
                 ):
 
                     # Check if order side is opposite to position side
