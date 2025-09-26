@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script para iniciar Server con venv y control de procesos
+# Script para iniciar STM con venv y control de procesos
 
 set -euo pipefail
 
@@ -7,8 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # Configuración
-PORT=8200
-MODULE="backend.v0_2.server.app"
+PORT=8100
+MODULE="backend.v0_2.stm.app"
 VENV_DIR="trading_bot_env"
 
 # Función para matar procesos
@@ -18,7 +18,6 @@ kill_pids() {
   echo "🔪 Enviando SIGTERM a: ${pids}"
   kill ${pids} >/dev/null 2>&1 || true
   sleep 0.3
-  # Forzar si siguen vivos
   for pid in ${pids}; do
     if kill -0 ${pid} >/dev/null 2>&1; then
       echo "⚠️  Forzando SIGKILL a ${pid}"
@@ -78,7 +77,7 @@ install_deps() {
 
 # Función para activar venv y ejecutar
 run_with_venv() {
-  echo "🚀 Iniciando Server v0.2 en puerto ${PORT} con venv..."
+  echo "🚀 Iniciando STM en puerto ${PORT} con venv..."
   
   # Activar venv
   source "${VENV_DIR}/bin/activate"
@@ -89,13 +88,13 @@ run_with_venv() {
   echo "Python: $(which python)"
   echo "Pip: $(which pip)"
   
-  # Ejecutar el servidor
+  # Ejecutar el STM
   exec python -m ${MODULE}
 }
 
-echo "🧹 Revisando procesos previos del Server..."
+echo "🧹 Revisando procesos previos del STM..."
 
-# 1) Cerrar procesos que ejecuten el módulo del server
+# 1) Cerrar procesos que ejecuten el módulo del STM
 if pgrep -u "$USER" -fl "python.*${MODULE}" >/dev/null 2>&1; then
   echo "🔎 Encontrado ${MODULE} corriendo"
   PIDS=$(pgrep -u "$USER" -f "python.*${MODULE}")
