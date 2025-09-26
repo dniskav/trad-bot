@@ -844,6 +844,7 @@ class PositionService:
             for pos in open_positions:
                 binance_positions.append(
                     {
+                        "positionId": pos.get("positionId"),  # Add positionId for server compatibility
                         "symbol": pos.get("symbol"),
                         "initialMargin": "0",
                         "maintMargin": "0",

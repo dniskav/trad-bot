@@ -42,13 +42,18 @@ class OpenPositionRequest(BaseModel):
     # Core order parameters
     symbol: str = Field(..., description="Trading pair symbol (e.g., DOGEUSDT)")
     side: Literal["BUY", "SELL"] = Field(..., description="Order side")
+    type: Literal["MARKET", "LIMIT", "STOP_MARKET", "STOP_LOSS", "TAKE_PROFIT"] = Field(
+        "MARKET", description="Order type"
+    )
     quantity: str = Field(..., description="Order quantity")
+    price: Optional[str] = Field(None, description="Order price (for LIMIT orders)")
+    stopPrice: Optional[str] = Field(None, description="Stop price (for STOP orders)")
     leverage: Optional[int] = Field(None, description="Leverage (1-10)")
     isIsolated: Optional[bool] = Field(False, description="Isolated margin")
 
     # Risk management (optional)
-    stopLossPrice: Optional[str] = Field(None, description="Stop loss price")
-    takeProfitPrice: Optional[str] = Field(None, description="Take profit price")
+    stopLoss: Optional[dict] = Field(None, description="Stop loss configuration")
+    takeProfit: Optional[dict] = Field(None, description="Take profit configuration")
 
     # Binance metadata
     clientOrderId: Optional[str] = Field(None, description="Client order ID")

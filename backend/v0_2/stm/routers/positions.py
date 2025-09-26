@@ -84,5 +84,5 @@ async def admin_reset_positions_orders():
     if position_service is None:
         raise HTTPException(status_code=500, detail="PositionService not initialized")
     log.warning("Admin reset: clearing positions and orders (STM)")
-    result = await position_service.clear_all_data()
+    result = await position_service.reset_positions_and_orders()
     return {"success": True, **result}

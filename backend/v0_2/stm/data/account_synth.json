@@ -1,9 +1,13 @@
 {
-  "usdt_balance": 999.9777675,
-  "doge_balance": 0,
-  "usdt_locked": 22.2547325,
-  "doge_locked": 0,
-  "current_balance": 977.723035,
-  "total_balance_usdt": 977.723035,
-  "last_updated": "2025-09-26T11:08:11.792427+00:00"
+  "initial_balance": 1000.0,
+  "current_balance": 949.51299754,
+  "total_pnl": 0.0,
+  "usdt_balance": 499.94961377,
+  "doge_balance": 2203.371157871544,
+  "usdt_locked": 50.43661623,
+  "doge_locked": 0.0,
+  "doge_price": 0.226925,
+  "total_balance_usdt": 949.51299754,
+  "invested": 0.0,
+  "last_updated": "2025-09-26T12:42:41.178469+00:00"
 }
