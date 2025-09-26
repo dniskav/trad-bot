@@ -24,6 +24,20 @@ ORDERS_FILE = "orders"
 # Precio actual (se actualiza desde Binance service)
 _current_price: Optional[float] = None
 
+# Configuración de comisiones Binance (simuladas)
+BINANCE_COMMISSION_RATES = {
+    "maker": 0.0002,  # 0.02% para maker
+    "taker": 0.0004,  # 0.04% para taker
+    "margin": 0.0004,  # 0.04% para margin trading
+}
+
+# Configuración de costos adicionales
+BINANCE_COSTS = {
+    "funding_rate": 0.0001,  # 0.01% cada 8 horas
+    "borrow_fee": 0.0001,  # 0.01% por día
+    "liquidation_fee": 0.005,  # 0.5% en liquidación
+}
+
 
 class PositionService:
     def __init__(
@@ -39,6 +53,32 @@ class PositionService:
         """Generate unique ID"""
         return str(uuid.uuid4())
 
+    def _calculate_commission(
+        self, quantity: float, price: float, order_type: str = "taker"
+    ) -> Dict[str, Any]:
+        """Calculate Binance-style commission"""
+        notional = quantity * price
+        rate = BINANCE_COMMISSION_RATES.get(
+            order_type, BINANCE_COMMISSION_RATES["taker"]
+        )
+        commission = notional * rate
+
+        return {
+            "commission": commission,
+            "commissionAsset": "USDT",  # Assuming USDT as base
+            "rate": rate,
+            "notional": notional,
+        }
+
+    def _calculate_funding_fee(self, position_size: float, price: float) -> float:
+        """Calculate funding fee (every 8 hours)"""
+        notional = abs(position_size) * price
+        return notional * BINANCE_COSTS["funding_rate"]
+
+    def _calculate_borrow_fee(self, borrowed_amount: float) -> float:
+        """Calculate daily borrow fee"""
+        return borrowed_amount * BINANCE_COSTS["borrow_fee"]
+
     async def _notify_position_change(
         self, change_type: str, position_data: Dict[str, Any]
     ):
@@ -49,12 +89,91 @@ class PositionService:
             except Exception as e:
                 log.error(f"Error notifying position change: {e}")
 
-    def _calculate_commission(self, quantity: float, price: float, side: str) -> float:
-        """Calculate commission based on Binance fees (0.1% for spot, 0.02% for futures)"""
-        # Using spot trading fees (0.1% = 0.001)
-        commission_rate = 0.001
-        notional = quantity * price
-        return notional * commission_rate
+    async def _notify_execution_report(
+        self, order_data: Dict[str, Any], execution_type: str = "TRADE"
+    ):
+        """Send Binance-style executionReport event"""
+        if self.on_position_change:
+            try:
+                # Calculate commission
+                quantity = float(order_data.get("quantity", 0))
+                price = float(order_data.get("price", 0))
+                commission_info = self._calculate_commission(quantity, price)
+
+                execution_report = {
+                    "e": "executionReport",
+                    "E": int(datetime.now(timezone.utc).timestamp() * 1000),
+                    "s": order_data.get("symbol"),
+                    "c": order_data.get("clientOrderId"),
+                    "S": order_data.get("side"),
+                    "o": order_data.get("type"),
+                    "f": order_data.get("timeInForce", "GTC"),
+                    "q": str(quantity),
+                    "p": str(price),
+                    "P": order_data.get("stopPrice", "0.00000000"),
+                    "F": "0.00000000",  # Iceberg quantity
+                    "g": -1,  # OrderListId
+                    "C": "",  # Original client order ID
+                    "x": execution_type,
+                    "X": "FILLED",
+                    "r": "NONE",
+                    "i": order_data.get("orderId"),
+                    "l": str(quantity),  # Last executed quantity
+                    "z": str(quantity),  # Cumulative filled quantity
+                    "L": str(price),  # Last executed price
+                    "n": str(commission_info["commission"]),  # Commission amount
+                    "N": commission_info["commissionAsset"],  # Commission asset
+                    "T": int(datetime.now(timezone.utc).timestamp() * 1000),
+                    "t": int(datetime.now(timezone.utc).timestamp() * 1000),  # Trade ID
+                    "I": 0,  # Ignore
+                    "w": False,  # Is the order on the book?
+                    "m": False,  # Is this trade the maker side?
+                    "M": False,  # Ignore
+                    "O": int(datetime.now(timezone.utc).timestamp() * 1000),
+                    "Z": str(
+                        quantity * price
+                    ),  # Cumulative quote asset transacted quantity
+                    "Y": str(quantity * price),  # Last quote asset transacted quantity
+                    "Q": "0.00000000",  # Quote Order Qty
+                }
+
+                await self.on_position_change("execution_report", execution_report)
+            except Exception as e:
+                log.error(f"Error notifying execution report: {e}")
+
+    async def _notify_account_position(self, position_data: Dict[str, Any]):
+        """Send Binance-style outboundAccountPosition event"""
+        if self.on_position_change:
+            try:
+                # Get current account balance (simplified)
+                account_balance = 1000.0  # This should come from account service
+
+                account_position = {
+                    "e": "outboundAccountPosition",
+                    "E": int(datetime.now(timezone.utc).timestamp() * 1000),
+                    "u": int(datetime.now(timezone.utc).timestamp() * 1000),
+                    "B": [{"a": "USDT", "f": str(account_balance), "l": "0.00000000"}],
+                    "P": [
+                        {
+                            "s": position_data.get("symbol"),
+                            "pa": position_data.get("positionAmt", "0"),
+                            "ep": position_data.get("entryPrice", "0"),
+                            "cr": "0.00000000",  # Accumulated realized
+                            "up": position_data.get("unrealizedProfit", "0"),
+                            "mt": (
+                                "isolated"
+                                if position_data.get("isolated", False)
+                                else "cross"
+                            ),
+                            "iw": "0.00000000",  # Isolated wallet
+                            "ps": position_data.get("positionSide", "BOTH"),
+                        }
+                    ],
+                }
+
+                await self.on_position_change("account_position", account_position)
+            except Exception as e:
+                log.error(f"Error notifying account position: {e}")
 
     @staticmethod
     def _parse_optional_price(value: Any) -> Optional[str]:
@@ -89,7 +208,8 @@ class PositionService:
             side = position_data.get("side", "BUY")
 
             # Calculate commission
-            commission = self._calculate_commission(quantity, entry_price, side)
+            commission_info = self._calculate_commission(quantity, entry_price, "taker")
+            commission_amount = commission_info["commission"]
 
             if change_type == "opened":
                 # When opening position: lock funds and pay commission
@@ -97,13 +217,17 @@ class PositionService:
 
                 if side == "BUY":
                     # BUY: lock USDT for purchase + commission
-                    account["usdt_locked"] += notional + commission
-                    account["usdt_balance"] -= commission  # Pay commission immediately
+                    account["usdt_locked"] += notional + commission_amount
+                    account[
+                        "usdt_balance"
+                    ] -= commission_amount  # Pay commission immediately
                 else:
                     # SELL: lock DOGE for sale + commission
-                    account["doge_locked"] += quantity + (commission / entry_price)
+                    account["doge_locked"] += quantity + (
+                        commission_amount / entry_price
+                    )
                     account["doge_balance"] -= (
-                        commission / entry_price
+                        commission_amount / entry_price
                     )  # Pay commission in DOGE
 
             elif change_type == "closed":
@@ -117,12 +241,16 @@ class PositionService:
                 if side == "BUY":
                     # BUY position closing: unlock USDT, receive DOGE, pay commission
                     account["usdt_locked"] -= notional
-                    account["doge_balance"] += quantity - (commission / current_price)
-                    account["usdt_balance"] -= commission  # Pay exit commission
+                    account["doge_balance"] += quantity - (
+                        commission_amount / current_price
+                    )
+                    account["usdt_balance"] -= commission_amount  # Pay exit commission
                 else:
                     # SELL position closing: unlock DOGE, receive USDT, pay commission
-                    account["doge_locked"] -= quantity + (commission / entry_price)
-                    account["usdt_balance"] += exit_notional - commission
+                    account["doge_locked"] -= quantity + (
+                        commission_amount / entry_price
+                    )
+                    account["usdt_balance"] += exit_notional - commission_amount
 
             # Recompute balances
             account = self.account_service._compute_balances(account)
@@ -132,7 +260,7 @@ class PositionService:
             self.account_service.store.write(self.account_service.account_file, account)
 
             log.info(
-                f"Account balance updated for {change_type} position: commission={commission:.6f}"
+                f"Account balance updated for {change_type} position: commission={commission_amount:.6f}"
             )
 
         except Exception as e:
@@ -242,6 +370,13 @@ class PositionService:
                     current_price
                 )  # For stop orders, use current price
 
+            # Calculate commission
+            quantity_float = float(request.quantity)
+            price_float = float(execution_price)
+            commission_info = self._calculate_commission(
+                quantity_float, price_float, "taker"
+            )
+
             # Create order record
             order_data = {
                 "orderId": order_id,
@@ -249,15 +384,15 @@ class PositionService:
                 "symbol": request.symbol,
                 "side": request.side,
                 "type": request.type,
-                "quantity": str(int(float(request.quantity))),
+                "quantity": str(int(quantity_float)),
                 "price": execution_price,
                 "stopPrice": request.stopPrice,
                 "timeInForce": request.timeInForce,
                 "status": "FILLED",  # STM simulates immediate fill
-                "executedQty": str(int(float(request.quantity))),
-                "cummulativeQuoteQty": str(
-                    float(request.quantity) * float(execution_price)
-                ),
+                "executedQty": str(int(quantity_float)),
+                "cummulativeQuoteQty": str(quantity_float * price_float),
+                "commission": str(commission_info["commission"]),
+                "commissionAsset": commission_info["commissionAsset"],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "updateTime": datetime.now(timezone.utc).isoformat(),
             }
@@ -266,6 +401,9 @@ class PositionService:
             orders = self._load_orders()
             orders.append(order_data)
             self._save_orders(orders)
+
+            # Send execution report event
+            await self._notify_execution_report(order_data)
 
             # Handle different order types
             if request.type == "MARKET":
@@ -278,7 +416,8 @@ class PositionService:
                     "side": request.side,
                     "quantity": request.quantity,
                     "entryPrice": execution_price,
-                    "leverage": 1,  # Default leverage
+                    "leverage": request.leverage
+                    or 1,  # Use request leverage or default to 1
                     "isIsolated": request.isIsolated == "TRUE",
                     "status": "open",
                     "pnl": 0.0,
@@ -296,6 +435,9 @@ class PositionService:
 
                 # Notify position change
                 await self._notify_position_change("opened", position_data)
+
+                # Send account position event
+                await self._notify_account_position(position_data)
 
                 return OrderResponse(
                     success=True,
@@ -431,6 +573,7 @@ class PositionService:
                 )
 
             # Create position
+            log.info(f"Creating position with leverage: {request.leverage}")
             position = Position(
                 positionId=position_id,
                 orderId=order_id,
@@ -463,9 +606,11 @@ class PositionService:
             position.takeProfitOrderId = tp_order_id
 
             # Save position
+            log.info(f"Position created with leverage: {position.leverage}")
             positions = self._load_positions()
             positions.append(position.dict())
             self._save_positions(positions)
+            log.info(f"Position saved with leverage: {position.dict().get('leverage')}")
 
             # Update account balance
             await self._update_account_balance(position.dict(), "opened")
@@ -859,7 +1004,7 @@ class PositionService:
                         "maxNotional": "0",
                         "bidNotional": "0",
                         "askNotional": "0",
-                        "positionSide": "BOTH",
+                        "positionSide": "LONG" if pos.get("side") == "BUY" else "SHORT",
                         "positionAmt": (
                             pos.get("quantity")
                             if pos.get("side") == "BUY"

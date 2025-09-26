@@ -28,6 +28,7 @@ class BinanceMarginOrderRequest(BaseModel):
     )
     newClientOrderId: Optional[str] = Field(None, description="Client order ID")
     icebergQty: Optional[str] = Field(None, description="Iceberg quantity")
+    leverage: Optional[int] = Field(None, description="Leverage (1-10)")
     recvWindow: Optional[int] = Field(5000, description="Receive window")
     timestamp: Optional[int] = Field(None, description="Order timestamp")
 

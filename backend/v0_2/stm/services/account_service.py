@@ -37,11 +37,18 @@ class AccountService:
         doge_balance = float(payload.get("doge_balance", 0) or 0)
         usdt_locked = float(payload.get("usdt_locked", 0) or 0)
         doge_locked = float(payload.get("doge_locked", 0) or 0)
-        current_balance = (
-            usdt_balance + doge_balance * price - (usdt_locked + doge_locked * price)
+
+        # Total balance includes both available and locked funds
+        # (locked funds are still part of the account, just not available for trading)
+        total_balance = (
+            usdt_balance + doge_balance * price + usdt_locked + doge_locked * price
         )
+
+        # Current balance is only the available funds (excluding locked)
+        current_balance = usdt_balance + doge_balance * price
+
         payload["current_balance"] = current_balance
-        payload["total_balance_usdt"] = current_balance
+        payload["total_balance_usdt"] = total_balance
         return payload
 
     async def ensure_account_initialized(self) -> None:
