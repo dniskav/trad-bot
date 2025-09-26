@@ -6,7 +6,6 @@ from ..services.stm_service import STMService
 from ..models.position import OpenPositionRequest, ClosePositionRequest, OrderResponse
 from fastapi import Body
 import json
-import urllib.request
 import uuid
 from datetime import datetime, timezone
 
@@ -49,27 +48,30 @@ async def _orchestrate_sl_tp_async(position_id: str, req: OpenPositionRequest) -
     log.info(f"Starting background SL/TP task for position {position_id}")
     try:
         print(f"📋 Request details: SL={req.stopLoss}, TP={req.takeProfit}")
-        
+
         if req.stopLoss and req.stopLoss.price:
             print(f"🛑 Setting SL at {req.stopLoss.price} for position {position_id}")
             log.info(f"Setting SL at {req.stopLoss.price} for position {position_id}")
             sl_result = await stm_service.set_stop_loss(position_id, req.stopLoss.price)
             print(f"🛑 SL result: {sl_result}")
             log.info(f"SL result: {sl_result}")
-            
+
         if req.takeProfit and req.takeProfit.price:
             print(f"🎯 Setting TP at {req.takeProfit.price} for position {position_id}")
             log.info(f"Setting TP at {req.takeProfit.price} for position {position_id}")
-            tp_result = await stm_service.set_take_profit(position_id, req.takeProfit.price)
+            tp_result = await stm_service.set_take_profit(
+                position_id, req.takeProfit.price
+            )
             print(f"🎯 TP result: {tp_result}")
             log.info(f"TP result: {tp_result}")
-            
+
         print(f"✅ BACKGROUND TASK COMPLETED for position {position_id}")
         log.info(f"Background SL/TP task completed for position {position_id}")
     except Exception as e:
         print(f"❌ BACKGROUND TASK ERROR for position {position_id}: {e}")
         log.error(f"Background SL/TP error for position {position_id}: {e}")
         import traceback
+
         print(f"❌ Traceback: {traceback.format_exc()}")
         log.error(f"Traceback: {traceback.format_exc()}")
 
@@ -99,7 +101,6 @@ async def open_position(request: OpenPositionRequest):
             success=True,
             orderId=request.clientOrderId,
             message="Accepted: opening in background; you will be notified via WS",
-            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     # STM is healthy - try to open synchronously with short timeout
@@ -116,17 +117,16 @@ async def open_position(request: OpenPositionRequest):
                 success=True,
                 orderId=request.clientOrderId,
                 message="Accepted: STM failed, retrying in background; you will be notified via WS",
-                timestamp=datetime.now(timezone.utc).isoformat(),
             )
 
         # Success - respond immediately to client, then process SL/TP in background
         position_id = open_resp.positionId
-        
+
         # Start background task for SL/TP
         log.info(f"Starting background SL/TP task for position {position_id}")
         task = asyncio.create_task(_orchestrate_sl_tp_async(position_id, request))
         log.info(f"Background task created: {task}")
-        
+
         # Return immediate response
         return open_resp
 
@@ -137,7 +137,6 @@ async def open_position(request: OpenPositionRequest):
             success=True,
             orderId=request.clientOrderId,
             message="Accepted: STM slow, opening in background; you will be notified via WS",
-            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
 

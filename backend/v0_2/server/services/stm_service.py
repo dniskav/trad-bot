@@ -64,31 +64,26 @@ class STMService:
     async def get_socket_logging_state(self) -> dict:
         """Get current socket logging state from STM"""
         try:
-            with urllib.request.urlopen(
-                f"{STM_HTTP}/socket/logging", timeout=5
-            ) as resp:
-                data = resp.read().decode()
-                stm_state = json.loads(data)
-                stm_state["server_binance_enabled"] = self.stm_log_enabled
-                return stm_state
-        except urllib.error.HTTPError as e:
-            return {"status": "error", "message": str(e), "code": e.code}
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{STM_HTTP}/socket/logging", timeout=5) as resp:
+                    stm_state = await resp.json()
+                    stm_state["server_binance_enabled"] = self.stm_log_enabled
+                    return stm_state
+        except aiohttp.ClientError as e:
+            return {"status": "error", "message": str(e), "code": 500}
         except Exception as e:
             return {"status": "error", "message": str(e), "code": 500}
 
     async def set_socket_logging_state(self, payload: dict) -> dict:
         """Set socket logging state in STM"""
         try:
-            data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(
-                f"{STM_HTTP}/socket/logging",
-                data=data,
-                headers={"Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                return json.loads(resp.read().decode())
-        except urllib.error.HTTPError as e:
-            return {"status": "error", "message": str(e), "code": e.code}
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{STM_HTTP}/socket/logging", json=payload, timeout=5
+                ) as resp:
+                    return await resp.json()
+        except aiohttp.ClientError as e:
+            return {"status": "error", "message": str(e), "code": 500}
         except Exception as e:
             return {"status": "error", "message": str(e), "code": 500}
 
@@ -107,6 +102,10 @@ class STMService:
                 "isIsolated": "TRUE" if request.isIsolated else "FALSE",
                 "newClientOrderId": request.clientOrderId,
             }
+
+            # Add leverage if provided
+            if request.leverage:
+                binance_data["leverage"] = request.leverage
 
             # Add price if LIMIT order
             if request.type == "LIMIT" and request.price:
@@ -137,21 +136,17 @@ class STMService:
         """Close a position via STM"""
         try:
             data = request.dict()
-            json_data = json.dumps(data).encode("utf-8")
-            req = urllib.request.Request(
-                f"{STM_HTTP}/positions/close",
-                data=json_data,
-                headers={"Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                response_data = json.loads(resp.read().decode())
-                return OrderResponse(**response_data)
-        except urllib.error.HTTPError as e:
-            error_data = json.loads(e.read().decode()) if e.read() else {}
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{STM_HTTP}/positions/close", json=data, timeout=10
+                ) as resp:
+                    response_data = await resp.json()
+                    return OrderResponse(**response_data)
+        except aiohttp.ClientError as e:
             return OrderResponse(
                 success=False,
                 orderId="",
-                message=f"STM error: {error_data.get('detail', str(e))}",
+                message=f"STM error: {str(e)}",
             )
         except Exception as e:
             return OrderResponse(
@@ -161,42 +156,51 @@ class STMService:
     async def get_positions(self, status: Optional[str] = None) -> Dict[str, Any]:
         """Get positions from STM"""
         try:
-            url = f"{STM_HTTP}/positions"
+            url = f"{STM_HTTP}/sapi/v1/margin/positions"
             if status:
                 url += f"?status={status}"
 
-            with urllib.request.urlopen(url, timeout=5) as resp:
-                return json.loads(resp.read().decode())
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=5) as resp:
+                    positions = await resp.json()
+                    return {
+                        "success": True,
+                        "positions": positions,
+                        "count": len(positions),
+                    }
         except Exception as e:
             return {"success": False, "message": f"Error connecting to STM: {str(e)}"}
 
     async def get_position(self, position_id: str) -> Dict[str, Any]:
         """Get a specific position from STM"""
         try:
-            with urllib.request.urlopen(
-                f"{STM_HTTP}/positions/{position_id}", timeout=5
-            ) as resp:
-                return json.loads(resp.read().decode())
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{STM_HTTP}/positions/{position_id}", timeout=5
+                ) as resp:
+                    return await resp.json()
         except Exception as e:
             return {"success": False, "message": f"Error connecting to STM: {str(e)}"}
 
     async def get_position_orders(self, position_id: str) -> Dict[str, Any]:
         """Get orders for a position from STM"""
         try:
-            with urllib.request.urlopen(
-                f"{STM_HTTP}/positions/{position_id}/orders", timeout=5
-            ) as resp:
-                return json.loads(resp.read().decode())
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{STM_HTTP}/positions/{position_id}/orders", timeout=5
+                ) as resp:
+                    return await resp.json()
         except Exception as e:
             return {"success": False, "message": f"Error connecting to STM: {str(e)}"}
 
     async def get_all_orders(self) -> Dict[str, Any]:
         """Get all orders from STM"""
         try:
-            with urllib.request.urlopen(
-                f"{STM_HTTP}/positions/orders/all", timeout=5
-            ) as resp:
-                return json.loads(resp.read().decode())
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{STM_HTTP}/positions/orders/all", timeout=5
+                ) as resp:
+                    return await resp.json()
         except Exception as e:
             return {
                 "success": False,
@@ -206,14 +210,11 @@ class STMService:
     async def reset_positions_orders(self) -> Dict[str, Any]:
         """Reset positions and orders in STM"""
         try:
-            req = urllib.request.Request(
-                f"{STM_HTTP}/positions/admin/reset",
-                data=b"{}",
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                return json.loads(resp.read().decode())
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{STM_HTTP}/positions/admin/reset", json={}, timeout=5
+                ) as resp:
+                    return await resp.json()
         except Exception as e:
             return {"success": False, "message": f"Error connecting to STM: {str(e)}"}
 

@@ -43,4 +43,4 @@ fi
 
 echo "🚀 Iniciando Server v0.2 en puerto ${PORT}..."
 echo "PYTHONPATH: $PYTHONPATH"
-exec python3 -m ${MODULE}
+python3 -m ${MODULE}

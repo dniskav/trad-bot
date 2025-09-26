@@ -89,7 +89,7 @@ run_with_venv() {
   echo "Pip: $(which pip)"
   
   # Ejecutar el STM
-  exec python -m ${MODULE}
+  python -m ${MODULE}
 }
 
 echo "🧹 Revisando procesos previos del STM..."

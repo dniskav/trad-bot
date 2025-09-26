@@ -198,32 +198,54 @@ class PositionService:
         self, position_data: Dict[str, Any], change_type: str
     ):
         """Update account balance when position changes"""
+        log.info(f"_update_account_balance called with change_type: {change_type}")
         if not self.account_service:
+            log.warning("account_service is None, skipping balance update")
             return
 
         try:
+            log.info("Getting account data...")
             account = await self.account_service.get_account()
+            log.info(f"Account data retrieved: {account}")
             quantity = float(position_data.get("quantity", 0))
             entry_price = float(position_data.get("entryPrice", 0))
             side = position_data.get("side", "BUY")
+            log.info(
+                f"Position data: quantity={quantity}, entry_price={entry_price}, side={side}"
+            )
 
             # Calculate commission
             commission_info = self._calculate_commission(quantity, entry_price, "taker")
             commission_amount = commission_info["commission"]
+            log.info(f"Commission calculated: {commission_amount}")
 
             if change_type == "opened":
                 # When opening position: lock funds and pay commission
                 notional = quantity * entry_price
+                leverage = float(position_data.get("leverage", 1))
+                margin_required = (
+                    notional / leverage
+                )  # Calculate margin based on leverage
+
+                # Debug logging
+                log.info(
+                    f"Balance update - leverage: {leverage}, notional: {notional}, margin_required: {margin_required}"
+                )
 
                 if side == "BUY":
-                    # BUY: lock USDT for purchase + commission
-                    account["usdt_locked"] += notional + commission_amount
+                    # BUY: lock margin + commission (not the full notional)
+                    old_locked = account["usdt_locked"]
+                    account["usdt_locked"] += margin_required + commission_amount
                     account[
                         "usdt_balance"
                     ] -= commission_amount  # Pay commission immediately
+                    log.info(
+                        f"BUY order: locked {margin_required + commission_amount} USDT (old: {old_locked}, new: {account['usdt_locked']})"
+                    )
                 else:
-                    # SELL: lock DOGE for sale + commission
-                    account["doge_locked"] += quantity + (
+                    # SELL: lock margin equivalent in DOGE + commission
+                    margin_doge = margin_required / entry_price
+                    account["doge_locked"] += margin_doge + (
                         commission_amount / entry_price
                     )
                     account["doge_balance"] -= (
@@ -257,7 +279,9 @@ class PositionService:
             account["last_updated"] = datetime.now(timezone.utc).isoformat()
 
             # Save updated account
+            log.info("Saving updated account...")
             self.account_service.store.write(self.account_service.account_file, account)
+            log.info("Account saved successfully")
 
             log.info(
                 f"Account balance updated for {change_type} position: commission={commission_amount:.6f}"
@@ -431,6 +455,9 @@ class PositionService:
                 self._save_positions(positions)
 
                 # Update account balance
+                log.info(
+                    f"About to update account balance with leverage: {position_data.get('leverage')}"
+                )
                 await self._update_account_balance(position_data, "opened")
 
                 # Notify position change
