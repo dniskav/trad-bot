@@ -47,7 +47,7 @@ class WebSocketManager:
             try:
                 await connection.send_json(message)
             except Exception as e:
-                log.warning(f"Error broadcasting to WS client: {e}")
+                log.warning(f"Error broadcasting to WS client: {type(e).__name__}: {e}")
                 disconnected.append(connection)
 
         # Clean up disconnected clients

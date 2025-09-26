@@ -5,7 +5,7 @@ from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
 
 # Import routers
-from .routers import health, websocket, socket, account
+from .routers import health, websocket, socket, account, positions
 from .services.websocket_manager import WebSocketManager
 from .services.binance_service import BinanceService
 from .services.stm_service import STMService
@@ -50,6 +50,7 @@ app.include_router(health.router)
 app.include_router(websocket.router)
 app.include_router(socket.router)
 app.include_router(account.router)
+app.include_router(positions.router)
 
 # Add middlewares
 app.middleware("http")(log_requests_middleware)

@@ -1,10 +1,11 @@
 import asyncio
 import json
-import urllib.request
-import urllib.error
+import aiohttp
 import websockets
+from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from backend.shared.logger import get_logger
+from ..models.position import OpenPositionRequest, ClosePositionRequest, OrderResponse
 
 log = get_logger("server.stm_service")
 
@@ -21,11 +22,12 @@ class STMService:
     async def check_health(self) -> bool:
         """Check if STM service is healthy"""
         try:
-            with urllib.request.urlopen(f"{STM_HTTP}/health", timeout=5) as resp:
-                if resp.status != 200:
-                    return False
-                data = json.loads(resp.read().decode())
-                return data.get("status") == "ok"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{STM_HTTP}/health", timeout=5) as resp:
+                    if resp.status != 200:
+                        return False
+                    data = await resp.json()
+                    return data.get("status") == "ok"
         except Exception as e:
             log.warning(f"STM health check failed: {e}")
             return False
@@ -77,54 +79,262 @@ class STMService:
     async def set_socket_logging_state(self, payload: dict) -> dict:
         """Set socket logging state in STM"""
         try:
-            scope = str(payload.get("scope", "all")).lower()
-            if scope == "binance":
-                if isinstance(payload.get("enabled"), bool):
-                    self.stm_log_enabled = payload["enabled"]
-                    log.info(
-                        f"🛠️  (server) Binance socket logging: {'on' if self.stm_log_enabled else 'off'}"
-                    )
-
+            data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(
                 f"{STM_HTTP}/socket/logging",
-                data=json.dumps(payload).encode("utf-8"),
+                data=data,
                 headers={"Content-Type": "application/json"},
-                method="POST",
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
-                data = resp.read().decode()
-                stm_resp = json.loads(data)
-                stm_resp["server_binance_enabled"] = self.stm_log_enabled
-                return stm_resp
+                return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             return {"status": "error", "message": str(e), "code": e.code}
         except Exception as e:
             return {"status": "error", "message": str(e), "code": 500}
 
+    async def open_position(self, request: OpenPositionRequest) -> OrderResponse:
+        """Open a position via STM using Binance-compatible format"""
+        try:
+            # Convert to Binance format
+            binance_data = {
+                "symbol": request.symbol,
+                "side": request.side,
+                "type": request.type,
+                "quantity": request.quantity,
+                "timeInForce": request.timeInForce or "GTC",
+                "newOrderRespType": "RESULT",
+                "sideEffectType": "NO_SIDE_EFFECT",
+                "isIsolated": "TRUE" if request.isIsolated else "FALSE",
+                "newClientOrderId": request.clientOrderId,
+            }
+
+            # Add price if LIMIT order
+            if request.type == "LIMIT" and request.price:
+                binance_data["price"] = request.price
+
+            # Add stopPrice if STOP order
+            if request.type in ["STOP_MARKET", "STOP_LOSS"] and request.stopPrice:
+                binance_data["stopPrice"] = request.stopPrice
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{STM_HTTP}/sapi/v1/margin/order", json=binance_data, timeout=20
+                ) as resp:
+                    response_data = await resp.json()
+                    return OrderResponse(**response_data)
+        except aiohttp.ClientError as e:
+            return OrderResponse(
+                success=False,
+                orderId="",
+                message=f"STM error: {str(e)}",
+            )
+        except Exception as e:
+            return OrderResponse(
+                success=False, orderId="", message=f"Error connecting to STM: {str(e)}"
+            )
+
+    async def close_position(self, request: ClosePositionRequest) -> OrderResponse:
+        """Close a position via STM"""
+        try:
+            data = request.dict()
+            json_data = json.dumps(data).encode("utf-8")
+            req = urllib.request.Request(
+                f"{STM_HTTP}/positions/close",
+                data=json_data,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                response_data = json.loads(resp.read().decode())
+                return OrderResponse(**response_data)
+        except urllib.error.HTTPError as e:
+            error_data = json.loads(e.read().decode()) if e.read() else {}
+            return OrderResponse(
+                success=False,
+                orderId="",
+                message=f"STM error: {error_data.get('detail', str(e))}",
+            )
+        except Exception as e:
+            return OrderResponse(
+                success=False, orderId="", message=f"Error connecting to STM: {str(e)}"
+            )
+
+    async def get_positions(self, status: Optional[str] = None) -> Dict[str, Any]:
+        """Get positions from STM"""
+        try:
+            url = f"{STM_HTTP}/positions"
+            if status:
+                url += f"?status={status}"
+
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            return {"success": False, "message": f"Error connecting to STM: {str(e)}"}
+
+    async def get_position(self, position_id: str) -> Dict[str, Any]:
+        """Get a specific position from STM"""
+        try:
+            with urllib.request.urlopen(
+                f"{STM_HTTP}/positions/{position_id}", timeout=5
+            ) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            return {"success": False, "message": f"Error connecting to STM: {str(e)}"}
+
+    async def get_position_orders(self, position_id: str) -> Dict[str, Any]:
+        """Get orders for a position from STM"""
+        try:
+            with urllib.request.urlopen(
+                f"{STM_HTTP}/positions/{position_id}/orders", timeout=5
+            ) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            return {"success": False, "message": f"Error connecting to STM: {str(e)}"}
+
+    async def get_all_orders(self) -> Dict[str, Any]:
+        """Get all orders from STM"""
+        try:
+            with urllib.request.urlopen(
+                f"{STM_HTTP}/positions/orders/all", timeout=5
+            ) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Error connecting to STM: {str(e)}",
+            }
+
+    async def reset_positions_orders(self) -> Dict[str, Any]:
+        """Reset positions and orders in STM"""
+        try:
+            req = urllib.request.Request(
+                f"{STM_HTTP}/positions/admin/reset",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            return {"success": False, "message": f"Error connecting to STM: {str(e)}"}
+
+    async def set_stop_loss(self, position_id: str, price: str) -> Dict[str, Any]:
+        """Create/Update SL for a position in STM using Binance format"""
+        try:
+            # Get position details first to determine side
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{STM_HTTP}/sapi/v1/margin/positions") as resp:
+                    positions = await resp.json()
+                    position = next(
+                        (p for p in positions if p.get("positionId") == position_id),
+                        None,
+                    )
+                    if not position:
+                        return {"success": False, "message": "Position not found"}
+
+                    # Determine opposite side for SL
+                    position_side = (
+                        "BUY" if float(position["positionAmt"]) > 0 else "SELL"
+                    )
+                    sl_side = "SELL" if position_side == "BUY" else "BUY"
+
+                    # Create SL order in Binance format
+                    sl_data = {
+                        "symbol": position["symbol"],
+                        "side": sl_side,
+                        "type": "STOP_MARKET",
+                        "quantity": position["positionAmt"],
+                        "stopPrice": price,
+                        "timeInForce": "GTC",
+                        "newOrderRespType": "RESULT",
+                        "sideEffectType": "NO_SIDE_EFFECT",
+                        "isIsolated": "TRUE" if position.get("isolated") else "FALSE",
+                        "newClientOrderId": f"sl-{position_id}",
+                    }
+
+                    async with session.post(
+                        f"{STM_HTTP}/sapi/v1/margin/order", json=sl_data, timeout=5
+                    ) as sl_resp:
+                        sl_result = await sl_resp.json()
+
+                        # If SL order was created successfully, update position with the order ID
+                        if sl_result.get("success") and sl_result.get("orderId"):
+                            # The STM automatically updates the position with stopLossOrderId
+                            # when it processes the SL order, so we just return the result
+                            pass
+
+                        return sl_result
+        except Exception as e:
+            return {"success": False, "message": f"Error setting SL: {str(e)}"}
+
+    async def set_take_profit(self, position_id: str, price: str) -> Dict[str, Any]:
+        """Create/Update TP for a position in STM using Binance format"""
+        try:
+            # Get position details first to determine side
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{STM_HTTP}/sapi/v1/margin/positions") as resp:
+                    positions = await resp.json()
+                    position = next(
+                        (p for p in positions if p.get("positionId") == position_id),
+                        None,
+                    )
+                    if not position:
+                        return {"success": False, "message": "Position not found"}
+
+                    # Determine opposite side for TP
+                    position_side = (
+                        "BUY" if float(position["positionAmt"]) > 0 else "SELL"
+                    )
+                    tp_side = "SELL" if position_side == "BUY" else "BUY"
+
+                    # Create TP order in Binance format
+                    tp_data = {
+                        "symbol": position["symbol"],
+                        "side": tp_side,
+                        "type": "LIMIT",
+                        "quantity": position["positionAmt"],
+                        "price": price,
+                        "timeInForce": "GTC",
+                        "newOrderRespType": "RESULT",
+                        "sideEffectType": "NO_SIDE_EFFECT",
+                        "isIsolated": "TRUE" if position.get("isolated") else "FALSE",
+                        "newClientOrderId": f"tp-{position_id}",
+                    }
+
+                    async with session.post(
+                        f"{STM_HTTP}/sapi/v1/margin/order", json=tp_data, timeout=5
+                    ) as tp_resp:
+                        tp_result = await tp_resp.json()
+
+                        # If TP order was created successfully, update position with the order ID
+                        if tp_result.get("success") and tp_result.get("orderId"):
+                            # The STM automatically updates the position with takeProfitOrderId
+                            # when it processes the TP order, so we just return the result
+                            pass
+
+                        return tp_result
+        except Exception as e:
+            return {"success": False, "message": f"Error setting TP: {str(e)}"}
+
     async def get_account_synth(self) -> dict:
         """Get synthetic account data from STM"""
         try:
-            with urllib.request.urlopen(f"{STM_HTTP}/account/synth", timeout=5) as resp:
-                data = resp.read().decode()
-                return json.loads(data)
-        except urllib.error.HTTPError as e:
-            return {"status": "error", "message": str(e), "code": e.code}
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{STM_HTTP}/account/synth", timeout=5) as resp:
+                    return await resp.json()
+        except aiohttp.ClientError as e:
+            return {"status": "error", "message": str(e), "code": 500}
         except Exception as e:
             return {"status": "error", "message": str(e), "code": 500}
 
     async def reset_account_synth(self) -> dict:
         """Reset synthetic account via STM"""
         try:
-            req = urllib.request.Request(
-                f"{STM_HTTP}/account/synth/reset",
-                data=b"{}",
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                data = resp.read().decode()
-                return json.loads(data)
-        except urllib.error.HTTPError as e:
-            return {"status": "error", "message": str(e), "code": e.code}
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{STM_HTTP}/account/synth/reset", json={}, timeout=5
+                ) as resp:
+                    return await resp.json()
+        except aiohttp.ClientError as e:
+            return {"status": "error", "message": str(e), "code": 500}
         except Exception as e:
             return {"status": "error", "message": str(e), "code": 500}
