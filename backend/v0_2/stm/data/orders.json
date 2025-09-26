@@ -1,0 +1,50 @@
+[
+  {
+    "orderId": "71a1c1e5-e973-4058-bb9a-2b16401b4918",
+    "clientOrderId": "server-buy-001",
+    "symbol": "DOGEUSDT",
+    "side": "BUY",
+    "type": "MARKET",
+    "quantity": "100",
+    "price": "0.222325",
+    "stopPrice": null,
+    "timeInForce": "GTC",
+    "status": "FILLED",
+    "executedQty": "100",
+    "cummulativeQuoteQty": "22.232499999999998",
+    "timestamp": "2025-09-26T11:08:11.791445+00:00",
+    "updateTime": "2025-09-26T11:08:11.791454+00:00"
+  },
+  {
+    "orderId": "5f0189b9-c2db-477f-8968-4dee4646665f",
+    "clientOrderId": "server-sl-001",
+    "symbol": "DOGEUSDT",
+    "side": "SELL",
+    "type": "STOP_MARKET",
+    "quantity": "100",
+    "price": "0.222275",
+    "stopPrice": "0.20",
+    "timeInForce": "GTC",
+    "status": "FILLED",
+    "executedQty": "100",
+    "cummulativeQuoteQty": "22.2275",
+    "timestamp": "2025-09-26T11:08:14.868921+00:00",
+    "updateTime": "2025-09-26T11:08:14.868930+00:00"
+  },
+  {
+    "orderId": "41035f9d-7a70-47d6-9355-b6ddf5472fec",
+    "clientOrderId": "server-tp-001",
+    "symbol": "DOGEUSDT",
+    "side": "SELL",
+    "type": "LIMIT",
+    "quantity": "100",
+    "price": "0.25",
+    "stopPrice": null,
+    "timeInForce": "GTC",
+    "status": "FILLED",
+    "executedQty": "100",
+    "cummulativeQuoteQty": "25.0",
+    "timestamp": "2025-09-26T11:08:18.209595+00:00",
+    "updateTime": "2025-09-26T11:08:18.209603+00:00"
+  }
+]

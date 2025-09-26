@@ -5,6 +5,7 @@ import websockets
 from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
 from .account_service import update_price
+from .position_service import update_price as update_position_price
 
 log = get_logger("stm.binance_service")
 SYMBOL = env_str("STM_SYMBOL", "dogeusdt").lower()
@@ -12,9 +13,10 @@ BINANCE_LOG_ENABLED = False
 
 
 class BinanceService:
-    def __init__(self):
+    def __init__(self, price_monitor=None):
         self.symbol = SYMBOL
         self.log_enabled = BINANCE_LOG_ENABLED
+        self.price_monitor = price_monitor
 
     async def bookticker_loop(self) -> None:
         """Connect to Binance WebSocket and track price updates"""
@@ -46,6 +48,12 @@ class BinanceService:
                                 a = float(data.get("a"))
                                 mid = (a + b) / 2.0
                                 update_price(mid)
+                                update_position_price(mid)
+                                # Update price monitor for SL/TP checking
+                                if self.price_monitor:
+                                    self.price_monitor.update_price(
+                                        self.symbol.upper(), mid
+                                    )
                             except Exception:
                                 pass
                         except Exception:
