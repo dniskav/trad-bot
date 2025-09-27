@@ -7,12 +7,7 @@ import PlugAndPlayBots from './PlugAndPlayBots'
 import { Toast } from './Toast'
 import WebSocketStatus from './WebSocketStatus'
 
-interface AppContentProps {
-  timeframe: string
-  onTimeframeChange: (timeframe: string) => void
-}
-
-const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange }) => {
+const AppContent: React.FC = () => {
   // Debug: Contador de montajes
   const mountCount = React.useRef(0)
   mountCount.current += 1
@@ -93,14 +88,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
               console.log('Chart collapsed')
             }}>
             <ErrorBoundary>
-              <ChartWrapper
-                symbol="DOGEUSDT"
-                timeframe={timeframe}
-                onTimeframeChange={onTimeframeChange}
-                live
-                binanceSymbol="DOGEUSDT"
-                binanceInterval={timeframe}
-              />
+              <ChartWrapper symbol="DOGEUSDT" live binanceSymbol="DOGEUSDT" />
             </ErrorBoundary>
           </Accordion>
 
