@@ -72,6 +72,20 @@ const ActivePositions: React.FC = () => {
     )
   }
 
+  const formatValue = (position: Position) => {
+    const quantity = parseFloat(position.positionAmt)
+    const entryPrice = parseFloat(position.entryPrice)
+    const value = Math.abs(quantity) * entryPrice
+    const pnl = parseFloat(position.unrealizedProfit)
+    const color = pnl >= 0 ? '#26a69a' : '#ef5350'
+
+    return (
+      <span className="value-amount" style={{ color }}>
+        ${value.toFixed(2)}
+      </span>
+    )
+  }
+
   const getPositionColor = (side: string) => {
     return side === 'BUY' ? '#26a69a' : '#ef5350'
   }
@@ -112,7 +126,7 @@ const ActivePositions: React.FC = () => {
   // Calcular totales
   const totals = positions.reduce(
     (acc, position) => {
-      const pnl = position.pnl
+      const pnl = parseFloat(position.unrealizedProfit)
       acc.totalPnl += pnl
       if (pnl >= 0) {
         acc.gains += pnl
@@ -163,14 +177,15 @@ const ActivePositions: React.FC = () => {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Símbolo</th>
-              <th>Lado</th>
-              <th>Entrada</th>
-              <th>Cantidad</th>
-              <th>Leverage</th>
+              <th>SYMBOL</th>
+              <th>SIDE</th>
+              <th>ENTRY PRICE</th>
+              <th>QUANTITY</th>
+              <th>VALUE</th>
+              <th>X</th>
               <th>P&L</th>
-              <th>Estado</th>
-              <th>Acción</th>
+              <th>STATUS</th>
+              <th>ACTION</th>
             </tr>
           </thead>
           <tbody>
@@ -190,6 +205,7 @@ const ActivePositions: React.FC = () => {
                 </td>
                 <td>${parseFloat(position.entryPrice).toFixed(5)}</td>
                 <td>{parseFloat(position.positionAmt).toFixed(4)}</td>
+                <td>{formatValue(position)}</td>
                 <td>{position.leverage}x</td>
                 <td>{formatPnL(position.unrealizedProfit)}</td>
                 <td>
