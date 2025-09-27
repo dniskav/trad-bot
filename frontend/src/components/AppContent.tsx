@@ -1,11 +1,10 @@
 import React, { useCallback, useContext, useEffect, useState } from 'react'
-import { useWebSocketConnection } from '../contexts/WebSocketConnectionContext'
 import { WebSocketContext } from '../contexts/WebSocketContext'
-import { useAccountBalance, useApiMarginInfo } from '../hooks'
+import { useApiMarginInfo } from '../hooks'
 // import { useSocket } from '../hooks/useSocket'
 import { Accordion } from './Accordion'
 import AccountBalance from './AccountBalance'
-import ActivePositions from './ActivePositions/ActivePositions'
+import ActivePositions from './ActivePositions'
 import BotSignals from './BotSignals'
 import CandlestickChart from './CandlestickChart'
 import ErrorBoundary from './ErrorBoundary'
@@ -21,24 +20,20 @@ interface AppContentProps {
 }
 
 const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange }) => {
-  // Debug: Contador de montajes
-  const mountCount = React.useRef(0)
-  mountCount.current += 1
-  console.log(`🚀 AppContent: Montaje #${mountCount.current}`)
-
-  // Contexto WebSocket para datos de mensajes
-  const wsContext = useContext(WebSocketContext)
-
-  // Contexto de conexión para estados
-  const { server, binance } = useWebSocketConnection()
+  // Debug: Contador de montajes (comentado para evitar spam)
+  // const mountCount = React.useRef(0)
+  // mountCount.current += 1
+  // console.log(`🚀 AppContent: Montaje #${mountCount.current}`)
 
   // Estados locales
   const [botSignals, setBotSignals] = useState<any>(null)
   const [positionHistory, setPositionHistory] = useState<any[]>([])
+  const [activePositions, setActivePositions] = useState<Record<
+    string,
+    Record<string, any>
+  > | null>(null)
   const [currentPrice, setCurrentPrice] = useState<number>(0)
-
-  // Use account balance hook with real-time updates
-  const { balance: accountBalance, isOnline } = useAccountBalance()
+  const [accountBalance, setAccountBalance] = useState<any>(null)
 
   // Use margin info hook
   const { isLoading: marginLoading, error: marginError, fetchMarginInfo } = useApiMarginInfo()
@@ -57,7 +52,55 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
     fetchData()
   }, []) // Remove fetchMarginInfo dependency to prevent infinite loop
 
-  // Account balance is now handled by useAccountBalance hook
+  // Singleton para evitar llamadas duplicadas
+  const fetchPromise = React.useRef<Promise<any> | null>(null)
+
+  // Fetch account balance from new endpoint (only once)
+  const fetchAccountBalance = useCallback(async () => {
+    if (accountBalance) {
+      return // Skip if already loaded
+    }
+
+    // Si ya hay una llamada en progreso, esperar a que termine
+    if (fetchPromise.current) {
+      try {
+        const data = await fetchPromise.current
+        setAccountBalance(data)
+        return
+      } catch (error) {
+        console.error('Error waiting for existing fetch:', error)
+        return
+      }
+    }
+
+    // Crear nueva promesa de fetch
+    fetchPromise.current = fetch('/api/account/synth')
+      .then(async (response) => {
+        if (response.ok) {
+          const data = await response.json()
+          setAccountBalance(data)
+          return data
+        }
+        throw new Error('Failed to fetch account balance')
+      })
+      .catch((error) => {
+        console.error('Error fetching account balance:', error)
+        throw error
+      })
+      .finally(() => {
+        fetchPromise.current = null // Limpiar la promesa
+      })
+
+    try {
+      await fetchPromise.current
+    } catch (error) {
+      // Error ya manejado arriba
+    }
+  }, [accountBalance])
+
+  useEffect(() => {
+    fetchAccountBalance()
+  }, [fetchAccountBalance])
 
   // Debug: Detectar cambios en props (comentado para evitar spam)
   // useEffect(() => {
@@ -84,10 +127,13 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
   //   // No necesitamos onMessage aquí porque AppSetup ya maneja los mensajes
   // })
 
+  // Contexto WebSocket (mantener para compatibilidad)
+  const ctx = useContext(WebSocketContext)
+
   // Efecto para procesar mensajes del contexto
   useEffect(() => {
-    if (wsContext && wsContext.lastMessage) {
-      const data = wsContext.lastMessage.message
+    if (ctx && ctx.lastMessage) {
+      const data = ctx.lastMessage.message
 
       // Procesar diferentes tipos de mensajes
       if (data.type === 'initial_data') {
@@ -95,7 +141,12 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
           if (data.data.current_price) {
             setCurrentPrice(data.data.current_price)
           }
-          // Account balance is now handled by useAccountBalance hook
+          if (data.data.account_balance) {
+            setAccountBalance(data.data.account_balance)
+          }
+          if (data.data.active_positions) {
+            setActivePositions(data.data.active_positions)
+          }
           // Historial: se carga únicamente desde el endpoint (no vía WS)
           if (data.data.bot_status) {
             // Los bot_status se pueden usar más adelante
@@ -115,7 +166,12 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
           if (data.data.current_price) {
             setCurrentPrice(data.data.current_price)
           }
-          // Account balance is now handled by useAccountBalance hook
+          if (data.data.account_balance) {
+            setAccountBalance(data.data.account_balance)
+          }
+          if (data.data.active_positions) {
+            setActivePositions(data.data.active_positions)
+          }
           // Historial: se carga únicamente desde el endpoint (no vía WS)
           if (data.data.bot_status) {
           }
@@ -141,19 +197,19 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
       } else if (data.type === 'position_history') {
         // Ignorado: el historial solo se consume por endpoint
       } else if (data.type === 'active_positions') {
-        // Las posiciones activas ahora se cargan via hook useActivePositions
+        setActivePositions(data.data || null)
       } else if (data.type === 'price' || data.type === 'price_update') {
         setCurrentPrice(data.data?.price || 0)
       } else if (data.type === 'account_balance') {
-        // Account balance is now handled by useAccountBalance hook
+        setAccountBalance(data.data)
       } else if (data.type === 'margin_info') {
         // Margin info is now handled by the hook
       } else if (data.type === 'history_stream') {
         // Ignorado: el historial solo se consume por endpoint
       } else if (data.type === 'plugin_bots_realtime') {
         // Publicar en el contexto para que cualquier componente (p.ej. PlugAndPlayBots) lo consuma
-        if (wsContext && wsContext.setPluginBotsRealtime) {
-          wsContext.setPluginBotsRealtime(data.data || {})
+        if (ctx && ctx.setPluginBotsRealtime) {
+          ctx.setPluginBotsRealtime(data.data || {})
         }
       } else if (data.type === 'candles') {
         setCandlesData(data.data?.candles || [])
@@ -164,7 +220,11 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
 
           // No actualizar historial desde payloads de velas
           const positionsPayload = data.data?.bot_signals?.positions
-          // Las posiciones activas ahora se cargan via hook useActivePositions
+          // Extraer posiciones activas si vienen embebidas (compatibilidad)
+          const activeFromPayload = positionsPayload?.active_positions
+          if (activeFromPayload) {
+            setActivePositions(activeFromPayload)
+          }
         }
       } else if (data.type === 'indicators') {
         setIndicatorsData(data.data || {})
@@ -173,7 +233,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
         setShowToast(true)
       }
     }
-  }, [wsContext?.lastMessage])
+  }, [ctx?.lastMessage])
 
   // Calcula estadísticas básicas por bot y generales
   const calculateStatistics = (history: any[]) => {
@@ -391,7 +451,6 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
             <AccountBalance
               currentPrice={currentPrice}
               balance={accountBalance}
-              isOnline={isOnline}
               symbol="DOGEUSDT"
             />
           </Accordion>
@@ -422,7 +481,7 @@ const AppContent: React.FC<AppContentProps> = ({ timeframe, onTimeframeChange })
             title="Posiciones Concurrentes Activas"
             defaultExpanded={true}
             storageKey="active-positions">
-            <ActivePositions />
+            <ActivePositions positions={activePositions} />
           </Accordion>
 
           {/* Información de Margen */}

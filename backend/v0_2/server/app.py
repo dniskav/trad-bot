@@ -1,7 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
 
@@ -53,15 +52,9 @@ app.include_router(socket.router)
 app.include_router(account.router)
 app.include_router(positions.router)
 
-# Add middlewares (order matters - CORS first, then logging)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Add middlewares
 app.middleware("http")(log_requests_middleware)
+
 
 if __name__ == "__main__":
     import uvicorn

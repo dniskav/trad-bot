@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useWebSocketContext } from '../../contexts/WebSocketContext'
-import { useWebSocketDetector } from './hooks'
+import { useWebSocketDetector } from '../../hooks/useWebSocketDetector'
 import type { StatusBadgeProps } from './types'
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export interface WebSocketDetectorState {
+interface WebSocketDetectorState {
   isConnected: boolean
   isConnecting: boolean
   error: string | null
   lastMessage: number | null
 }
 
-export interface WebSocketDetectorOptions {
+interface WebSocketDetectorOptions {
   url?: string | string[]
   urlContains?: string | string[]
   checkInterval?: number

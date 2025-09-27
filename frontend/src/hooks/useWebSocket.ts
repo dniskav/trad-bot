@@ -41,7 +41,7 @@ export const useWebSocket = (
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data)
-          // console.log('📨 Mensaje WebSocket recibido:', message) // Comentado para reducir spam
+          console.log('📨 Mensaje WebSocket recibido:', message)
           if (onMessage) {
             onMessage(message)
           }

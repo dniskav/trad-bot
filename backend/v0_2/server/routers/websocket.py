@@ -38,10 +38,8 @@ async def notify_websocket_clients(request: Request):
         # Broadcast to all connected WebSocket clients
         await ws_manager.broadcast(data)
 
-        # Handle different event types
-        event_type = data.get("type")
-
-        if event_type == "position_change":
+        # On position-related events, fetch open positions and log PnL changes
+        if data.get("type") == "position_change":
             try:
                 resp = await stm_service.get_positions(status="open")
                 positions = resp.get("positions", []) or []
@@ -59,54 +57,6 @@ async def notify_websocket_clients(request: Request):
                         log.info(f"PNL change | position={pid} pnl={float(pnl):.8f}")
             except Exception as e:
                 log.warning(f"Failed logging PnL changes: {e}")
-
-        elif event_type == "execution_report":
-            # Log execution report details
-            symbol = data.get("s", "unknown")
-            side = data.get("S", "unknown")
-            quantity = data.get("q", "0")
-            price = data.get("L", "0")
-            commission = data.get("n", "0")
-            commission_asset = data.get("N", "USDT")
-            log.info(
-                f"Order executed | {symbol} {side} {quantity} @ {price} | Commission: {commission} {commission_asset}"
-            )
-
-        elif event_type == "account_position":
-            # Log account position updates
-            positions = data.get("P", [])
-            balances = data.get("B", [])
-
-            # Log balance information
-            for balance in balances:
-                asset = balance.get("a", "unknown")
-                free = balance.get("f", "0")
-                locked = balance.get("l", "0")
-                log.info(f"Account balance | {asset}: Free={free}, Locked={locked}")
-
-            # Log position information
-            for pos in positions:
-                symbol = pos.get("s", "unknown")
-                position_amt = pos.get("pa", "0")
-                unrealized_pnl = pos.get("up", "0")
-                log.info(
-                    f"Account position | {symbol}: {position_amt} | PnL: {unrealized_pnl}"
-                )
-
-            # Fetch and broadcast updated account balance to frontend
-            try:
-                account_response = await stm_service.get_account_synth()
-                if account_response.get("success"):
-                    account_data = account_response.get("data", {})
-                    # Broadcast account balance update to frontend
-                    balance_update = {
-                        "type": "account_balance_update",
-                        "data": account_data,
-                    }
-                    await ws_manager.broadcast(balance_update)
-                    log.info("📊 Account balance update broadcasted to frontend")
-            except Exception as e:
-                log.error(f"Failed to fetch and broadcast account balance: {e}")
 
         return {"success": True, "message": "Notification broadcasted"}
     except Exception as e:

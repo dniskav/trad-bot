@@ -175,11 +175,11 @@ class WebSocketSingleton {
   }
 
   send(message: string) {
-    // console.log('📤 WebSocketSingleton: send() llamado') // Comentado para reducir spam
+    console.log('📤 WebSocketSingleton: send() llamado')
 
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(message)
-      // console.log('📤 WebSocketSingleton: Mensaje enviado:', message) // Comentado para reducir spam
+      console.log('📤 WebSocketSingleton: Mensaje enviado:', message)
     } else {
       console.warn('⚠️ WebSocketSingleton: No se puede enviar mensaje, WebSocket no está abierto')
     }
