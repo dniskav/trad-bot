@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react'
 import { Accordion } from './Accordion'
 import ActivePositions from './ActivePositions/ActivePositions'
-import ChartWrapper from './ChartWrapper'
+import { ChartWrapper } from './ChartWrapper'
 import ErrorBoundary from './ErrorBoundary'
 import PlugAndPlayBots from './PlugAndPlayBots'
 import { Toast } from './Toast'
