@@ -1,4 +1,9 @@
 import type { CandlestickData, LineData } from 'lightweight-charts'
+
+// Extender CandlestickData para incluir volumen
+interface ExtendedCandlestickData extends CandlestickData {
+  volume?: number
+}
 import {
   CandlestickSeries,
   ColorType,
@@ -110,7 +115,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const seriesInitializedRef = useRef<boolean>(false)
   const smaFastRef = useRef<any>(null)
   const smaSlowRef = useRef<any>(null)
-  const [candleData, setCandleData] = useState<CandlestickData[]>([])
+  const [candleData, setCandleData] = useState<ExtendedCandlestickData[]>([])
   const [indicators, setIndicators] = useState<TechnicalIndicators | null>(null)
   const [volumeType, setVolumeType] = useState<'quote' | 'base'>('quote')
 
@@ -200,13 +205,14 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
   useEffect(() => {
     if (propCandlesData && Array.isArray(propCandlesData) && propCandlesData.length > 0) {
-      const formattedData: CandlestickData[] = propCandlesData
+      const formattedData: ExtendedCandlestickData[] = propCandlesData
         .map((candle: any) => ({
           time: (candle.time / 1000) as any,
           open: candle.open,
           high: candle.high,
           low: candle.low,
-          close: candle.close
+          close: candle.close,
+          volume: candle.volume || 0
         }))
         .filter((candle) => {
           // Validar que el tiempo sea válido y no sea NaN
@@ -228,8 +234,22 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   useEffect(() => {
     if (propIndicatorsData) {
       setIndicators(propIndicatorsData)
+    } else if (candleData && candleData.length > 0) {
+      // Si no hay indicadores externos, crear indicadores básicos desde los datos de velas
+      const volumeData = candleData.map(candle => candle.volume || 0)
+      const timestamps = candleData.map(candle => (candle.time as number) * 1000)
+      
+      const basicIndicators: TechnicalIndicators = {
+        volume: volumeData,
+        timestamps: timestamps,
+        sma_fast: [],
+        sma_slow: [],
+        rsi: []
+      }
+      
+      setIndicators(basicIndicators)
     }
-  }, [propIndicatorsData, timeframe])
+  }, [propIndicatorsData, candleData, timeframe])
 
   useEffect(() => {
     if (!live || !binanceMsg) return
