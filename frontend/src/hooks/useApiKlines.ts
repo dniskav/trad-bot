@@ -46,7 +46,7 @@ export const useApiKlines = (
           high: candle.high,
           low: candle.low,
           close: candle.close,
-          volume: candle.volume
+          volume: candle.quote_volume || candle.volume // Usar quote_volume como prioridad, igual que en WebSocket
         }))
 
         console.log(`🔄 Datos transformados: ${transformedData.length} velas`)
