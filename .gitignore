@@ -111,3 +111,5 @@ dmypy.json
 backtest_results/
 performance_data/
 backend/config_real_trading.env
+backend/v0_2/stm/data/positions.json
+
