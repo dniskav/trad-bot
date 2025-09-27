@@ -16,10 +16,6 @@ function App() {
 
   const handleTimeframeChange = (newTimeframe: string) => {
     setTimeframe(newTimeframe)
-    // Guardar en localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('candlestick-timeframe', newTimeframe)
-    }
   }
 
   return (
