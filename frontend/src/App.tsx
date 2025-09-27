@@ -2,6 +2,8 @@ import { useState } from 'react'
 import './App.css'
 import AppContent from './components/AppContent'
 import { AppSetup } from './components/AppSetup'
+import WebSocketManager from './components/WebSocketManager'
+import { WebSocketConnectionProvider } from './contexts/WebSocketConnectionContext'
 import { WebSocketProvider } from './contexts/WebSocketContext'
 
 function App() {
@@ -21,11 +23,14 @@ function App() {
   }
 
   return (
-    <WebSocketProvider>
-      <AppSetup>
-        <AppContent timeframe={timeframe} onTimeframeChange={handleTimeframeChange} />
-      </AppSetup>
-    </WebSocketProvider>
+    <WebSocketConnectionProvider>
+      <WebSocketProvider>
+        <WebSocketManager />
+        <AppSetup>
+          <AppContent timeframe={timeframe} onTimeframeChange={handleTimeframeChange} />
+        </AppSetup>
+      </WebSocketProvider>
+    </WebSocketConnectionProvider>
   )
 }
 

@@ -2,8 +2,8 @@
 export const API_CONFIG = {
   BASE_URL:
     typeof window !== 'undefined' && window.location.hostname
-      ? `${window.location.protocol}//${window.location.hostname}:8000`
-      : 'http://localhost:8000',
+      ? `${window.location.protocol}//${window.location.hostname}:3000`
+      : 'http://localhost:3000',
 
   ENDPOINTS: {
     BOTS: '/api/bots',
@@ -14,7 +14,11 @@ export const API_CONFIG = {
     POSITION_INFO: '/api/position-info',
     TRADING_HISTORY: '/api/trading/history',
     MARGIN_INFO: '/api/margin-info',
-    KLINES: '/api/klines'
+    KLINES: '/api/klines',
+    POSITIONS: '/api/positions',
+    POSITIONS_OPEN: '/api/positions/open',
+    POSITIONS_CLOSE: '/api/positions/close',
+    ACCOUNT_SYNTH: '/api/account/synth'
   },
 
   TIMEOUT: 30000, // 30 seconds (Binance can be slow)
