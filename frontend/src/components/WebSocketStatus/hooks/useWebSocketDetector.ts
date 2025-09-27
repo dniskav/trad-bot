@@ -48,7 +48,7 @@ export const useWebSocketDetector = (options: WebSocketDetectorOptions = {}) => 
     lastMessage: null
   })
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const intervalRef = useRef<number | null>(null)
   const lastCheckRef = useRef<number>(0)
   const lastPulseRef = useRef<number>(0)
   const originalWebSocketRef = useRef<typeof WebSocket | null>(null)
@@ -108,54 +108,80 @@ export const useWebSocketDetector = (options: WebSocketDetectorOptions = {}) => 
     ) {
       const ws = new originalWebSocketRef.current!(url, protocols)
 
-      // Interceptar addEventListener para capturar mensajes
-      const originalAddEventListener = ws.addEventListener.bind(ws)
-      ws.addEventListener = function (
-        type: string,
-        listener: EventListenerOrEventListenerObject,
-        options?: boolean | AddEventListenerOptions
-      ) {
-        if (type === 'message' && enablePulse) {
-          const wrappedListener = (event: MessageEvent) => {
-            const now = Date.now()
-            const timeSinceLastPulse = now - lastPulseRef.current
+      // Verificar si la URL coincide con nuestros criterios
+      const urlMatches =
+        !url && !urlContains
+          ? true
+          : (url && (Array.isArray(url) ? url.includes(ws.url) : ws.url === url)) ||
+            (urlContains && Array.isArray(urlContains)
+              ? urlContains.some((keyword) => ws.url.includes(keyword))
+              : ws.url.includes(urlContains as string))
 
-            // Throttle del pulse para evitar spam
-            if (timeSinceLastPulse >= pulseThrottle) {
-              // Verificar si la URL coincide con nuestros criterios
-              const urlMatches =
-                !url && !urlContains
-                  ? true
-                  : (url && (Array.isArray(url) ? url.includes(ws.url) : ws.url === url)) ||
-                    (urlContains && Array.isArray(urlContains)
-                      ? urlContains.some((keyword) => ws.url.includes(keyword))
-                      : ws.url.includes(urlContains as string))
+      if (urlMatches) {
+        // Monitorear estado de conexión usando readyState
+        const monitorConnectionState = () => {
+          const isConnected = ws.readyState === 1 // OPEN
+          const isConnecting = ws.readyState === 0 // CONNECTING
+          const hasError = ws.readyState === 3 // CLOSED
 
-              if (urlMatches) {
+          setState((prev) => ({
+            ...prev,
+            isConnected,
+            isConnecting,
+            error: hasError ? 'Connection closed' : null
+          }))
+        }
+
+        // Verificar estado inicial
+        monitorConnectionState()
+
+        // Monitorear cambios de estado periódicamente
+        const stateInterval = setInterval(monitorConnectionState, 1000)
+
+        // Limpiar intervalo cuando se cierre la conexión
+        const originalClose = ws.close.bind(ws)
+        ws.close = function (code?: number, reason?: string) {
+          clearInterval(stateInterval)
+          return originalClose(code, reason)
+        }
+
+        // Interceptar addEventListener para capturar mensajes
+        const originalAddEventListener = ws.addEventListener.bind(ws)
+        ws.addEventListener = function (
+          type: string,
+          listener: EventListenerOrEventListenerObject,
+          options?: boolean | AddEventListenerOptions
+        ) {
+          if (type === 'message' && enablePulse) {
+            const wrappedListener = (event: MessageEvent) => {
+              const now = Date.now()
+              const timeSinceLastPulse = now - lastPulseRef.current
+
+              // Throttle del pulse para evitar spam
+              if (timeSinceLastPulse >= pulseThrottle) {
                 // Usar setTimeout para evitar setState durante render
                 setTimeout(() => {
                   setState((prev) => ({
                     ...prev,
-                    lastMessage: now,
-                    isConnected: true
+                    lastMessage: now
                   }))
                 }, 0)
                 lastPulseRef.current = now
               }
+
+              // Llamar al listener original
+              if (typeof listener === 'function') {
+                listener(event)
+              } else if (listener && typeof listener === 'object' && 'handleEvent' in listener) {
+                listener.handleEvent(event)
+              }
             }
 
-            // Llamar al listener original
-            if (typeof listener === 'function') {
-              listener(event)
-            } else if (listener && typeof listener === 'object' && 'handleEvent' in listener) {
-              listener.handleEvent(event)
-            }
+            return originalAddEventListener(type, wrappedListener, options)
           }
 
-          return originalAddEventListener(type, wrappedListener, options)
+          return originalAddEventListener(type, listener, options)
         }
-
-        return originalAddEventListener(type, listener, options)
       }
 
       return ws
