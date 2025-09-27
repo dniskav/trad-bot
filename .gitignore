@@ -112,4 +112,6 @@ backtest_results/
 performance_data/
 backend/config_real_trading.env
 backend/v0_2/stm/data/positions.json
+backend/v0_2/stm/data/orders.json
+backend/v0_2/stm/data/account.json
 
