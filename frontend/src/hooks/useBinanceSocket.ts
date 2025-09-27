@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { eventBus } from '../eventBus'
 
 interface BinanceSocketOptions {
   symbol?: string // e.g. 'dogeusdt'
@@ -50,8 +49,6 @@ export function useBinanceSocket(options: BinanceSocketOptions = {}): BinanceSoc
     ws.onopen = () => {
       setIsConnected(true)
       setIsConnecting(false)
-      // Emit connection event to EventBus
-      eventBus.emit('ws:binance:connected', { url, symbol: opts.symbol, interval: opts.interval })
     }
 
     ws.onmessage = (event) => {
@@ -61,26 +58,11 @@ export function useBinanceSocket(options: BinanceSocketOptions = {}): BinanceSoc
         if (payload?.stream?.includes('@kline_')) {
           const msg = { type: 'binance.kline', data: payload.data }
           setLastMessage(msg)
-          // Emit message event to EventBus
-          eventBus.emit('ws:binance:message', {
-            type: 'kline',
-            data: payload.data,
-            stream: payload.stream
-          })
         } else if (payload?.stream?.endsWith('@bookTicker')) {
           const msg = { type: 'binance.bookTicker', data: payload.data }
           setLastMessage(msg)
-          // Emit message event to EventBus
-          eventBus.emit('ws:binance:message', {
-            type: 'bookTicker',
-            data: payload.data,
-            stream: payload.stream
-          })
         } else {
-          const msg = { type: 'binance.raw', data: payload }
-          setLastMessage(msg)
-          // Emit message event to EventBus
-          eventBus.emit('ws:binance:message', { type: 'raw', data: payload })
+          setLastMessage({ type: 'binance.raw', data: payload })
         }
       } catch (err) {
         // Ignore parse errors
@@ -90,19 +72,11 @@ export function useBinanceSocket(options: BinanceSocketOptions = {}): BinanceSoc
     ws.onerror = () => {
       setError('WebSocket error')
       setIsConnecting(false)
-      // Emit error event to EventBus
-      eventBus.emit('ws:binance:error', { error: 'WebSocket error', url })
     }
 
     ws.onclose = () => {
       setIsConnected(false)
       setIsConnecting(false)
-      // Emit disconnection event to EventBus
-      eventBus.emit('ws:binance:disconnected', {
-        url,
-        symbol: opts.symbol,
-        interval: opts.interval
-      })
     }
 
     return () => {

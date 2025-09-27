@@ -9,8 +9,6 @@ interface AccountBalance {
   initial_balance: number
   current_balance: number
   total_pnl: number
-  balance_change_pct: number
-  is_profitable: boolean
   usdt_balance: number
   doge_balance: number
   usdt_locked: number
@@ -65,17 +63,10 @@ export const useAccountBalance = () => {
         log.info('✅ Account balance fetched successfully (wrapped format)')
       } else if (response.data.initial_balance !== undefined) {
         // Direct format: { initial_balance: 1000, current_balance: 1000, ... }
-        const initialBalance = response.data.initial_balance || 0
-        const currentBalance = response.data.current_balance || 0
-        const totalPnl = response.data.total_pnl || 0
-
         const balanceData: AccountBalance = {
-          initial_balance: initialBalance,
-          current_balance: currentBalance,
-          total_pnl: totalPnl,
-          balance_change_pct:
-            initialBalance > 0 ? ((currentBalance - initialBalance) / initialBalance) * 100 : 0,
-          is_profitable: totalPnl > 0,
+          initial_balance: response.data.initial_balance || 0,
+          current_balance: response.data.current_balance || 0,
+          total_pnl: response.data.total_pnl || 0,
           usdt_balance: response.data.usdt_balance || 0,
           doge_balance: response.data.doge_balance || 0,
           usdt_locked: response.data.usdt_locked || 0,
