@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { useWebSocketContext } from '../../contexts/WebSocketContext'
-import { useWebSocketDetector } from '../../hooks/useWebSocketDetector'
 import type { StatusBadgeProps } from './types'
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({
@@ -11,10 +10,7 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({
   pulsing
 }) => {
   const getBorderColor = () => {
-    if (connected) {
-      // Verde más claro cuando está pulsando
-      return pulsing ? '#34d399' : '#10b981'
-    }
+    if (connected) return '#10b981'
     if (connecting) return '#f59e0b'
     if (error) return '#ef4444'
     return '#6b7280'
@@ -50,30 +46,18 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({
 }
 
 export const WebSocketStatus: React.FC = () => {
-  const { isConnected, isConnecting, error, lastMessage } = useWebSocketContext()
-
-  // Usar detector de WebSockets para BookTick con configuración específica
   const {
-    isConnected: binanceConnected,
-    isConnecting: binanceConnecting,
-    error: binanceError,
-    lastMessage: binanceLastMessage,
-    label: binanceLabel,
-    detectTargetConnections
-  } = useWebSocketDetector({
-    urlContains: ['binance', 'stream', 'dogeusdt'],
-    checkInterval: 2000,
-    enableLogs: false,
-    enablePulse: true,
-    pulseThrottle: 500,
-    label: 'BookTick'
-  })
+    isConnected,
+    isConnecting,
+    error,
+    binanceIsConnected,
+    binanceIsConnecting,
+    binanceError,
+    lastMessage
+  } = useWebSocketContext()
 
   const [serverPulse, setServerPulse] = useState(false)
   const [binancePulse, setBinancePulse] = useState(false)
-
-  // Detectar conexiones específicas
-  const { hasTargetConnection } = detectTargetConnections()
 
   useEffect(() => {
     if (!lastMessage || (lastMessage as any).message?.__source !== 'server') return
@@ -82,13 +66,12 @@ export const WebSocketStatus: React.FC = () => {
     return () => clearTimeout(t)
   }, [lastMessage?.id])
 
-  // Pulse para BookTick cuando llega mensaje real interceptado
   useEffect(() => {
-    if (!binanceLastMessage) return
+    if (!lastMessage || (lastMessage as any).message?.__source !== 'binance') return
     setBinancePulse(true)
     const t = setTimeout(() => setBinancePulse(false), 250)
     return () => clearTimeout(t)
-  }, [binanceLastMessage])
+  }, [lastMessage?.id])
 
   return (
     <div style={{ display: 'flex', gap: '6px' }}>
@@ -100,9 +83,9 @@ export const WebSocketStatus: React.FC = () => {
         pulsing={serverPulse}
       />
       <StatusBadge
-        label={binanceLabel}
-        connected={binanceConnected || hasTargetConnection}
-        connecting={binanceConnecting}
+        label="BookTick"
+        connected={binanceIsConnected}
+        connecting={binanceIsConnecting}
         error={binanceError}
         pulsing={binancePulse}
       />
