@@ -1,9 +1,4 @@
 import type { CandlestickData, LineData } from 'lightweight-charts'
-
-// Extender CandlestickData para incluir volumen
-interface ExtendedCandlestickData extends CandlestickData {
-  volume?: number
-}
 import {
   CandlestickSeries,
   ColorType,
@@ -15,6 +10,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useBinanceSocket } from '../../hooks/useBinanceSocket'
 import { Accordion } from '../Accordion'
 import type { CandlestickChartProps, TechnicalIndicators } from './types'
+
+// Extender CandlestickData para incluir volumen
+interface ExtendedCandlestickData extends CandlestickData {
+  volume?: number
+}
 
 const TIMEFRAMES = [
   { value: '1m', label: '1m', category: 'Minutos' },
@@ -234,11 +234,12 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   useEffect(() => {
     if (propIndicatorsData) {
       setIndicators(propIndicatorsData)
-    } else if (candleData && candleData.length > 0) {
-      // Si no hay indicadores externos, crear indicadores básicos desde los datos de velas
-      const volumeData = candleData.map(candle => candle.volume || 0)
-      const timestamps = candleData.map(candle => (candle.time as number) * 1000)
-      
+    } else if (candleData && candleData.length > 0 && !indicators) {
+      // Solo crear indicadores básicos si no existen indicadores previos
+      // Esto evita sobrescribir indicadores calculados en tiempo real
+      const volumeData = candleData.map((candle) => candle.volume || 0)
+      const timestamps = candleData.map((candle) => (candle.time as number) * 1000)
+
       const basicIndicators: TechnicalIndicators = {
         volume: volumeData,
         timestamps: timestamps,
@@ -246,10 +247,10 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         sma_slow: [],
         rsi: []
       }
-      
+
       setIndicators(basicIndicators)
     }
-  }, [propIndicatorsData, candleData, timeframe])
+  }, [propIndicatorsData, candleData, timeframe, indicators])
 
   useEffect(() => {
     if (!live || !binanceMsg) return
