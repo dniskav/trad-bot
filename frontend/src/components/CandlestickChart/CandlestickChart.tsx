@@ -9,7 +9,14 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useBinanceSocket } from '../../hooks/useBinanceSocket'
 import { Accordion } from '../Accordion'
+import { useVolumeData } from './hooks'
 import type { CandlestickChartProps, TechnicalIndicators } from './types'
+import {
+  filterVolumeDataForChart,
+  processHistoricalVolume,
+  processWebSocketVolume,
+  validateVolumeData
+} from './utils'
 
 // Extender CandlestickData para incluir volumen
 interface ExtendedCandlestickData extends CandlestickData {
@@ -74,11 +81,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     return timeframe
   })
 
-  // Sincronizar con el prop cuando cambie
-  useEffect(() => {
-    setLocalTimeframe(timeframe)
-  }, [timeframe])
-
   // Función para manejar el cambio de timeframe
   const handleTimeframeChange = (newTimeframe: string) => {
     setLocalTimeframe(newTimeframe)
@@ -117,7 +119,9 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const smaSlowRef = useRef<any>(null)
   const [candleData, setCandleData] = useState<ExtendedCandlestickData[]>([])
   const [indicators, setIndicators] = useState<TechnicalIndicators | null>(null)
-  const [volumeType, setVolumeType] = useState<'quote' | 'base'>('quote')
+
+  // Hook personalizado para manejar datos de volumen
+  const { volumeData, updateVolumeData, clearVolumeData, setVolumeType } = useVolumeData()
 
   const { lastMessage: binanceMsg } = useBinanceSocket(
     live
@@ -129,6 +133,14 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         }
       : { enableKlines: false, enableBookTicker: false }
   )
+
+  // Sincronizar con el prop cuando cambie
+  useEffect(() => {
+    setLocalTimeframe(timeframe)
+    // Limpiar indicadores y volumen cuando cambia el timeframe para evitar mezcla de datos
+    setIndicators(null)
+    clearVolumeData()
+  }, [timeframe, clearVolumeData])
 
   const computeSMA = (values: number[], period: number): (number | null)[] => {
     const result: (number | null)[] = []
@@ -231,18 +243,31 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     }
   }, [propCandlesData, timeframe])
 
+  // useEffect separado para procesar datos históricos de volumen
+  useEffect(() => {
+    if (candleData && candleData.length > 0 && !volumeData) {
+      console.log('📊 Procesando datos históricos de volumen:', candleData.length, 'velas')
+
+      const { volumes, timestamps } = processHistoricalVolume(candleData)
+
+      if (validateVolumeData(volumes, timestamps)) {
+        updateVolumeData(volumes, timestamps)
+        console.log('✅ Datos de volumen históricos procesados:', volumes.length, 'puntos')
+      } else {
+        console.warn('⚠️ Datos de volumen históricos inválidos')
+      }
+    }
+  }, [candleData, volumeData, updateVolumeData])
+
   useEffect(() => {
     if (propIndicatorsData) {
       setIndicators(propIndicatorsData)
     } else if (candleData && candleData.length > 0 && !indicators) {
       // Solo crear indicadores básicos si no existen indicadores previos
       // Esto evita sobrescribir indicadores calculados en tiempo real
-      const volumeData = candleData.map((candle) => candle.volume || 0)
-      const timestamps = candleData.map((candle) => (candle.time as number) * 1000)
-
       const basicIndicators: TechnicalIndicators = {
-        volume: volumeData,
-        timestamps: timestamps,
+        volume: [],
+        timestamps: [],
         sma_fast: [],
         sma_slow: [],
         rsi: []
@@ -295,35 +320,32 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           }
 
           const closes = trimmed.map((c) => c.close)
-          const timesMs = trimmed.map((c) => ((c.time as number) * 1000) as number)
           const smaFast = computeSMA(closes, 8)
           const smaSlow = computeSMA(closes, 21)
           const rsi = computeRSI(closes, 14)
           const macdObj = computeMACD(closes)
-          // Mantener volúmenes previos y solo actualizar la última vela
-          const prevVolumeByTime: Record<number, number> = {}
-          if (
-            indicators &&
-            Array.isArray(indicators.timestamps) &&
-            Array.isArray(indicators.volume)
-          ) {
-            for (let i = 0; i < indicators.timestamps.length; i++) {
-              const t = indicators.timestamps[i]
-              const v = Number(indicators.volume[i] ?? 0)
-              if (Number.isFinite(t)) prevVolumeByTime[t] = v
-            }
-          }
-          const volumes = timesMs.map((t, i) => {
-            if (i === timesMs.length - 1) return volume
-            return prevVolumeByTime[t] ?? 0
-          })
+
+          // Procesar volumen usando las nuevas utilidades
+          const currentVolumes = volumeData?.volume || []
+          const currentTimestamps = volumeData?.timestamps || []
+          const newTimestamp = Math.floor((startMs as number) / 1000) * 1000
+
+          const { volumes, timestamps } = processWebSocketVolume(
+            volume,
+            currentVolumes,
+            currentTimestamps,
+            newTimestamp
+          )
+
+          // Actualizar datos de volumen
+          updateVolumeData(volumes, timestamps)
 
           setIndicators({
             sma_fast: smaFast.map((v) => (v === null ? NaN : Number(v))),
             sma_slow: smaSlow.map((v) => (v === null ? NaN : Number(v))),
             rsi: rsi.map((v) => (v === null ? NaN : Number(v))),
             volume: volumes,
-            timestamps: timesMs,
+            timestamps: timestamps,
             macd: {
               macd: macdObj.macd.map((v) => (v === null ? NaN : Number(v))) as number[],
               signal: macdObj.signal.map((v) => (v === null ? NaN : Number(v))) as number[],
@@ -711,65 +733,59 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     }
   }, [indicators])
 
+  // useEffect separado para el chart de volumen
   useEffect(() => {
-    if (volumeContainerRef.current && indicators) {
-      if (
-        indicators.volume &&
-        Array.isArray(indicators.volume) &&
-        indicators.timestamps &&
-        Array.isArray(indicators.timestamps)
-      ) {
-        const volumeChart = createChart(volumeContainerRef.current, {
-          width: volumeContainerRef.current.clientWidth,
-          height: 200,
-          layout: { background: { type: ColorType.Solid, color: '#1e1e1e' }, textColor: '#d1d4dc' },
-          timeScale: {
-            timeVisible: true,
-            secondsVisible: false,
-            borderColor: '#485c7b',
-            borderVisible: true
-          },
-          rightPriceScale: {
-            borderColor: '#485c7b',
-            borderVisible: true,
-            scaleMargins: { top: 0.1, bottom: 0.1 }
-          }
-        })
-        const volumeSeries = volumeChart.addSeries(HistogramSeries, {
-          color: '#9b59b6',
-          title: 'Volume'
-        })
-        const volumeData = indicators.volume
-          .map((value, index) => ({
-            time: (indicators.timestamps[index] / 1000) as any,
-            value,
-            color: value > 0 ? '#26a69a' : '#ef5350'
-          }))
-          .filter((item) => {
-            const time = item.time as number
-            return (
-              item.value !== null &&
-              item.value !== undefined &&
-              !isNaN(item.value) &&
-              !isNaN(time) &&
-              isFinite(time) &&
-              time > 0
-            )
-          })
-        volumeSeries.setData(volumeData)
-        const handleResize = () => {
-          if (volumeContainerRef.current) {
-            volumeChart.applyOptions({ width: volumeContainerRef.current.clientWidth })
-          }
+    if (volumeContainerRef.current && volumeData) {
+      const { volume: volumes, timestamps } = volumeData
+
+      if (!validateVolumeData(volumes, timestamps)) {
+        console.warn('⚠️ Datos de volumen inválidos para el chart')
+        return
+      }
+
+      console.log('📊 Creando chart de volumen con', volumes.length, 'puntos')
+
+      const volumeChart = createChart(volumeContainerRef.current, {
+        width: volumeContainerRef.current.clientWidth,
+        height: 200,
+        layout: { background: { type: ColorType.Solid, color: '#1e1e1e' }, textColor: '#d1d4dc' },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          borderColor: '#485c7b',
+          borderVisible: true
+        },
+        rightPriceScale: {
+          borderColor: '#485c7b',
+          borderVisible: true,
+          scaleMargins: { top: 0.1, bottom: 0.1 }
         }
-        window.addEventListener('resize', handleResize)
-        return () => {
-          window.removeEventListener('resize', handleResize)
-          volumeChart.remove()
+      })
+
+      const volumeSeries = volumeChart.addSeries(HistogramSeries, {
+        color: '#9b59b6',
+        title: 'Volume'
+      })
+
+      const chartData = filterVolumeDataForChart(volumes, timestamps)
+      volumeSeries.setData(chartData)
+
+      console.log('✅ Chart de volumen creado con', chartData.length, 'puntos válidos')
+
+      const handleResize = () => {
+        if (volumeContainerRef.current) {
+          volumeChart.applyOptions({ width: volumeContainerRef.current.clientWidth })
         }
       }
+
+      window.addEventListener('resize', handleResize)
+
+      return () => {
+        window.removeEventListener('resize', handleResize)
+        volumeChart.remove()
+      }
     }
-  }, [indicators])
+  }, [volumeData])
 
   useEffect(() => {
     if (seriesRef.current && signals && signals.length > 0) {
@@ -807,9 +823,9 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           <button
             id={`${componentId}-volume-toggle`}
             className="timeframe-btn"
-            onClick={() => setVolumeType((t) => (t === 'quote' ? 'base' : 'quote'))}
+            onClick={() => setVolumeType(volumeData?.volumeType === 'quote' ? 'base' : 'quote')}
             title="Alternar tipo de volumen (quote/base)">
-            Vol: {volumeType}
+            Vol: {volumeData?.volumeType || 'quote'}
           </button>
         </div>
       </div>
@@ -899,9 +915,9 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         </Accordion>
       )}
 
-      {indicators && (
+      {volumeData && (
         <Accordion
-          title={`Volumen (${volumeType})`}
+          title={`Volumen (${volumeData.volumeType})`}
           defaultExpanded={false}
           storageKey="chart-volume">
           <div className="indicator-chart-container">
