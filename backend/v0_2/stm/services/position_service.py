@@ -145,14 +145,50 @@ class PositionService:
         """Send Binance-style outboundAccountPosition event"""
         if self.on_position_change:
             try:
-                # Get current account balance (simplified)
-                account_balance = 1000.0  # This should come from account service
+                # Get real account balance from account service
+                account_data = self.account_service.get_account()
+                if not account_data:
+                    log.error(
+                        "Failed to get account data for account_position notification"
+                    )
+                    return
+
+                # Extract real balances
+                usdt_balance = float(account_data.get("usdt_balance", 0))
+                usdt_locked = float(account_data.get("usdt_locked", 0))
+                doge_balance = float(account_data.get("doge_balance", 0))
+                doge_locked = float(account_data.get("doge_locked", 0))
+                doge_price = float(account_data.get("doge_price", 0))
+
+                # Calculate total balances in USDT
+                usdt_total = usdt_balance + usdt_locked
+                doge_total_usdt = (doge_balance + doge_locked) * doge_price
+
+                # Create balances array in Binance format
+                balances = []
+                if usdt_total > 0:
+                    balances.append(
+                        {
+                            "a": "USDT",
+                            "f": f"{usdt_balance:.8f}",  # Free (available)
+                            "l": f"{usdt_locked:.8f}",  # Locked
+                        }
+                    )
+
+                if doge_total_usdt > 0:
+                    balances.append(
+                        {
+                            "a": "DOGE",
+                            "f": f"{doge_balance:.8f}",  # Free (available)
+                            "l": f"{doge_locked:.8f}",  # Locked
+                        }
+                    )
 
                 account_position = {
                     "e": "outboundAccountPosition",
                     "E": int(datetime.now(timezone.utc).timestamp() * 1000),
                     "u": int(datetime.now(timezone.utc).timestamp() * 1000),
-                    "B": [{"a": "USDT", "f": str(account_balance), "l": "0.00000000"}],
+                    "B": balances,
                     "P": [
                         {
                             "s": position_data.get("symbol"),
@@ -171,6 +207,9 @@ class PositionService:
                     ],
                 }
 
+                log.info(
+                    f"📊 Sending real account balance: USDT={usdt_balance:.2f}+{usdt_locked:.2f}, DOGE={doge_balance:.2f}+{doge_locked:.2f}"
+                )
                 await self.on_position_change("account_position", account_position)
             except Exception as e:
                 log.error(f"Error notifying account position: {e}")

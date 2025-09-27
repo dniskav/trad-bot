@@ -15,17 +15,19 @@ interface AccountBalanceViewModel {
 }
 
 interface AccountBalanceProps {
-  balance: AccountBalanceViewModel
+  balance: AccountBalanceViewModel | null
   secondaryTitle?: string
   currentPrice?: number
   symbol?: string
+  isOnline?: boolean
 }
 
 const AccountBalance: React.FC<AccountBalanceProps> = ({
   balance,
   secondaryTitle,
   currentPrice,
-  symbol = 'DOGEUSDT'
+  symbol = 'DOGEUSDT',
+  isOnline = true
 }) => {
   const formatCurrency = (amount: number | undefined | null) => {
     if (amount === undefined || amount === null || isNaN(amount)) {
@@ -106,6 +108,16 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
         <span className="balance-icon">{getBalanceIcon()}</span>
         <span className="balance-title">
           Saldo de Cuenta{secondaryTitle ? ` · ${secondaryTitle}` : ''}
+        </span>
+        <span
+          className="connection-status"
+          style={{
+            fontSize: '0.75rem',
+            fontWeight: 'normal',
+            color: isOnline ? '#26a69a' : '#ef5350',
+            marginLeft: '8px'
+          }}>
+          {isOnline ? 'online' : 'offline'}
         </span>
       </div>
 
