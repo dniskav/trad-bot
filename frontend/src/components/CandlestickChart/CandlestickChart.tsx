@@ -265,13 +265,28 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     } else if (candleData && candleData.length > 0 && !indicators) {
       // Solo crear indicadores básicos si no existen indicadores previos
       // Esto evita sobrescribir indicadores calculados en tiempo real
+      
+      // Calcular indicadores técnicos desde los datos históricos
+      const closes = candleData.map(candle => candle.close)
+      const timestamps = candleData.map(candle => (candle.time as number) * 1000)
+      const smaFast = computeSMA(closes, 8)
+      const smaSlow = computeSMA(closes, 21)
+      const rsi = computeRSI(closes, 14)
+      
       const basicIndicators: TechnicalIndicators = {
         volume: [],
-        timestamps: [],
-        sma_fast: [],
-        sma_slow: [],
-        rsi: []
+        timestamps: timestamps,
+        sma_fast: smaFast.map((v) => (v === null ? NaN : Number(v))),
+        sma_slow: smaSlow.map((v) => (v === null ? NaN : Number(v))),
+        rsi: rsi.map((v) => (v === null ? NaN : Number(v)))
       }
+
+      console.log('📊 Indicadores básicos calculados:', {
+        sma_fast: basicIndicators.sma_fast.length,
+        sma_slow: basicIndicators.sma_slow.length,
+        rsi: basicIndicators.rsi.length,
+        timestamps: basicIndicators.timestamps.length
+      })
 
       setIndicators(basicIndicators)
     }
