@@ -4,11 +4,13 @@
 # Autor: Trading Bot Assistant
 # Fecha: $(date)
 
-# Uso: ./fix_port.sh [--stm | --server | --api | --ports "p1 p2 ..."]
+# Uso: ./fix_port.sh [--stm | --server | --api | --ports "p1 p2 ..."] [--force]
 # Sin parámetros repara todos (8000, 8100, 8200)
+# --force: omite confirmaciones (usar con precaución)
 
 PORTS_DEFAULT=(8000 8100 8200)
 PORTS=()
+FORCE_MODE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,6 +28,9 @@ while [[ $# -gt 0 ]]; do
       # siguiente argumento con lista de puertos separados por espacio
       for p in $1; do PORTS+=($p); done
       shift ;;
+    --force)
+      FORCE_MODE=true
+      shift ;;
     *)
       echo "⚠️  Opción desconocida: $1 (se ignorará)"; shift ;;
   esac
@@ -36,6 +41,9 @@ if [[ ${#PORTS[@]} -eq 0 ]]; then
 fi
 
 echo "🔧 Arreglando puertos: ${PORTS[*]}"
+if [ "$FORCE_MODE" = true ]; then
+    echo "⚠️  MODO FORCE ACTIVADO - Se omitirán confirmaciones"
+fi
 
 # Función para mostrar procesos en el puerto 8000
 show_port_processes() {
@@ -49,15 +57,37 @@ show_port_processes() {
     done
 }
 
-# Función para matar procesos en el puerto 8000
+# Función para matar procesos en el puerto específico
 kill_port_processes() {
     for p in "${PORTS[@]}"; do
       echo "🛑 Matando procesos en el puerto $p..."
       pids=$(lsof -ti:$p)
       if [ ! -z "$pids" ]; then
-          echo "$pids" | xargs kill -9 2>/dev/null
-          sleep 1
-          echo "✅ Procesos terminados en $p"
+          # Mostrar información del proceso antes de matarlo
+          echo "📋 Procesos a terminar en puerto $p:"
+          for pid in $pids; do
+              if [ ! -z "$pid" ]; then
+                  echo "  PID: $pid - $(ps -p $pid -o comm= 2>/dev/null || echo 'Proceso no encontrado')"
+              fi
+          done
+          
+          # Confirmar antes de matar (a menos que esté en modo force)
+          if [ "$FORCE_MODE" = true ]; then
+              echo "🚀 Modo force activado - terminando procesos automáticamente"
+              echo "$pids" | xargs kill -9 2>/dev/null
+              sleep 1
+              echo "✅ Procesos terminados en $p"
+          else
+              echo "⚠️  ¿Continuar? (y/N)"
+              read -r response
+              if [[ "$response" =~ ^[Yy]$ ]]; then
+                  echo "$pids" | xargs kill -9 2>/dev/null
+                  sleep 1
+                  echo "✅ Procesos terminados en $p"
+              else
+                  echo "❌ Operación cancelada para puerto $p"
+              fi
+          fi
       else
           echo "ℹ️  No hay procesos usando el puerto $p"
       fi
@@ -68,21 +98,26 @@ kill_port_processes() {
 kill_server_processes() {
     echo "🛑 Matando procesos específicos del servidor..."
     
-    # Matar procesos de uvicorn
+    # Obtener la ruta del proyecto actual
+    PROJECT_PATH=$(pwd)
+    echo "📁 Proyecto: $PROJECT_PATH"
+    
+    # Matar procesos de uvicorn específicos del proyecto
     pkill -f "uvicorn.*backend.v0_2" 2>/dev/null
     pkill -f "uvicorn.*8100" 2>/dev/null
     pkill -f "uvicorn.*8200" 2>/dev/null
-    pkill -f "python.*server.py" 2>/dev/null
     
-    # Matar procesos de v0.2
+    # Matar procesos Python específicos del proyecto (más específicos)
+    pkill -f "python.*$PROJECT_PATH.*server.py" 2>/dev/null
+    pkill -f "python.*$PROJECT_PATH.*app.py" 2>/dev/null
+    
+    # Matar procesos de v0.2 específicos del proyecto
     pkill -f "backend.v0_2.stm.app" 2>/dev/null
     pkill -f "backend.v0_2.server.app" 2>/dev/null
-    pkill -f "python.*app.py" 2>/dev/null
     
-    # Matar procesos de trading bot
-    pkill -f "trading.*bot" 2>/dev/null
-    pkill -f "real_trading_manager" 2>/dev/null
-    pkill -f "trading_tracker" 2>/dev/null
+    # Matar procesos de trading bot específicos del proyecto
+    pkill -f "real_trading_manager.*$PROJECT_PATH" 2>/dev/null
+    pkill -f "trading_tracker.*$PROJECT_PATH" 2>/dev/null
     
     sleep 2
     echo "✅ Procesos del servidor terminados"
@@ -105,18 +140,20 @@ check_port_free() {
 cleanup_python_processes() {
     echo "🧹 Limpiando procesos Python huérfanos..."
     
-    # Procesos de multiprocessing
-    pkill -f "multiprocessing.spawn_main" 2>/dev/null
-    pkill -f "multiprocessing.resource_tracker" 2>/dev/null
+    # Obtener la ruta del proyecto actual
+    PROJECT_PATH=$(pwd)
     
-    # Procesos de trading
-    pkill -f "trading.*tracker" 2>/dev/null
-    pkill -f "bot.*agresivo" 2>/dev/null
-    pkill -f "bot.*conservador" 2>/dev/null
+    # Procesos de multiprocessing específicos del proyecto
+    pkill -f "multiprocessing.spawn_main.*$PROJECT_PATH" 2>/dev/null
+    pkill -f "multiprocessing.resource_tracker.*$PROJECT_PATH" 2>/dev/null
     
-    # Procesos de v0.2
-    pkill -f "backend.v0_2" 2>/dev/null
-    pkill -f "python.*app.py" 2>/dev/null
+    # Procesos de trading específicos del proyecto
+    pkill -f "trading.*tracker.*$PROJECT_PATH" 2>/dev/null
+    pkill -f "bot.*agresivo.*$PROJECT_PATH" 2>/dev/null
+    pkill -f "bot.*conservador.*$PROJECT_PATH" 2>/dev/null
+    
+    # Procesos de v0.2 específicos del proyecto
+    pkill -f "backend.v0_2.*$PROJECT_PATH" 2>/dev/null
     
     sleep 1
     echo "✅ Limpieza completada"
@@ -151,6 +188,9 @@ main() {
         echo "   o"
         echo "   ./start_server.sh --start"
         echo "   ./start_server.sh --foreground"
+        echo ""
+        echo "🔧 Para usar el script en modo automático:"
+        echo "   ./fix_port.sh --force"
         echo ""
     else
         echo ""
