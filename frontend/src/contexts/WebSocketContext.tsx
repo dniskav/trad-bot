@@ -36,6 +36,7 @@ interface WebSocketContextType {
   addMessage: (type: 'sent' | 'received', message: any) => void
   clearMessages: () => void
 
+
   // Estado en tiempo real de plugin bots
   pluginBotsRealtime: Record<string, any>
   setPluginBotsRealtime: (data: Record<string, any>) => void
