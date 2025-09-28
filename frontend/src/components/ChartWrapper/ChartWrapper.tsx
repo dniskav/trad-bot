@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react'
-import { useBinanceKlines } from '../../hooks/useBinanceKlines'
 import CandlestickChart from '../CandlestickChart'
+import { useBinanceKlines, useBinanceSocket } from './hooks'
 import './styles.css'
 import type { ChartWrapperProps } from './types'
 
@@ -8,7 +8,8 @@ const ChartWrapper: React.FC<ChartWrapperProps> = ({
   symbol = 'DOGEUSDT',
   live = true,
   binanceSymbol = 'DOGEUSDT',
-  binanceInterval
+  binanceInterval,
+  enableWebSocket = true
 }) => {
   // Estado para el timeframe con inicialización desde localStorage
   const [timeframe, setTimeframe] = useState(() => {
@@ -21,19 +22,33 @@ const ChartWrapper: React.FC<ChartWrapperProps> = ({
   // Hook para obtener datos históricos de Binance
   const { candlesData, isLoading, error } = useBinanceKlines(symbol, timeframe, 1000)
 
+  // WebSocket propio del componente (autónomo)
+  const binanceSocket = useBinanceSocket({
+    symbol: binanceSymbol.toLowerCase(),
+    interval: timeframe,
+    enableKlines: enableWebSocket,
+    enableBookTicker: false
+  })
+
   // Estado para forzar re-montado del chart
   const [chartRemountKey, setChartRemountKey] = useState(0)
 
   // Función para manejar cambios de timeframe con localStorage
-  const handleTimeframeChange = useCallback((newTimeframe: string) => {
-    setTimeframe(newTimeframe)
-    // Guardar en localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('candlestick-timeframe', newTimeframe)
-    }
-    // Forzar re-montado cuando cambia el timeframe
-    setChartRemountKey((prev) => prev + 1)
-  }, [])
+  const handleTimeframeChange = useCallback(
+    (newTimeframe: string) => {
+      setTimeframe(newTimeframe)
+
+      // Guardar en localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('candlestick-timeframe', newTimeframe)
+      }
+
+      // Forzar re-montado cuando cambia el timeframe
+      // El WebSocket se reconectará automáticamente con el nuevo intervalo
+      setChartRemountKey((prev) => prev + 1)
+    },
+    [timeframe]
+  )
 
   // Mostrar loading mientras se cargan los datos históricos
   if (isLoading && candlesData.length === 0) {
@@ -64,9 +79,10 @@ const ChartWrapper: React.FC<ChartWrapperProps> = ({
           candlesData={candlesData}
           indicatorsData={null}
           onTimeframeChange={handleTimeframeChange}
-          live={live}
+          live={live && enableWebSocket}
           binanceSymbol={binanceSymbol}
           binanceInterval={binanceInterval || timeframe}
+          binanceMsg={binanceSocket.lastMessage}
         />
       </div>
     </div>

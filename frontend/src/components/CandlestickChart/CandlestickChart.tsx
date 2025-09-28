@@ -7,9 +7,8 @@ import {
   LineSeries
 } from 'lightweight-charts'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useBinanceSocket } from '../../hooks/useBinanceSocket'
 import { Accordion } from '../Accordion'
-import { useVolumeData } from './hooks'
+import { useBinanceSocket, useVolumeData } from '../ChartWrapper/hooks'
 import type { CandlestickChartProps, TechnicalIndicators } from './types'
 import {
   filterVolumeDataForChart,
@@ -119,6 +118,20 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   const smaSlowRef = useRef<any>(null)
   const [candleData, setCandleData] = useState<ExtendedCandlestickData[]>([])
   const [indicators, setIndicators] = useState<TechnicalIndicators | null>(null)
+  const [, setUserHasZoomed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chart-zoom-state')
+      return saved === 'true'
+    }
+    return false
+  })
+  const [, setSavedVisibleRange] = useState<{ from: number; to: number } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chart-visible-range')
+      return saved ? JSON.parse(saved) : null
+    }
+    return null
+  })
 
   // Hook personalizado para manejar datos de volumen
   const { volumeData, updateVolumeData, clearVolumeData, setVolumeType } = useVolumeData()
@@ -219,7 +232,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     if (propCandlesData && Array.isArray(propCandlesData) && propCandlesData.length > 0) {
       const formattedData: ExtendedCandlestickData[] = propCandlesData
         .map((candle: any) => ({
-          time: (candle.time / 1000) as any,
+          time: (candle.time / 1000) as any, // Convertir de ms a segundos para Lightweight Charts
           open: candle.open,
           high: candle.high,
           low: candle.low,
@@ -233,12 +246,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         })
         .sort((a, b) => (a.time as number) - (b.time as number)) // Ordenar por tiempo ascendente
 
-      console.log('📊 CandlestickChart: Datos procesados:', {
-        original: propCandlesData.length,
-        filtered: formattedData.length,
-        timeframe
-      })
-
       setCandleData(formattedData)
     }
   }, [propCandlesData, timeframe])
@@ -246,13 +253,10 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   // useEffect separado para procesar datos históricos de volumen
   useEffect(() => {
     if (candleData && candleData.length > 0 && !volumeData) {
-      console.log('📊 Procesando datos históricos de volumen:', candleData.length, 'velas')
-
       const { volumes, timestamps } = processHistoricalVolume(candleData)
 
       if (validateVolumeData(volumes, timestamps)) {
         updateVolumeData(volumes, timestamps)
-        console.log('✅ Datos de volumen históricos procesados:', volumes.length, 'puntos')
       } else {
         console.warn('⚠️ Datos de volumen históricos inválidos')
       }
@@ -265,14 +269,14 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     } else if (candleData && candleData.length > 0 && !indicators) {
       // Solo crear indicadores básicos si no existen indicadores previos
       // Esto evita sobrescribir indicadores calculados en tiempo real
-      
+
       // Calcular indicadores técnicos desde los datos históricos
-      const closes = candleData.map(candle => candle.close)
-      const timestamps = candleData.map(candle => (candle.time as number) * 1000)
+      const closes = candleData.map((candle) => candle.close)
+      const timestamps = candleData.map((candle) => (candle.time as number) * 1000)
       const smaFast = computeSMA(closes, 8)
       const smaSlow = computeSMA(closes, 21)
       const rsi = computeRSI(closes, 14)
-      
+
       const basicIndicators: TechnicalIndicators = {
         volume: [],
         timestamps: timestamps,
@@ -280,13 +284,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         sma_slow: smaSlow.map((v) => (v === null ? NaN : Number(v))),
         rsi: rsi.map((v) => (v === null ? NaN : Number(v)))
       }
-
-      console.log('📊 Indicadores básicos calculados:', {
-        sma_fast: basicIndicators.sma_fast.length,
-        sma_slow: basicIndicators.sma_slow.length,
-        rsi: basicIndicators.rsi.length,
-        timestamps: basicIndicators.timestamps.length
-      })
 
       setIndicators(basicIndicators)
     }
@@ -298,6 +295,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       if (binanceMsg.type === 'binance.kline' && binanceMsg.data) {
         const klineWrapper = binanceMsg.data
         const k = klineWrapper.k || klineWrapper
+
+        // Verificar que el intervalo del WebSocket coincida con el timeframe actual
+        const wsInterval = k.i ?? k.interval
+        if (wsInterval !== timeframe) {
+          return
+        }
+
         const startMs = k.t ?? k.startTime
         const open = Number(k.o ?? k.open)
         const high = Number(k.h ?? k.high)
@@ -355,16 +359,32 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           // Actualizar datos de volumen
           updateVolumeData(volumes, timestamps)
 
-          setIndicators({
-            sma_fast: smaFast.map((v) => (v === null ? NaN : Number(v))),
-            sma_slow: smaSlow.map((v) => (v === null ? NaN : Number(v))),
-            rsi: rsi.map((v) => (v === null ? NaN : Number(v))),
-            volume: volumes,
-            timestamps: timestamps,
-            macd: {
-              macd: macdObj.macd.map((v) => (v === null ? NaN : Number(v))) as number[],
-              signal: macdObj.signal.map((v) => (v === null ? NaN : Number(v))) as number[],
-              histogram: macdObj.histogram.map((v) => (v === null ? NaN : Number(v))) as number[]
+          // Solo actualizar indicadores si no existen o si hay datos suficientes
+          setIndicators((prev) => {
+            // Si no hay indicadores previos, crear nuevos
+            if (!prev) {
+              return {
+                sma_fast: smaFast.map((v) => (v === null ? NaN : Number(v))),
+                sma_slow: smaSlow.map((v) => (v === null ? NaN : Number(v))),
+                rsi: rsi.map((v) => (v === null ? NaN : Number(v))),
+                volume: volumes,
+                timestamps: timestamps,
+                macd: {
+                  macd: macdObj.macd.map((v) => (v === null ? NaN : Number(v))) as number[],
+                  signal: macdObj.signal.map((v) => (v === null ? NaN : Number(v))) as number[],
+                  histogram: macdObj.histogram.map((v) =>
+                    v === null ? NaN : Number(v)
+                  ) as number[]
+                }
+              }
+            }
+
+            // Si ya existen indicadores, solo actualizar volumen y timestamps
+            // Mantener SMA, RSI y MACD existentes para evitar parpadeo
+            return {
+              ...prev,
+              volume: volumes,
+              timestamps: timestamps
             }
           })
 
@@ -388,7 +408,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           borderColor: '#485c7b',
           borderVisible: true,
           visible: true,
-          rightOffset: 15,
+          rightOffset: 0,
           tickMarkFormatter: (time: any) => {
             const date = new Date(time * 1000)
             if (timeframe === '1m' || timeframe === '3m' || timeframe === '5m') {
@@ -442,14 +462,16 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         rightPriceScale: {
           borderColor: '#485c7b',
           borderVisible: true,
-          scaleMargins: { top: 0.05, bottom: 0.05 },
-          autoScale: true
+          scaleMargins: { top: 0.15, bottom: 0.05 },
+          autoScale: true,
+          alignLabels: false
         },
         leftPriceScale: {
           borderColor: '#485c7b',
           borderVisible: true,
-          scaleMargins: { top: 0.05, bottom: 0.05 },
-          autoScale: true
+          scaleMargins: { top: 0.15, bottom: 0.05 },
+          autoScale: true,
+          alignLabels: false
         },
         handleScroll: {
           mouseWheel: true,
@@ -464,6 +486,35 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         }
       })
 
+      // Listener para detectar zoom manual del usuario (con delay para evitar errores)
+      setTimeout(() => {
+        try {
+          chart.timeScale().subscribeVisibleTimeRangeChange((timeRange) => {
+            if (timeRange && timeRange.from !== null && timeRange.to !== null) {
+              setUserHasZoomed(true)
+              setSavedVisibleRange({
+                from: timeRange.from as number,
+                to: timeRange.to as number
+              })
+
+              // Guardar en localStorage
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('chart-zoom-state', 'true')
+                localStorage.setItem(
+                  'chart-visible-range',
+                  JSON.stringify({
+                    from: timeRange.from as number,
+                    to: timeRange.to as number
+                  })
+                )
+              }
+            }
+          })
+        } catch (error) {
+          console.error('❌ Error al suscribirse al cambio de rango visible:', error)
+        }
+      }, 100)
+
       const series = chart.addSeries(CandlestickSeries, {
         upColor: '#26a69a',
         downColor: '#ef5350',
@@ -473,13 +524,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       const smaFast = chart.addSeries(LineSeries, {
         color: '#ffff00',
         lineWidth: 1,
-        title: 'SMA Fast (8)',
+        title: '',
         priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
       })
       const smaSlow = chart.addSeries(LineSeries, {
         color: '#ff00ff',
         lineWidth: 1,
-        title: 'SMA Slow (21)',
+        title: '',
         priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
       })
 
@@ -518,9 +569,14 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
   }, [timeframe])
 
   useEffect(() => {
-    if (seriesRef.current && candleData.length > 0) {
-      seriesRef.current.setData(candleData)
-      seriesInitializedRef.current = true
+    // Solo procesar datos si el chart está inicializado y hay datos válidos
+    if (chartRef.current && seriesRef.current && candleData.length > 0) {
+      try {
+        seriesRef.current.setData(candleData)
+        seriesInitializedRef.current = true
+      } catch (error) {
+        console.error('❌ Error al establecer datos en el chart:', error)
+      }
     }
   }, [candleData])
 
@@ -758,8 +814,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         return
       }
 
-      console.log('📊 Creando chart de volumen con', volumes.length, 'puntos')
-
       const volumeChart = createChart(volumeContainerRef.current, {
         width: volumeContainerRef.current.clientWidth,
         height: 200,
@@ -784,8 +838,6 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
       const chartData = filterVolumeDataForChart(volumes, timestamps)
       volumeSeries.setData(chartData)
-
-      console.log('✅ Chart de volumen creado con', chartData.length, 'puntos válidos')
 
       const handleResize = () => {
         if (volumeContainerRef.current) {
@@ -870,11 +922,11 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           <>
             <div className="legend-item">
               <div className="legend-marker" style={{ backgroundColor: '#ffff00' }}></div>
-              <span>SMA Fast (8)</span>
+              <span></span>
             </div>
             <div className="legend-item">
               <div className="legend-marker" style={{ backgroundColor: '#ff00ff' }}></div>
-              <span>SMA Slow (21)</span>
+              <span></span>
             </div>
             <div className="legend-item">
               <div className="legend-marker" style={{ backgroundColor: '#f39c12' }}></div>

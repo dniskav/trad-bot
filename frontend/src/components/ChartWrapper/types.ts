@@ -3,6 +3,7 @@ export interface ChartWrapperProps {
   live?: boolean
   binanceSymbol?: string
   binanceInterval?: string
+  enableWebSocket?: boolean
 }
 
 export interface CandlestickData {
