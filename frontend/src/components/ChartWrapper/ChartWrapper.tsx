@@ -38,29 +38,12 @@ const ChartWrapper: React.FC<ChartWrapperProps> = ({
   const onDataRef = useRef(onData)
   onDataRef.current = onData
 
-  // Emitir datos raw del WebSocket
+  // Pasar mensaje raw del WebSocket al padre (sin procesar)
   useEffect(() => {
     if (binanceSocket.lastMessage && onDataRef.current) {
-      onDataRef.current({
-        message: 'binance_data',
-        data: binanceSocket.lastMessage
-      })
+      onDataRef.current(binanceSocket.lastMessage)
     }
   }, [binanceSocket.lastMessage])
-
-  // Emitir estado de conexión
-  useEffect(() => {
-    if (onDataRef.current) {
-      onDataRef.current({
-        message: 'connection_state',
-        data: {
-          isConnected: binanceSocket.isConnected,
-          isConnecting: binanceSocket.isConnecting,
-          error: binanceSocket.error
-        }
-      })
-    }
-  }, [binanceSocket.isConnected, binanceSocket.isConnecting, binanceSocket.error])
 
   // Función para manejar cambios de timeframe con localStorage
   const handleTimeframeChange = useCallback(
