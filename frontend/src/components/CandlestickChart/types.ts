@@ -31,4 +31,5 @@ export interface CandlestickChartProps {
   live?: boolean
   binanceSymbol?: string
   binanceInterval?: string
+  binanceMsg?: any
 }
