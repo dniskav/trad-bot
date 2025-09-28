@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react'
+import { appChartDataHandler } from '../handlers/chartDataHandler'
 import { Accordion } from './Accordion'
-import ActivePositions from './ActivePositions/ActivePositions'
 import AccountBalance from './AccountBalance'
+import ActivePositions from './ActivePositions/ActivePositions'
 import { ChartWrapper } from './ChartWrapper'
 import ErrorBoundary from './ErrorBoundary'
 import PlugAndPlayBots from './PlugAndPlayBots'
@@ -21,6 +22,11 @@ const AppContent: React.FC = () => {
   // Función estable para cerrar el toast
   const handleToastClose = useCallback(() => {
     setShowToast(false)
+  }, [])
+
+  // Función estable para manejar datos del chart
+  const handleChartDataStable = useCallback((rawMessage: any) => {
+    appChartDataHandler(rawMessage)
   }, [])
 
   return (
@@ -55,9 +61,7 @@ const AppContent: React.FC = () => {
         <div className="health-container">
           {/* Saldo de Cuenta */}
           <Accordion title="Saldo de Cuenta" defaultExpanded={true} storageKey="account-balance">
-            <AccountBalance
-              symbol="DOGEUSDT"
-            />
+            <AccountBalance symbol="DOGEUSDT" />
           </Accordion>
 
           {/* Posiciones Concurrentes Activas */}
@@ -88,7 +92,12 @@ const AppContent: React.FC = () => {
               console.log('Chart collapsed')
             }}>
             <ErrorBoundary>
-              <ChartWrapper symbol="DOGEUSDT" live binanceSymbol="DOGEUSDT" />
+              <ChartWrapper
+                symbol="DOGEUSDT"
+                live
+                binanceSymbol="DOGEUSDT"
+                onData={handleChartDataStable}
+              />
             </ErrorBoundary>
           </Accordion>
 
