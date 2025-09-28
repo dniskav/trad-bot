@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import CandlestickChart from '../CandlestickChart'
 import { useBinanceKlines, useBinanceSocket } from './hooks'
 import './styles.css'
@@ -9,7 +9,8 @@ const ChartWrapper: React.FC<ChartWrapperProps> = ({
   live = true,
   binanceSymbol = 'DOGEUSDT',
   binanceInterval,
-  enableWebSocket = true
+  enableWebSocket = true,
+  onData
 }) => {
   // Estado para el timeframe con inicialización desde localStorage
   const [timeframe, setTimeframe] = useState(() => {
@@ -32,6 +33,34 @@ const ChartWrapper: React.FC<ChartWrapperProps> = ({
 
   // Estado para forzar re-montado del chart
   const [chartRemountKey, setChartRemountKey] = useState(0)
+
+  // Referencia estable para onData
+  const onDataRef = useRef(onData)
+  onDataRef.current = onData
+
+  // Emitir datos raw del WebSocket
+  useEffect(() => {
+    if (binanceSocket.lastMessage && onDataRef.current) {
+      onDataRef.current({
+        message: 'binance_data',
+        data: binanceSocket.lastMessage
+      })
+    }
+  }, [binanceSocket.lastMessage])
+
+  // Emitir estado de conexión
+  useEffect(() => {
+    if (onDataRef.current) {
+      onDataRef.current({
+        message: 'connection_state',
+        data: {
+          isConnected: binanceSocket.isConnected,
+          isConnecting: binanceSocket.isConnecting,
+          error: binanceSocket.error
+        }
+      })
+    }
+  }, [binanceSocket.isConnected, binanceSocket.isConnecting, binanceSocket.error])
 
   // Función para manejar cambios de timeframe con localStorage
   const handleTimeframeChange = useCallback(

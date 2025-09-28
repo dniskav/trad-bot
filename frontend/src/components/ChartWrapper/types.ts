@@ -4,6 +4,8 @@ export interface ChartWrapperProps {
   binanceSymbol?: string
   binanceInterval?: string
   enableWebSocket?: boolean
+  // Callback genérico que recibe { message, data }
+  onData?: (payload: { message: string; data: any }) => void
 }
 
 export interface CandlestickData {
