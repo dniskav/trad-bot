@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react'
 import { Accordion } from './Accordion'
 import ActivePositions from './ActivePositions/ActivePositions'
+import AccountBalance from './AccountBalance'
 import { ChartWrapper } from './ChartWrapper'
 import ErrorBoundary from './ErrorBoundary'
 import PlugAndPlayBots from './PlugAndPlayBots'
@@ -54,10 +55,9 @@ const AppContent: React.FC = () => {
         <div className="health-container">
           {/* Saldo de Cuenta */}
           <Accordion title="Saldo de Cuenta" defaultExpanded={true} storageKey="account-balance">
-            {/* <AccountBalance
+            <AccountBalance
               symbol="DOGEUSDT"
-            /> */}
-            Saldo de Cuenta
+            />
           </Accordion>
 
           {/* Posiciones Concurrentes Activas */}

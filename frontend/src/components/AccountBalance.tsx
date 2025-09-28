@@ -1,13 +1,14 @@
 import React from 'react'
 import { BalanceRow } from './BalanceRow'
 import { BalanceStatus } from './BalanceStatus'
+import { useAccountBalance } from '../hooks/useAccountBalance'
 
 interface AccountBalanceViewModel {
   initial_balance: number
   current_balance: number
   total_pnl: number
-  balance_change_pct: number
-  is_profitable: boolean
+  balance_change_pct?: number
+  is_profitable?: boolean
   usdt_balance: number
   doge_balance: number
   total_balance_usdt: number
@@ -15,20 +16,19 @@ interface AccountBalanceViewModel {
 }
 
 interface AccountBalanceProps {
-  balance: AccountBalanceViewModel | null
-  secondaryTitle?: string
-  currentPrice?: number
   symbol?: string
-  isOnline?: boolean
+  secondaryTitle?: string
 }
 
 const AccountBalance: React.FC<AccountBalanceProps> = ({
-  balance,
-  secondaryTitle,
-  currentPrice,
   symbol = 'DOGEUSDT',
-  isOnline = true
+  secondaryTitle = 'Synthetic'
 }) => {
+  // Usar el hook para obtener los datos de la cuenta
+  const { balance, loading, error, isOnline } = useAccountBalance()
+  
+  // Calcular precio actual desde el balance
+  const currentPrice = balance?.doge_price
   const formatCurrency = (amount: number | undefined | null) => {
     if (amount === undefined || amount === null || isNaN(amount)) {
       return '$0.00'
@@ -73,8 +73,15 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
     return '📊'
   }
 
-  // Si no hay balance, mostrar loading
-  if (!balance) {
+  // Calcular campos faltantes si no están en el balance
+  const balanceWithCalculatedFields = balance ? {
+    ...balance,
+    balance_change_pct: balance.balance_change_pct ?? ((balance.current_balance - balance.initial_balance) / balance.initial_balance) * 100,
+    is_profitable: balance.is_profitable ?? balance.total_pnl > 0
+  } : null
+
+  // Si está cargando, mostrar loading
+  if (loading) {
     return (
       <div className="account-balance">
         <div className="balance-header">
@@ -84,6 +91,40 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
         <div className="balance-content">
           <div className="balance-row">
             <span className="balance-label">Cargando...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Si hay error, mostrar error
+  if (error) {
+    return (
+      <div className="account-balance">
+        <div className="balance-header">
+          <span className="balance-icon">❌</span>
+          <span className="balance-title">Saldo de Cuenta</span>
+        </div>
+        <div className="balance-content">
+          <div className="balance-row">
+            <span className="balance-label" style={{ color: '#ef5350' }}>Error: {error}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Si no hay balance, mostrar mensaje
+  if (!balance) {
+    return (
+      <div className="account-balance">
+        <div className="balance-header">
+          <span className="balance-icon">📊</span>
+          <span className="balance-title">Saldo de Cuenta</span>
+        </div>
+        <div className="balance-content">
+          <div className="balance-row">
+            <span className="balance-label">No hay datos disponibles</span>
           </div>
         </div>
       </div>
@@ -217,7 +258,7 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
 
             <BalanceRow
               label="Cambio:"
-              value={formatPercentage(balance.balance_change_pct)}
+              value={formatPercentage(balanceWithCalculatedFields.balance_change_pct)}
               valueType="change"
               color={getBalanceColor()}
             />
@@ -227,8 +268,8 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
               value={
                 <BalanceStatus
                   totalPnl={balance.total_pnl}
-                  balanceChangePct={balance.balance_change_pct}
-                  isProfitable={balance.is_profitable}
+                  balanceChangePct={balanceWithCalculatedFields.balance_change_pct}
+                  isProfitable={balanceWithCalculatedFields.is_profitable}
                 />
               }
               valueType="status"
