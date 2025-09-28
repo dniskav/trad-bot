@@ -6,7 +6,7 @@ import type { PriceUpdateData } from '../eventBus/types'
  * Conecta el chartDataHandler agnóstico con el event bus de la app
  */
 export const appChartDataHandler = (rawMessage: any) => {
-  console.log('📊 App chart data handler received raw message:', rawMessage)
+  // console.log('📊 App chart data handler received raw message:', rawMessage)
 
   // Procesar mensaje raw del socket y emitir evento tipado
   if (rawMessage.type === 'binance.kline') {

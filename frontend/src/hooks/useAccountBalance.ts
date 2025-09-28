@@ -1,6 +1,5 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { API_CONFIG } from '../config/api'
-import { WebSocketContext } from '../contexts/WebSocketContext'
 import apiClient from '../services/apiClient'
 
 const log = console
@@ -41,7 +40,6 @@ export const useAccountBalance = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
-  const wsContext = useContext(WebSocketContext)
 
   console.log('🔍 useAccountBalance hook initialized')
 
@@ -105,18 +103,7 @@ export const useAccountBalance = () => {
     }
   }, []) // Empty dependency array to run only once on mount
 
-  // Escuchar notificaciones WebSocket para actualizaciones en tiempo real
-  useEffect(() => {
-    if (!wsContext?.lastMessage) return
-
-    const message = wsContext.lastMessage.message
-
-    if (message.type === 'account_balance_update') {
-      log.info('✅ Account balance update received via WebSocket')
-      setBalance(message.data)
-      setIsOnline(true)
-    }
-  }, [wsContext?.lastMessage])
+  // WebSocket functionality removed - using only API data
 
   // Función para actualizar balance manualmente
   const refreshBalance = useCallback(() => {

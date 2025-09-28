@@ -35,7 +35,11 @@ const AppContent: React.FC = () => {
       <header className="app-header">
         <div className="header-content">
           <div className="header-left">
-            <WebSocketStatus />
+            <WebSocketStatus
+              label="Binance"
+              socketId="binance"
+              urlContains={['binance', 'stream', 'dogeusdt']}
+            />
           </div>
 
           <div className="header-center">

@@ -1,5 +1,6 @@
 export { eventBus } from './eventBus'
 export type {
+  AccountBalanceSynthetic,
   ApiEvent,
   AppEvent,
   BinanceBookTickerData,

@@ -120,6 +120,28 @@ export interface BinanceBookTickerData {
 
 export type BinanceData = BinanceKlineData | BinanceBookTickerData
 
+export interface AccountBalanceSynthetic {
+  initial_balance: number
+  current_balance: number
+  total_pnl: number
+  usdt_balance: number
+  doge_balance: number
+  usdt_locked: number
+  doge_locked: number
+  doge_price: number
+  total_balance_usdt: number
+  invested: number
+
+  // Nuevos campos para trading
+  available_usdt: number
+  available_doge: number
+  available_balance_usdt: number
+  trading_power_usdt: number
+  max_position_size_usdt: number
+
+  last_updated: string
+}
+
 export interface EventBusHandler {
   (payload: EventPayload): void
 }

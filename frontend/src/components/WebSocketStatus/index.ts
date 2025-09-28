@@ -1,4 +1,5 @@
-export * from './types'
-export { WebSocketStatus as default } from './WebSocketStatus'
 export { useWebSocketDetector } from './hooks'
 export type { WebSocketDetectorOptions, WebSocketDetectorState } from './hooks'
+export { StatusBadge } from './StatusBadge'
+export * from './types'
+export { WebSocketStatus as default } from './WebSocketStatus'

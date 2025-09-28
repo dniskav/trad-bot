@@ -1,20 +1,9 @@
 import React from 'react'
 import { useAccountBalance } from '../hooks/useAccountBalance'
-import { usePriceData } from '../hooks/usePriceData'
 import { BalanceRow } from './BalanceRow'
 import { BalanceStatus } from './BalanceStatus'
 
-interface AccountBalanceViewModel {
-  initial_balance: number
-  current_balance: number
-  total_pnl: number
-  balance_change_pct?: number
-  is_profitable?: boolean
-  usdt_balance: number
-  doge_balance: number
-  total_balance_usdt: number
-  invested?: number
-}
+// Removed unused interface
 
 interface AccountBalanceProps {
   symbol?: string
@@ -25,14 +14,12 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
   symbol = 'DOGEUSDT',
   secondaryTitle = 'Synthetic'
 }) => {
-  // Usar el hook para obtener los datos de la cuenta
+  // Usar el hook para obtener los datos de la cuenta (fallback)
   const { balance, loading, error, isOnline } = useAccountBalance()
 
-  // Usar el hook para obtener precios en tiempo real
-  const priceData = usePriceData('DOGEUSDT')
-
-  // Usar precio en tiempo real si está disponible, sino el del balance
-  const currentPrice = priceData.price || balance?.doge_price
+  // Usar datos de la API
+  const currentPrice = balance?.doge_price
+  const isConnected = isOnline
   const formatCurrency = (amount: number | undefined | null) => {
     if (amount === undefined || amount === null || isNaN(amount)) {
       return '$0.00'
@@ -64,27 +51,30 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
   }
 
   const getBalanceColor = () => {
-    if (!balance) return '#ffa726' // Naranja por defecto
-    if (balance.is_profitable) return '#26a69a' // Verde para ganancias
-    if (balance.current_balance < balance.initial_balance) return '#ef5350' // Rojo para pérdidas
-    return '#ffa726' // Naranja para neutral
+    if (!balance) return '#ffa726'
+    if (balance.current_balance > balance.initial_balance) return '#26a69a'
+    if (balance.current_balance < balance.initial_balance) return '#ef5350'
+    return '#ffa726'
   }
 
   const getBalanceIcon = () => {
-    if (!balance) return '📊' // Icono por defecto
-    if (balance.is_profitable) return '📈'
+    if (!balance) return '📊'
+    if (balance.current_balance > balance.initial_balance) return '📈'
     if (balance.current_balance < balance.initial_balance) return '📉'
     return '📊'
   }
 
+  const displayBalance = balance
+
   // Calcular campos faltantes si no están en el balance
-  const balanceWithCalculatedFields = balance
+  const balanceWithCalculatedFields = displayBalance
     ? {
-        ...balance,
+        ...displayBalance,
         balance_change_pct:
-          balance.balance_change_pct ??
-          ((balance.current_balance - balance.initial_balance) / balance.initial_balance) * 100,
-        is_profitable: balance.is_profitable ?? balance.total_pnl > 0
+          ((displayBalance.current_balance - displayBalance.initial_balance) /
+            displayBalance.initial_balance) *
+          100,
+        is_profitable: displayBalance.current_balance > displayBalance.initial_balance
       }
     : null
 
@@ -125,7 +115,7 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
   }
 
   // Si no hay balance, mostrar mensaje
-  if (!balance) {
+  if (!displayBalance) {
     return (
       <div className="account-balance">
         <div className="balance-header">
@@ -165,10 +155,10 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
           style={{
             fontSize: '0.75rem',
             fontWeight: 'normal',
-            color: isOnline ? '#26a69a' : '#ef5350',
+            color: isConnected || isOnline ? '#26a69a' : '#ef5350',
             marginLeft: '8px'
           }}>
-          {isOnline ? 'online' : 'offline'}
+          {isConnected || isOnline ? 'online' : 'offline'}
         </span>
       </div>
 
@@ -200,33 +190,33 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
           <div className="card-content">
             <BalanceRow
               label="Saldo Inicial:"
-              value={formatCurrency(balance.initial_balance)}
+              value={formatCurrency(displayBalance.initial_balance)}
               valueType="default"
             />
 
             <BalanceRow
               label="Saldo Actual:"
-              value={formatCurrency(balance.current_balance)}
+              value={formatCurrency(displayBalance.current_balance)}
               valueType="current"
               color={getBalanceColor()}
             />
 
             <BalanceRow
               label="USDT Disponible:"
-              value={formatCurrency(balance.usdt_balance)}
+              value={formatCurrency(displayBalance.usdt_balance)}
               valueType="default"
             />
 
             <BalanceRow
               label="DOGE Disponible:"
-              value={`${formatDoge(balance.doge_balance)} DOGE`}
+              value={`${formatDoge(displayBalance.doge_balance)} DOGE`}
               valueType="default"
             />
 
-            {balance.invested !== undefined && (
+            {displayBalance.invested !== undefined && (
               <BalanceRow
                 label="Invertido:"
-                value={formatCurrency(balance.invested)}
+                value={formatCurrency(displayBalance.invested)}
                 valueType="default"
                 color="#3b82f6"
               />
@@ -234,13 +224,57 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
 
             <BalanceRow
               label="Total en USDT:"
-              value={formatCurrency(balance.total_balance_usdt)}
+              value={formatCurrency(displayBalance.total_balance_usdt)}
               valueType="default"
             />
           </div>
         </div>
 
-        {/* Card 2: Precios y PnL */}
+        {/* Card 2: Balance Disponible para Trading */}
+        <div className="balance-card">
+          <div className="card-header">
+            <span className="card-icon">💰</span>
+            <span className="card-title">Disponible para Trading</span>
+          </div>
+          <div className="card-content">
+            <BalanceRow
+              label="USDT Disponible:"
+              value={formatCurrency(displayBalance.usdt_balance)}
+              valueType="default"
+              color="#26a69a"
+            />
+
+            <BalanceRow
+              label="DOGE Disponible:"
+              value={`${formatDoge(displayBalance.doge_balance)} DOGE`}
+              valueType="default"
+              color="#26a69a"
+            />
+
+            <BalanceRow
+              label="Balance Total Disponible:"
+              value={formatCurrency(displayBalance.total_balance_usdt)}
+              valueType="default"
+              color="#26a69a"
+            />
+
+            <BalanceRow
+              label="Poder de Trading:"
+              value={formatCurrency(displayBalance.total_balance_usdt)}
+              valueType="default"
+              color="#3b82f6"
+            />
+
+            <BalanceRow
+              label="Max Posición (USDT):"
+              value={formatCurrency(displayBalance.total_balance_usdt * 0.95)}
+              valueType="default"
+              color="#ffa726"
+            />
+          </div>
+        </div>
+
+        {/* Card 3: Precios y PnL */}
         <div className="balance-card">
           <div className="card-header">
             <span className="card-icon">📊</span>
@@ -261,14 +295,14 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
 
             <BalanceRow
               label="PnL Total:"
-              value={formatCurrency(balance.total_pnl)}
+              value={formatCurrency(displayBalance.total_pnl || 0)}
               valueType="pnl"
               color={getBalanceColor()}
             />
 
             <BalanceRow
               label="Cambio:"
-              value={formatPercentage(balanceWithCalculatedFields.balance_change_pct)}
+              value={formatPercentage(balanceWithCalculatedFields?.balance_change_pct || 0)}
               valueType="change"
               color={getBalanceColor()}
             />
@@ -277,9 +311,9 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
               label="Estado:"
               value={
                 <BalanceStatus
-                  totalPnl={balance.total_pnl}
-                  balanceChangePct={balanceWithCalculatedFields.balance_change_pct}
-                  isProfitable={balanceWithCalculatedFields.is_profitable}
+                  totalPnl={displayBalance.total_pnl || 0}
+                  balanceChangePct={balanceWithCalculatedFields?.balance_change_pct || 0}
+                  isProfitable={balanceWithCalculatedFields?.is_profitable || false}
                 />
               }
               valueType="status"

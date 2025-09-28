@@ -1,4 +1,5 @@
-import type { BinanceKlineData, EventPayload, EventType, PriceUpdateData } from '../eventBus/types'
+import type { BinanceKlineData, EventPayload, PriceUpdateData } from '../eventBus/types'
+import { EventType } from '../eventBus/types'
 
 /**
  * Handler para procesar datos del chart

@@ -1,5 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react'
-import { WebSocketContext } from '../contexts/WebSocketContext'
+import React, { useEffect, useState } from 'react'
 import { useApiBotActions, useApiBots, useApiProcessInfo } from '../hooks'
 import { PluginBotCard, type BotInfo as PluginBotInfo } from './PluginBotCard'
 import { ServerInfoAccordion } from './ServerInfoAccordion'
@@ -42,7 +41,6 @@ interface PlugAndPlayBotsProps {
 }
 
 const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', currentPrice = 0 }) => {
-  const wsCtx = useContext(WebSocketContext)
   const [bots, setBots] = useState<Record<string, BotInfo>>({})
   const [expandedBots, setExpandedBots] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
@@ -114,72 +112,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', curre
     }
   }, [processInfoData])
 
-  // Overlay en vivo con datos de plugin_bots_realtime desde el contexto
-  useEffect(() => {
-    if (!wsCtx || !wsCtx.pluginBotsRealtime) return
-    const rt = wsCtx.pluginBotsRealtime
-    if (!rt || Object.keys(rt).length === 0) return
-
-    // console.log('🔄 PlugAndPlayBots: WebSocket data received:', rt)
-
-    setBots((prev) => {
-      const next: Record<string, BotInfo> = { ...prev }
-      Object.entries(rt as Record<string, any>).forEach(([name, info]) => {
-        if (!next[name]) return
-
-        //  console.log(`🔄 PlugAndPlayBots: Updating bot ${name} with data:`, info)
-
-        next[name] = {
-          ...next[name],
-          is_active: info.is_active ?? next[name].is_active,
-          positions_count: info.positions_count ?? next[name].positions_count,
-          last_signal: info.last_signal ?? next[name].last_signal,
-          uptime_seconds: info.uptime ?? next[name].uptime_seconds,
-          start_time: info.start_time ?? next[name].start_time,
-          synthetic_mode: info.synthetic_mode ?? next[name].synthetic_mode,
-          synthetic_balance: info.synthetic_balance ?? next[name].synthetic_balance,
-          author: info.author ?? next[name].author
-        }
-      })
-      return next
-    })
-  }, [wsCtx?.pluginBotsRealtime])
-
-  // Listen to other WebSocket messages for bot updates
-  useEffect(() => {
-    if (!wsCtx || !wsCtx.lastMessage) return
-
-    const data = wsCtx.lastMessage.message
-    //console.log('🔄 PlugAndPlayBots: WebSocket message received:', data)
-
-    if (data.type === 'initial_data' || data.type === 'update') {
-      if (data.data && data.data.bot_status) {
-        //console.log('🔄 PlugAndPlayBots: Bot status from WebSocket:', data.data.bot_status)
-
-        setBots((prev) => {
-          const next: Record<string, BotInfo> = { ...prev }
-          Object.entries(data.data.bot_status).forEach(([name, status]: [string, any]) => {
-            if (!next[name]) return
-
-            //            console.log(`🔄 PlugAndPlayBots: Updating bot ${name} status:`, status)
-            //            console.log(`🔄 PlugAndPlayBots: last_signal for ${name}:`, status.last_signal)
-
-            next[name] = {
-              ...next[name],
-              is_active: status.is_active ?? next[name].is_active,
-              positions_count: status.positions_count ?? next[name].positions_count,
-              last_signal: status.last_signal ?? next[name].last_signal,
-              uptime_seconds: status.uptime ?? next[name].uptime_seconds,
-              start_time: status.start_time ?? next[name].start_time,
-              synthetic_mode: status.synthetic_mode ?? next[name].synthetic_mode,
-              author: status.author ?? next[name].author
-            }
-          })
-          return next
-        })
-      }
-    }
-  }, [wsCtx?.lastMessage])
+  // WebSocket functionality removed - using only API data
 
   const handleBotToggle = async (botName: string, isActive: boolean) => {
     try {

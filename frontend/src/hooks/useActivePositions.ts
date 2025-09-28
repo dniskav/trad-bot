@@ -1,6 +1,5 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { API_CONFIG } from '../config/api'
-import { WebSocketContext } from '../contexts/WebSocketContext'
 import apiClient from '../services/apiClient'
 
 const log = console
@@ -34,7 +33,6 @@ export const useActivePositions = () => {
   const [positions, setPositions] = useState<Position[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const wsContext = useContext(WebSocketContext)
 
   const fetchActivePositions = useCallback(async () => {
     setLoading(true)
@@ -64,19 +62,7 @@ export const useActivePositions = () => {
     fetchActivePositions()
   }, [fetchActivePositions])
 
-  // Escuchar notificaciones WebSocket para actualizaciones en tiempo real
-  useEffect(() => {
-    if (!wsContext?.lastMessage) return
-
-    const message = wsContext.lastMessage.message
-
-    if (message.type === 'position_change') {
-      log.info(`✅ Position change received: ${message.change_type}`)
-
-      // Refrescar posiciones cuando hay cambios
-      fetchActivePositions()
-    }
-  }, [wsContext?.lastMessage, fetchActivePositions])
+  // WebSocket functionality removed - using only API data
 
   // Función para actualizar posiciones manualmente
   const refreshPositions = useCallback(() => {

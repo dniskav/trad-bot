@@ -5,3 +5,13 @@ export interface StatusBadgeProps {
   error: string | null
   pulsing: boolean
 }
+
+export interface WebSocketStatusProps {
+  label: string
+  socketId: string
+  urlContains?: string[]
+  checkInterval?: number
+  enableLogs?: boolean
+  enablePulse?: boolean
+  pulseThrottle?: number
+}
