@@ -23,8 +23,16 @@ export const appChartDataHandler = (rawMessage: any) => {
   } else if (rawMessage.type === 'binance.bookTicker') {
     // Para book ticker, por ahora no hacemos nada
     console.log('📊 Book ticker data received:', rawMessage)
+  } else if (rawMessage.e === 'account_balance' && rawMessage.s === 'trading_server') {
+    // Mensaje del servidor con formato compatible con Binance
+    console.log('📊 Server account balance received:', rawMessage)
+    eventBus.emit(EventType.WS_SERVER_ACCOUNT_BALANCE, rawMessage.d)
+  } else if (rawMessage.e === 'positions_update' && rawMessage.s === 'trading_server') {
+    // Mensaje del servidor con formato compatible con Binance
+    console.log('📊 Server positions update received:', rawMessage)
+    eventBus.emit(EventType.WS_SERVER_POSITIONS, rawMessage.d)
   } else {
     // Para otros tipos de mensajes
-    console.log('📊 Unknown message type:', rawMessage.type, rawMessage)
+    console.log('📊 Unknown message type:', rawMessage.type || rawMessage.e, rawMessage)
   }
 }

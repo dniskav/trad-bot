@@ -11,7 +11,6 @@ export interface WebSocketStatusProps {
   socketId: string
   urlContains?: string[]
   checkInterval?: number
-  enableLogs?: boolean
   enablePulse?: boolean
   pulseThrottle?: number
 }

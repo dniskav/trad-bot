@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "positionId": "f9642ba4-3a90-4b73-9d1f-2228779cfc26",
+    "orderId": "39c7068a-06f2-4ad6-8e27-2064cd2c3982",
+    "symbol": "DOGEUSDT",
+    "side": "BUY",
+    "quantity": "222",
+    "entryPrice": "0.230625",
+    "leverage": 1,
+    "isIsolated": false,
+    "status": "open",
+    "pnl": 0.27750000000000025,
+    "createdAt": "2025-09-28T17:31:54.171305+00:00",
+    "updatedAt": "2025-09-28T20:15:39.429506+00:00",
+    "stopLossPrice": "0.20000",
+    "stopLossOrderId": "8caeaa85-75bd-4e97-99a6-f48a63870fa9",
+    "takeProfitPrice": "0.28000",
+    "takeProfitOrderId": "43f6e931-a6e9-4c30-8b3d-50617548cc73",
+    "botId": null,
+    "strategy": null,
+    "closedAt": null
+  }
+]

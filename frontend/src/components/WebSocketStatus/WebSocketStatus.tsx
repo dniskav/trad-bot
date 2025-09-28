@@ -9,25 +9,19 @@ export const WebSocketStatus: React.FC<WebSocketStatusProps> = ({
   socketId: _socketId, // Renamed to avoid unused warning
   urlContains = [],
   checkInterval = 2000,
-  enableLogs = false,
   enablePulse = true,
   pulseThrottle = 500
 }) => {
   // Usar detector de WebSockets genérico
-  const { isConnected, isConnecting, error, lastMessage, detectTargetConnections } =
-    useWebSocketDetector({
-      urlContains,
-      checkInterval,
-      enableLogs,
-      enablePulse,
-      pulseThrottle,
-      label
-    })
+  const { isConnected, isConnecting, error, lastMessage } = useWebSocketDetector({
+    urlContains,
+    checkInterval,
+    enablePulse,
+    pulseThrottle,
+    label
+  })
 
   const [pulse, setPulse] = useState(false)
-
-  // Detectar conexiones específicas
-  const { hasTargetConnection } = detectTargetConnections()
 
   // Pulse cuando llega mensaje real interceptado
   useEffect(() => {
@@ -40,7 +34,7 @@ export const WebSocketStatus: React.FC<WebSocketStatusProps> = ({
   return (
     <StatusBadge
       label={label}
-      connected={isConnected || hasTargetConnection}
+      connected={isConnected}
       connecting={isConnecting}
       error={error}
       pulsing={pulse}

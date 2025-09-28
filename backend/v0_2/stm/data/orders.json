@@ -1,1 +1,56 @@
-[]
+[
+  {
+    "orderId": "39c7068a-06f2-4ad6-8e27-2064cd2c3982",
+    "clientOrderId": "manual-pos-001",
+    "symbol": "DOGEUSDT",
+    "side": "BUY",
+    "type": "MARKET",
+    "quantity": "222",
+    "price": "0.230625",
+    "stopPrice": null,
+    "timeInForce": "GTC",
+    "status": "FILLED",
+    "executedQty": "222",
+    "cummulativeQuoteQty": "51.19875",
+    "commission": "0.0204795",
+    "commissionAsset": "USDT",
+    "timestamp": "2025-09-28T17:31:54.162103+00:00",
+    "updateTime": "2025-09-28T17:31:54.162115+00:00"
+  },
+  {
+    "orderId": "8caeaa85-75bd-4e97-99a6-f48a63870fa9",
+    "clientOrderId": "sl-f9642ba4-3a90-4b73-9d1f-2228779cfc26",
+    "symbol": "DOGEUSDT",
+    "side": "SELL",
+    "type": "STOP_MARKET",
+    "quantity": "222",
+    "price": "0.230625",
+    "stopPrice": "0.20000",
+    "timeInForce": "GTC",
+    "status": "FILLED",
+    "executedQty": "222",
+    "cummulativeQuoteQty": "51.19875",
+    "commission": "0.0204795",
+    "commissionAsset": "USDT",
+    "timestamp": "2025-09-28T17:31:54.185225+00:00",
+    "updateTime": "2025-09-28T17:31:54.185232+00:00"
+  },
+  {
+    "orderId": "43f6e931-a6e9-4c30-8b3d-50617548cc73",
+    "clientOrderId": "tp-f9642ba4-3a90-4b73-9d1f-2228779cfc26",
+    "symbol": "DOGEUSDT",
+    "side": "SELL",
+    "type": "LIMIT",
+    "quantity": "222",
+    "price": "0.28000",
+    "stopPrice": null,
+    "timeInForce": "GTC",
+    "status": "FILLED",
+    "executedQty": "222",
+    "cummulativeQuoteQty": "62.160000000000004",
+    "commission": "0.024864000000000004",
+    "commissionAsset": "USDT",
+    "timestamp": "2025-09-28T17:31:54.199573+00:00",
+    "updateTime": "2025-09-28T17:31:54.199578+00:00"
+  }
+]

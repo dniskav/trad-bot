@@ -317,11 +317,35 @@ class STMService:
             return {"success": False, "message": f"Error setting TP: {str(e)}"}
 
     async def get_account_synth(self) -> dict:
-        """Get synthetic account data from STM"""
+        """Get synthetic account data from STM with additional available balance fields"""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{STM_HTTP}/account/synth", timeout=5) as resp:
-                    return await resp.json()
+                    account_data = await resp.json()
+
+                    # Agregar campos de balance disponible
+                    if account_data and not account_data.get("status") == "error":
+                        usdt_balance = float(account_data.get("usdt_balance", 0))
+                        doge_balance = float(account_data.get("doge_balance", 0))
+                        usdt_locked = float(account_data.get("usdt_locked", 0))
+                        doge_locked = float(account_data.get("doge_locked", 0))
+                        doge_price = float(account_data.get("doge_price", 0))
+
+                        # Calcular balances disponibles (excluyendo fondos bloqueados)
+                        available_usdt = max(0, usdt_balance - usdt_locked)
+                        available_doge = max(0, doge_balance - doge_locked)
+                        available_balance_usdt = available_usdt + (
+                            available_doge * doge_price
+                        )
+
+                        # Agregar campos al response
+                        account_data["available_usdt"] = available_usdt
+                        account_data["available_doge"] = available_doge
+                        account_data["available_balance_usdt"] = available_balance_usdt
+                        account_data["trading_power_usdt"] = available_balance_usdt
+                        account_data["max_position_size_usdt"] = available_balance_usdt
+
+                    return account_data
         except aiohttp.ClientError as e:
             return {"status": "error", "message": str(e), "code": 500}
         except Exception as e:
