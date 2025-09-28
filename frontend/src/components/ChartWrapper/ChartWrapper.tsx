@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react'
-import { useApiKlines } from '../../hooks/useApiKlines'
+import { useBinanceKlines } from '../../hooks/useBinanceKlines'
 import CandlestickChart from '../CandlestickChart'
 import './styles.css'
 import type { ChartWrapperProps } from './types'
@@ -19,7 +19,7 @@ const ChartWrapper: React.FC<ChartWrapperProps> = ({
   })
 
   // Hook para obtener datos históricos de Binance
-  const { candlesData, isLoading, error } = useApiKlines(symbol, timeframe, 1000)
+  const { candlesData, isLoading, error } = useBinanceKlines(symbol, timeframe, 1000)
 
   // Estado para forzar re-montado del chart
   const [chartRemountKey, setChartRemountKey] = useState(0)
