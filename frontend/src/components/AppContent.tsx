@@ -9,6 +9,10 @@ import PlugAndPlayBots from './PlugAndPlayBots'
 import { Toast } from './Toast'
 import WebSocketStatus from './WebSocketStatus'
 
+// Signatures para detectar conexiones WebSocket
+const binanceSignatures = ['binance', 'stream', 'dogeusdt']
+const serverSignatures = ['trading_server', 'account_balance', 'positions_update']
+
 const AppContent: React.FC = () => {
   // Debug: Contador de montajes
   const mountCount = React.useRef(0)
@@ -35,11 +39,8 @@ const AppContent: React.FC = () => {
       <header className="app-header">
         <div className="header-content">
           <div className="header-left">
-            <WebSocketStatus
-              label="Binance"
-              socketId="binance"
-              urlContains={['binance', 'stream', 'dogeusdt']}
-            />
+            <WebSocketStatus label="Binance" socketId="binance" urlContains={binanceSignatures} />
+            <WebSocketStatus label="Server" socketId="server" urlContains={serverSignatures} />
           </div>
 
           <div className="header-center">
