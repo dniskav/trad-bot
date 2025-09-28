@@ -18,7 +18,7 @@ export const API_CONFIG = {
     POSITIONS: '/api/positions',
     POSITIONS_OPEN: '/api/positions/open',
     POSITIONS_CLOSE: '/api/positions/close',
-    ACCOUNT_SYNTH: '/api/account/synth'
+    ACCOUNT_SYNTH: '/account/synth'
   },
 
   TIMEOUT: 30000, // 30 seconds (Binance can be slow)

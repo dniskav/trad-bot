@@ -11,6 +11,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8200',
         changeOrigin: true
       },
+      '/account': {
+        target: 'http://127.0.0.1:8200',
+        changeOrigin: true
+      },
       '/bot': {
         target: 'http://127.0.0.1:8200',
         changeOrigin: true

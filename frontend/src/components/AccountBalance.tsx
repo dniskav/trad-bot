@@ -1,7 +1,8 @@
 import React from 'react'
+import { useAccountBalance } from '../hooks/useAccountBalance'
+import { usePriceData } from '../hooks/usePriceData'
 import { BalanceRow } from './BalanceRow'
 import { BalanceStatus } from './BalanceStatus'
-import { useAccountBalance } from '../hooks/useAccountBalance'
 
 interface AccountBalanceViewModel {
   initial_balance: number
@@ -26,9 +27,12 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
 }) => {
   // Usar el hook para obtener los datos de la cuenta
   const { balance, loading, error, isOnline } = useAccountBalance()
-  
-  // Calcular precio actual desde el balance
-  const currentPrice = balance?.doge_price
+
+  // Usar el hook para obtener precios en tiempo real
+  const priceData = usePriceData('DOGEUSDT')
+
+  // Usar precio en tiempo real si está disponible, sino el del balance
+  const currentPrice = priceData.price || balance?.doge_price
   const formatCurrency = (amount: number | undefined | null) => {
     if (amount === undefined || amount === null || isNaN(amount)) {
       return '$0.00'
@@ -74,11 +78,15 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
   }
 
   // Calcular campos faltantes si no están en el balance
-  const balanceWithCalculatedFields = balance ? {
-    ...balance,
-    balance_change_pct: balance.balance_change_pct ?? ((balance.current_balance - balance.initial_balance) / balance.initial_balance) * 100,
-    is_profitable: balance.is_profitable ?? balance.total_pnl > 0
-  } : null
+  const balanceWithCalculatedFields = balance
+    ? {
+        ...balance,
+        balance_change_pct:
+          balance.balance_change_pct ??
+          ((balance.current_balance - balance.initial_balance) / balance.initial_balance) * 100,
+        is_profitable: balance.is_profitable ?? balance.total_pnl > 0
+      }
+    : null
 
   // Si está cargando, mostrar loading
   if (loading) {
@@ -107,7 +115,9 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
         </div>
         <div className="balance-content">
           <div className="balance-row">
-            <span className="balance-label" style={{ color: '#ef5350' }}>Error: {error}</span>
+            <span className="balance-label" style={{ color: '#ef5350' }}>
+              Error: {error}
+            </span>
           </div>
         </div>
       </div>
