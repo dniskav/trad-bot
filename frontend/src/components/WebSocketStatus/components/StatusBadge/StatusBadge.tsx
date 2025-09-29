@@ -1,6 +1,6 @@
 import React from 'react'
-import type { StatusBadgeProps } from './types'
-import './WebSocketStatus.css'
+import type { StatusBadgeProps } from '../../types'
+import '../../WebSocketStatus.css'
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
   label,
@@ -27,3 +27,5 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     </div>
   )
 }
+
+export default StatusBadge

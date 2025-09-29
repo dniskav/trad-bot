@@ -1,2 +1,2 @@
-export { useWebSocketDetector } from './useWebSocketDetector'
-export type { WebSocketDetectorOptions, WebSocketDetectorState } from './useWebSocketDetector'
+export { useWsObserver } from './useWsObserver'
+export type { UseWsObserverOptions, UseWsObserverState } from './useWsObserver'
