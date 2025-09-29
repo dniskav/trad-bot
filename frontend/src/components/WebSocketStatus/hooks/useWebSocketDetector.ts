@@ -11,7 +11,6 @@ export interface WebSocketDetectorOptions {
   url?: string | string[]
   urlContains?: string | string[]
   checkInterval?: number
-  enableLogs?: boolean
   enablePulse?: boolean
   pulseThrottle?: number
   label?: string
@@ -25,7 +24,6 @@ export interface WebSocketDetectorOptions {
  * @param options.url - URL específica a detectar (opcional)
  * @param options.urlContains - Palabras que debe contener la URL (opcional)
  * @param options.checkInterval - Intervalo de verificación en ms (default: 3000)
- * @param options.enableLogs - Habilitar logs de debug (default: true)
  * @param options.enablePulse - Habilitar pulse visual (default: true)
  * @param options.pulseThrottle - Throttle del pulse en ms (default: 1000)
  * @param options.label - Label personalizado para el detector (default: 'WebSocket')
@@ -35,7 +33,6 @@ export const useWebSocketDetector = (options: WebSocketDetectorOptions = {}) => 
     url,
     urlContains,
     checkInterval = 3000,
-    enableLogs = true,
     enablePulse = true,
     pulseThrottle = 1000,
     label = 'WebSocket'
@@ -49,73 +46,71 @@ export const useWebSocketDetector = (options: WebSocketDetectorOptions = {}) => 
   })
 
   const intervalRef = useRef<number | null>(null)
-  const lastCheckRef = useRef<number>(0)
   const lastPulseRef = useRef<number>(0)
   const originalWebSocketRef = useRef<typeof WebSocket | null>(null)
 
+  // Función para verificar si una URL coincide con los criterios
+  const matchesUrl = (
+    wsUrl: string,
+    config: { url?: string | string[]; urlContains?: string | string[] }
+  ): boolean => {
+    // Si no hay filtros definidos, no aceptar ninguna conexión
+    if (!config.url && !config.urlContains) {
+      return false
+    }
+
+    // Verificar URL exacta
+    if (config.url) {
+      if (Array.isArray(config.url)) {
+        if (config.url.includes(wsUrl)) return true
+      } else {
+        if (wsUrl === config.url) return true
+      }
+    }
+
+    // Verificar palabras clave en la URL
+    if (config.urlContains) {
+      if (Array.isArray(config.urlContains)) {
+        // Solo coincidir si el array no está vacío
+        if (config.urlContains.length > 0) {
+          const matchedKeywords = config.urlContains.filter((keyword) => wsUrl.includes(keyword))
+          if (matchedKeywords.length > 0) {
+            return true
+          }
+        }
+      } else {
+        if (wsUrl.includes(config.urlContains)) return true
+      }
+    }
+
+    return false
+  }
+
   // Detectar conexiones WebSocket usando Network Information API
   const detectWebSocketConnections = useCallback(() => {
-    try {
-      // Usar Network Information API si está disponible
-      const connection =
-        (navigator as any).connection ||
-        (navigator as any).mozConnection ||
-        (navigator as any).webkitConnection
-
-      // Detectar conexiones WebSocket activas usando una estrategia diferente
-      // Verificar si hay actividad de red reciente
-      const now = Date.now()
-      const timeSinceLastCheck = now - lastCheckRef.current
-
-      // Simular detección basada en actividad de red
-      // En un caso real, esto podría usar otras APIs o eventos
-      const hasNetworkActivity = timeSinceLastCheck < 5000 // 5 segundos
-
-      // Detectar conexiones específicas basadas en configuración
-      let hasTargetConnection = hasNetworkActivity && connection?.effectiveType !== 'slow-2g'
-
-      // Si se especifica URL o palabras clave, aplicar filtros adicionales
-      if (url || urlContains) {
-        // En una implementación real, aquí verificaríamos URLs específicas
-        // Por ahora, simulamos que hay conexión si hay actividad de red
-        hasTargetConnection = hasNetworkActivity
-      }
-
-      setState((prev) => ({
-        ...prev,
-        isConnected: hasTargetConnection,
-        isConnecting: false,
-        error: hasTargetConnection ? null : 'No connection detected',
-        lastMessage: hasTargetConnection ? now : prev.lastMessage
-      }))
-
-      lastCheckRef.current = now
-    } catch (error) {
-      // Silently handle errors
-    }
-  }, [url, urlContains, enableLogs])
+    // Deshabilitar detección automática para evitar falsos positivos
+    // Solo confiar en el interceptor de WebSocket para detección real
+    return
+  }, [])
 
   // Monkey patch WebSocket para interceptar mensajes
   const setupWebSocketInterceptor = useCallback(() => {
     if (originalWebSocketRef.current) return // Ya está configurado
 
-    originalWebSocketRef.current = window.WebSocket
+    // Capturar el WebSocket original ANTES de reemplazarlo
+    const originalWebSocket = window.WebSocket
+    originalWebSocketRef.current = originalWebSocket
 
     const InterceptedWebSocket = function (
       this: WebSocket,
       url: string,
       protocols?: string | string[]
     ) {
-      const ws = new originalWebSocketRef.current!(url, protocols)
+      // Usar la referencia capturada directamente para evitar recursión
+      const ws = new (originalWebSocket as any)(url, protocols)
 
       // Verificar si la URL coincide con nuestros criterios
-      const urlMatches =
-        !url && !urlContains
-          ? true
-          : (url && (Array.isArray(url) ? url.includes(ws.url) : ws.url === url)) ||
-            (urlContains && Array.isArray(urlContains)
-              ? urlContains.some((keyword) => ws.url.includes(keyword))
-              : ws.url.includes(urlContains as string))
+      const urlMatches = matchesUrl(ws.url, { url, urlContains })
 
       if (urlMatches) {
         // Monitorear estado de conexión usando readyState
@@ -145,54 +140,43 @@ export const useWebSocketDetector = (options: WebSocketDetectorOptions = {}) => 
           return originalClose(code, reason)
         }
 
-        // Interceptar addEventListener para capturar mensajes
-        const originalAddEventListener = ws.addEventListener.bind(ws)
-        ws.addEventListener = function (
-          type: string,
-          listener: EventListenerOrEventListenerObject,
-          options?: boolean | AddEventListenerOptions
-        ) {
-          if (type === 'message' && enablePulse) {
-            const wrappedListener = (event: MessageEvent) => {
-              const now = Date.now()
-              const timeSinceLastPulse = now - lastPulseRef.current
+        // Añadir un listener propio sin modificar la API del socket (no invasivo)
+        if (enablePulse) {
+          const pulseListener = (event: MessageEvent) => {
+            const now = Date.now()
+            const timeSinceLastPulse = now - lastPulseRef.current
 
-              // Throttle del pulse para evitar spam
-              if (timeSinceLastPulse >= pulseThrottle) {
-                // Usar setTimeout para evitar setState durante render
-                setTimeout(() => {
-                  setState((prev) => ({
-                    ...prev,
-                    lastMessage: now
-                  }))
-                }, 0)
-                lastPulseRef.current = now
-              }
-
-              // Llamar al listener original
-              if (typeof listener === 'function') {
-                listener(event)
-              } else if (listener && typeof listener === 'object' && 'handleEvent' in listener) {
-                listener.handleEvent(event)
-              }
+            if (timeSinceLastPulse >= pulseThrottle) {
+              setState((prev) => ({
+                ...prev,
+                lastMessage: now
+              }))
+              lastPulseRef.current = now
             }
-
-            return originalAddEventListener(type, wrappedListener, options)
           }
 
-          return originalAddEventListener(type, listener, options)
+          ws.addEventListener('message', pulseListener)
+
+          // Asegurar limpieza del listener al cerrar
+          const removeOnClose = () => ws.removeEventListener('message', pulseListener)
+          ws.addEventListener('close', removeOnClose, { once: true })
         }
       }
 
       return ws
     } as any
 
-    // Copiar propiedades estáticas
-    Object.setPrototypeOf(InterceptedWebSocket, originalWebSocketRef.current)
-    Object.defineProperty(InterceptedWebSocket, 'prototype', {
-      value: originalWebSocketRef.current.prototype,
-      writable: false
-    })
+    // Copiar propiedades estáticas de forma segura
+    try {
+      Object.setPrototypeOf(InterceptedWebSocket, originalWebSocket)
+      Object.defineProperty(InterceptedWebSocket, 'prototype', {
+        value: originalWebSocket.prototype,
+        writable: false
+      })
+    } catch (error) {
+      // Si falla la copia de propiedades, continuar sin ellas
+      console.warn('No se pudieron copiar las propiedades estáticas del WebSocket:', error)
+    }
 
     // Reemplazar WebSocket global
     window.WebSocket = InterceptedWebSocket as any
@@ -229,10 +213,10 @@ export const useWebSocketDetector = (options: WebSocketDetectorOptions = {}) => 
   // Detectar conexiones específicas basadas en configuración
   const detectTargetConnections = useCallback(() => {
     return {
-      hasTargetConnection: state.isConnected,
-      targetConnections: state.isConnected ? [{ url: url || 'detected-stream', readyState: 1 }] : []
+      hasTargetConnection: false, // Siempre false para evitar falsos positivos
+      targetConnections: []
     }
-  }, [state.isConnected, url])
+  }, [])
 
   return {
     ...state,
