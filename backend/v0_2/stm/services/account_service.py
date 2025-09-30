@@ -5,9 +5,11 @@ from typing import Optional
 from datetime import datetime, timezone
 from backend.shared.persistence import JsonStore
 from backend.shared.logger import get_logger
+from backend.shared.settings import env_str
 import aiohttp
 
 log = get_logger("stm.account_service")
+SYMBOL = env_str("SERVER_SYMBOL", "dogeusdt").lower()
 
 # Persistencia para cuenta sintética
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
@@ -85,7 +87,7 @@ class AccountService:
 
     async def reset_account(self) -> dict:
         """Reset account to default values"""
-        price = _last_price or self._fetch_price_rest("dogeusdt") or 0.0
+        price = _last_price or self._fetch_price_rest(SYMBOL) or 0.0
         doge_balance = (500.0 / price) if price > 0 else 0.0
         data = {
             "initial_balance": 1000.0,
