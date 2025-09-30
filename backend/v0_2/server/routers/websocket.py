@@ -93,6 +93,13 @@ async def notify_websocket_clients(request: Request):
             try:
                 resp = await stm_service.get_positions(status="open")
                 positions = resp.get("positions", []) or []
+                # Fetch current price once to approximate close fee and real-time PnL
+                acct = await stm_service.get_account_synth()
+                curr_price = (
+                    float(acct.get("doge_price", 0)) if isinstance(acct, dict) else 0.0
+                )
+                # Fee rates (approx taker on entry and exit)
+                TAKER = 0.0004
 
                 for p in positions:
                     pid = p.get("positionId")
@@ -100,8 +107,34 @@ async def notify_websocket_clients(request: Request):
                     if pid is None or pnl is None:
                         continue
 
+                    # Compute net PnL after estimated fees
+                    try:
+                        entry = float(p.get("entryPrice", 0))
+                        qty = float(p.get("quantity", 0)) or abs(
+                            float(p.get("positionAmt", 0))
+                        )
+                        side = (
+                            p.get("side")
+                            or p.get("positionSide")
+                            or ("SELL" if float(p.get("positionAmt", 0)) < 0 else "BUY")
+                        ).upper()
+                        gross = float(pnl)
+                        # Estimate taker fees at entry and potential exit
+                        fee_open = TAKER * entry * qty
+                        fee_close = TAKER * (curr_price or entry) * qty
+                        pnl_net = gross - fee_open - fee_close
+                        # Broadcast pnl update for this position
+                        await ws_manager.broadcast(
+                            {
+                                "type": "position_change",
+                                "positionId": pid,
+                                "fields": {"pnl": f"{pnl_net}"},
+                            }
+                        )
+                    except Exception:
+                        pass
+
                     last = _last_pnl_by_position.get(pid)
-                    # Log only when PnL actually changes (allow tiny epsilon)
                     if last is None or abs(float(pnl) - float(last)) > 1e-8:
                         _last_pnl_by_position[pid] = float(pnl)
                         log.info(f"PNL change | position={pid} pnl={float(pnl):.8f}")
