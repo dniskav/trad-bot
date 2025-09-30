@@ -187,7 +187,11 @@ export const useAccountBalance = () => {
 
     const onPositionsLifecycle = (msg: any) => {
       const t = msg?.type
-      if (t === SocketMsg.POSITION_OPENED || t === SocketMsg.POSITION_CLOSED) {
+      if (
+        t === SocketMsg.POSITION_OPENED ||
+        t === SocketMsg.POSITION_CLOSED ||
+        t === SocketMsg.POSITION_CHANGE
+      ) {
         fetchAccountBalance()
       }
     }

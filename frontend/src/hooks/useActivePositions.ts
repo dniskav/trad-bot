@@ -107,12 +107,18 @@ export const useActivePositions = () => {
       const price = (bid + ask) / 2
       setPositions((prev) =>
         prev.map((p) => {
-          // Long/short not fully supported here; we treat positionSide 'LONG' as long
-          const qty = Math.abs(parseFloat(p.positionAmt)) || 0
-          const entry = parseFloat(p.entryPrice) || 0
-          const side = (p.positionSide || 'LONG').toUpperCase()
+          const qty =
+            Math.abs(
+              parseFloat(((p as any).positionAmt ?? (p as any).quantity ?? '0') as string)
+            ) || 0
+          const entry = parseFloat((p as any).entryPrice) || 0
+          // Determine side robustly: prefer positionSide, then side, then sign of positionAmt
+          const sideRaw =
+            ((p as any).positionSide ||
+              (p as any).side ||
+              (((p as any).positionAmt ?? 0) < 0 ? 'SELL' : 'BUY')) + ''
+          const side = sideRaw.toUpperCase()
           const gross = side === 'SELL' ? (entry - price) * qty : (price - entry) * qty
-          // Keep strings for compatibility
           return { ...p, unrealizedProfit: gross.toString() }
         })
       )
