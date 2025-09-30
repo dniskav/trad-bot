@@ -5,6 +5,7 @@ set -euo pipefail
 
 # Cambiar al directorio del proyecto trading_bot
 cd "$(dirname "$0")"
+PROJECT_PATH="$(pwd)"
 
 # Configuración
 PORT=8200
@@ -105,8 +106,16 @@ fi
 # 2) Liberar el puerto si está ocupado
 if lsof -i :${PORT} -sTCP:LISTEN -u "$USER" >/dev/null 2>&1; then
   echo "🔧 Liberando puerto ${PORT} ocupado"
-  PIDS=$(lsof -t -i :${PORT} -sTCP:LISTEN -u "$USER")
-  kill_pids "$PIDS"
+  FILTERED_PIDS=""
+  while read -r pid; do
+    if [ -n "$pid" ]; then
+      cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
+      if [[ "$cmd" == *python* ]] && [[ "$cmd" == *"$PROJECT_PATH"* ]]; then
+        FILTERED_PIDS+="$pid "
+      fi
+    fi
+  done < <(lsof -t -i :${PORT} -sTCP:LISTEN -u "$USER")
+  kill_pids "$FILTERED_PIDS"
 fi
 
 # 3) Verificar compatibilidad y crear venv

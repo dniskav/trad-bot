@@ -6,6 +6,7 @@ set -euo pipefail
 # Cambiar al directorio del proyecto trading_bot
 cd "$(dirname "$0")"
 export PYTHONPATH="$(pwd)"
+PROJECT_PATH="$(pwd)"
 
 PORT=8200
 MODULE="backend.v0_2.server.app"
@@ -28,17 +29,26 @@ kill_pids() {
 echo "🧹 Revisando procesos previos del Server..."
 
 # 1) Cerrar procesos que ejecuten el módulo del server
-if pgrep -u "$USER" -fl "python3 -m ${MODULE}" >/dev/null 2>&1; then
+if pgrep -u "$USER" -fl "python.* -m ${MODULE}" >/dev/null 2>&1; then
   echo "🔎 Encontrado ${MODULE} corriendo"
-  PIDS=$(pgrep -u "$USER" -f "python3 -m ${MODULE}")
+  PIDS=$(pgrep -u "$USER" -f "python.* -m ${MODULE}")
   kill_pids "$PIDS"
 fi
 
 # 2) Liberar el puerto si está ocupado
 if lsof -i :${PORT} -sTCP:LISTEN -u "$USER" >/dev/null 2>&1; then
   echo "🔧 Liberando puerto ${PORT} ocupado"
-  PIDS=$(lsof -t -i :${PORT} -sTCP:LISTEN -u "$USER")
-  kill_pids "$PIDS"
+  # Filtrar solo procesos Python del proyecto
+  FILTERED_PIDS=""
+  while read -r pid; do
+    if [ -n "$pid" ]; then
+      cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
+      if [[ "$cmd" == *python* ]] && [[ "$cmd" == *"$PROJECT_PATH"* ]]; then
+        FILTERED_PIDS+="$pid "
+      fi
+    fi
+  done < <(lsof -t -i :${PORT} -sTCP:LISTEN -u "$USER")
+  kill_pids "$FILTERED_PIDS"
 fi
 
 echo "🚀 Iniciando Server v0.2 en puerto ${PORT}..."

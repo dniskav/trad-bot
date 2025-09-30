@@ -11,6 +11,7 @@
 PORTS_DEFAULT=(8000 8100 8200)
 PORTS=()
 FORCE_MODE=false
+DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,6 +32,9 @@ while [[ $# -gt 0 ]]; do
     --force)
       FORCE_MODE=true
       shift ;;
+    --dry-run)
+      DRY_RUN=true
+      shift ;;
     *)
       echo "⚠️  Opción desconocida: $1 (se ignorará)"; shift ;;
   esac
@@ -44,16 +48,38 @@ echo "🔧 Arreglando puertos: ${PORTS[*]}"
 if [ "$FORCE_MODE" = true ]; then
     echo "⚠️  MODO FORCE ACTIVADO - Se omitirán confirmaciones"
 fi
+if [ "$DRY_RUN" = true ]; then
+    echo "👟 DRY RUN - No se terminará ningún proceso"
+fi
+
+# Ruta absoluta del proyecto (raíz del repo)
+PROJECT_PATH=$(pwd)
+
+# Helper: verificar si un PID es un proceso Python del proyecto
+is_project_python_pid() {
+    local pid="$1"
+    local cmd
+    cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
+    if [[ -z "$cmd" ]]; then
+        return 1
+    fi
+    if [[ "$cmd" == *python* ]] && [[ "$cmd" == *"$PROJECT_PATH"* ]]; then
+        return 0
+    fi
+    return 1
+}
 
 # Función para mostrar procesos en el puerto 8000
 show_port_processes() {
     for p in "${PORTS[@]}"; do
-      echo "📋 Procesos usando el puerto $p:"
+      echo "📋 Procesos (Python del proyecto) usando el puerto $p:"
       lsof -ti:$p | while read pid; do
-        if [ ! -z "$pid" ]; then
-            echo "  PID: $pid - $(ps -p $pid -o comm= 2>/dev/null || echo 'Proceso no encontrado')"
+        if [ -n "$pid" ] && is_project_python_pid "$pid"; then
+          proc_cmd=$(ps -p "$pid" -o command= 2>/dev/null || echo "Proceso no encontrado")
+          echo "  PID: $pid"
+          echo "    CMD: $proc_cmd"
         fi
-      done
+      done || true
     done
 }
 
@@ -61,35 +87,38 @@ show_port_processes() {
 kill_port_processes() {
     for p in "${PORTS[@]}"; do
       echo "🛑 Matando procesos en el puerto $p..."
-      pids=$(lsof -ti:$p)
-      if [ ! -z "$pids" ]; then
-          # Mostrar información del proceso antes de matarlo
-          echo "📋 Procesos a terminar en puerto $p:"
-          for pid in $pids; do
-              if [ ! -z "$pid" ]; then
-                  echo "  PID: $pid - $(ps -p $pid -o comm= 2>/dev/null || echo 'Proceso no encontrado')"
-              fi
-          done
-          
-          # Confirmar antes de matar (a menos que esté en modo force)
-          if [ "$FORCE_MODE" = true ]; then
-              echo "🚀 Modo force activado - terminando procesos automáticamente"
-              echo "$pids" | xargs kill -9 2>/dev/null
-              sleep 1
-              echo "✅ Procesos terminados en $p"
+      any_killed=false
+      lsof -ti:$p | while read pid; do
+        if [ -n "$pid" ] && is_project_python_pid "$pid"; then
+          proc_cmd=$(ps -p "$pid" -o command= 2>/dev/null || echo "Proceso no encontrado")
+          if [ "$DRY_RUN" = true ]; then
+            echo "📝 DRY-RUN: Se terminaría PID $pid"
+          elif [ "$FORCE_MODE" = true ]; then
+            echo "🔪 Terminando PID $pid (force)"
+            kill -9 "$pid" 2>/dev/null || true
+            any_killed=true
           else
-              echo "⚠️  ¿Continuar? (y/N)"
-              read -r response
-              if [[ "$response" =~ ^[Yy]$ ]]; then
-                  echo "$pids" | xargs kill -9 2>/dev/null
-                  sleep 1
-                  echo "✅ Procesos terminados en $p"
-              else
-                  echo "❌ Operación cancelada para puerto $p"
-              fi
+            echo "⚠️  Terminar PID $pid?"
+            echo "    $proc_cmd"
+            printf "    Confirmar (y/N): "
+            read -r response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+              kill -9 "$pid" 2>/dev/null || true
+              any_killed=true
+              echo "   ✅ Terminado $pid"
+            else
+              echo "   ⏭️  Omitido $pid"
+            fi
           fi
+        fi
+      done
+      if [ "$DRY_RUN" = true ]; then
+        echo "ℹ️  DRY-RUN: listado completado en $p"
+      elif [ "$any_killed" = true ]; then
+        sleep 1
+        echo "✅ Procesos Python del proyecto terminados en $p"
       else
-          echo "ℹ️  No hay procesos usando el puerto $p"
+        echo "ℹ️  No se encontraron procesos Python del proyecto en $p"
       fi
     done
 }
@@ -97,30 +126,48 @@ kill_port_processes() {
 # Función para matar procesos específicos del servidor
 kill_server_processes() {
     echo "🛑 Matando procesos específicos del servidor..."
-    
-    # Obtener la ruta del proyecto actual
-    PROJECT_PATH=$(pwd)
     echo "📁 Proyecto: $PROJECT_PATH"
-    
-    # Matar procesos de uvicorn específicos del proyecto
-    pkill -f "uvicorn.*backend.v0_2" 2>/dev/null
-    pkill -f "uvicorn.*8100" 2>/dev/null
-    pkill -f "uvicorn.*8200" 2>/dev/null
-    
-    # Matar procesos Python específicos del proyecto (más específicos)
-    pkill -f "python.*$PROJECT_PATH.*server.py" 2>/dev/null
-    pkill -f "python.*$PROJECT_PATH.*app.py" 2>/dev/null
-    
-    # Matar procesos de v0.2 específicos del proyecto
-    pkill -f "backend.v0_2.stm.app" 2>/dev/null
-    pkill -f "backend.v0_2.server.app" 2>/dev/null
-    
-    # Matar procesos de trading bot específicos del proyecto
-    pkill -f "real_trading_manager.*$PROJECT_PATH" 2>/dev/null
-    pkill -f "trading_tracker.*$PROJECT_PATH" 2>/dev/null
-    
-    sleep 2
-    echo "✅ Procesos del servidor terminados"
+
+    # Enumerar procesos Python del proyecto y filtrar por patrones del server/STM
+    mapfile -t lines < <(pgrep -fl python 2>/dev/null | grep -F "$PROJECT_PATH" || true)
+    if [ ${#lines[@]} -eq 0 ]; then
+      echo "ℹ️  No se encontraron procesos Python del proyecto activos"
+      return 0
+    fi
+
+    for line in "${lines[@]}"; do
+      pid=$(echo "$line" | awk '{print $1}')
+      cmd=${line#* } || true
+      if [[ -z "$pid" ]]; then continue; fi
+      # Patrones del proyecto a considerar seguros
+      if [[ "$cmd" == *"backend.v0_2.server.app"* ]] || \
+         [[ "$cmd" == *"backend.v0_2.stm.app"* ]] || \
+         [[ "$cmd" == *"server.py"* ]] || \
+         [[ "$cmd" == *"app.py"* ]] || \
+         [[ "$cmd" == *"real_trading_manager"* ]] || \
+         [[ "$cmd" == *"trading_tracker"* ]]; then
+        if [ "$DRY_RUN" = true ]; then
+          echo "📝 DRY-RUN: Se terminaría PID $pid"
+        elif [ "$FORCE_MODE" = true ]; then
+          echo "🔪 Terminando PID $pid (force)"
+          kill -9 "$pid" 2>/dev/null || true
+        else
+          echo "⚠️  Terminar proceso $pid?"
+          echo "    $cmd"
+          printf "    Confirmar (y/N): "
+          read -r response
+          if [[ "$response" =~ ^[Yy]$ ]]; then
+            kill -9 "$pid" 2>/dev/null || true
+            echo "   ✅ Terminado $pid"
+          else
+            echo "   ⏭️  Omitido $pid"
+          fi
+        fi
+      fi
+    done
+
+    sleep 1
+    echo "✅ Revisión de procesos del servidor completada"
 }
 
 # Función para verificar si el puerto está libre
@@ -139,22 +186,36 @@ check_port_free() {
 # Función para limpiar procesos Python huérfanos
 cleanup_python_processes() {
     echo "🧹 Limpiando procesos Python huérfanos..."
-    
-    # Obtener la ruta del proyecto actual
-    PROJECT_PATH=$(pwd)
-    
-    # Procesos de multiprocessing específicos del proyecto
-    pkill -f "multiprocessing.spawn_main.*$PROJECT_PATH" 2>/dev/null
-    pkill -f "multiprocessing.resource_tracker.*$PROJECT_PATH" 2>/dev/null
-    
-    # Procesos de trading específicos del proyecto
-    pkill -f "trading.*tracker.*$PROJECT_PATH" 2>/dev/null
-    pkill -f "bot.*agresivo.*$PROJECT_PATH" 2>/dev/null
-    pkill -f "bot.*conservador.*$PROJECT_PATH" 2>/dev/null
-    
-    # Procesos de v0.2 específicos del proyecto
-    pkill -f "backend.v0_2.*$PROJECT_PATH" 2>/dev/null
-    
+    # Buscar procesos Python del proyecto que parezcan auxiliares/huérfanos
+    mapfile -t lines < <(pgrep -fl python 2>/dev/null | grep -F "$PROJECT_PATH" || true)
+    for line in "${lines[@]}"; do
+      pid=$(echo "$line" | awk '{print $1}')
+      cmd=${line#* } || true
+      if [[ -z "$pid" ]]; then continue; fi
+      # Patrones seguros (multiprocessing y utilidades del proyecto)
+      if [[ "$cmd" == *"multiprocessing.spawn_main"* ]] || \
+         [[ "$cmd" == *"multiprocessing.resource_tracker"* ]] || \
+         [[ "$cmd" == *"trading"* && "$cmd" == *"tracker"* ]] || \
+         [[ "$cmd" == *"backend.v0_2"* ]]; then
+        if [ "$DRY_RUN" = true ]; then
+          echo "📝 DRY-RUN: Se terminaría auxiliar PID $pid"
+        elif [ "$FORCE_MODE" = true ]; then
+          echo "🔪 Terminando auxiliar PID $pid (force)"
+          kill -9 "$pid" 2>/dev/null || true
+        else
+          echo "⚠️  Terminar auxiliar $pid?"
+          echo "    $cmd"
+          printf "    Confirmar (y/N): "
+          read -r response
+          if [[ "$response" =~ ^[Yy]$ ]]; then
+            kill -9 "$pid" 2>/dev/null || true
+            echo "   ✅ Terminado $pid"
+          else
+            echo "   ⏭️  Omitido $pid"
+          fi
+        fi
+      fi
+    done
     sleep 1
     echo "✅ Limpieza completada"
 }
