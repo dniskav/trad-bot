@@ -239,35 +239,63 @@ const AccountBalance: React.FC<AccountBalanceProps> = ({
           <div className="card-content">
             <BalanceRow
               label="USDT Disponible:"
-              value={formatCurrency(displayBalance.usdt_balance)}
+              value={formatCurrency(
+                (displayBalance as any).available_usdt ?? displayBalance.usdt_balance
+              )}
               valueType="default"
               color="#26a69a"
             />
 
             <BalanceRow
               label="DOGE Disponible:"
-              value={`${formatDoge(displayBalance.doge_balance)} DOGE`}
+              value={`${formatDoge(
+                (displayBalance as any).available_doge ?? displayBalance.doge_balance
+              )} DOGE`}
               valueType="default"
               color="#26a69a"
+            />
+
+            <BalanceRow
+              label="Poder USDT:"
+              value={formatCurrency((displayBalance as any).available_usdt ?? 0)}
+              valueType="default"
+            />
+
+            <BalanceRow
+              label="Poder DOGE (USDT):"
+              value={formatCurrency(
+                ((displayBalance as any).available_doge ?? 0) * (displayBalance.doge_price ?? 0)
+              )}
+              valueType="default"
             />
 
             <BalanceRow
               label="Balance Total Disponible:"
-              value={formatCurrency(displayBalance.total_balance_usdt)}
+              value={formatCurrency(
+                (displayBalance as any).available_balance_usdt ?? displayBalance.total_balance_usdt
+              )}
               valueType="default"
               color="#26a69a"
             />
 
             <BalanceRow
-              label="Poder de Trading:"
-              value={formatCurrency(displayBalance.total_balance_usdt)}
+              label="Poder de Trading (USDT):"
+              value={formatCurrency(
+                (displayBalance as any).trading_power_usdt ??
+                  (displayBalance as any).available_balance_usdt ??
+                  displayBalance.total_balance_usdt
+              )}
               valueType="default"
               color="#3b82f6"
             />
 
             <BalanceRow
               label="Max Posición (USDT):"
-              value={formatCurrency(displayBalance.total_balance_usdt * 0.95)}
+              value={formatCurrency(
+                (displayBalance as any).max_position_size_usdt ??
+                  ((displayBalance as any).trading_power_usdt ??
+                    displayBalance.total_balance_usdt) * 0.95
+              )}
               valueType="default"
               color="#ffa726"
             />

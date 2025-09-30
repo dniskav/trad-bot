@@ -18,6 +18,12 @@ interface AccountBalance {
   total_balance_usdt: number
   invested: number
   last_updated: string
+  // Extended fields from server (available balances and trading power)
+  available_usdt?: number
+  available_doge?: number
+  available_balance_usdt?: number
+  trading_power_usdt?: number
+  max_position_size_usdt?: number
 }
 
 interface AccountResponse {
@@ -35,6 +41,12 @@ interface AccountResponse {
   total_balance_usdt?: number
   invested?: number
   last_updated?: string
+  // Extended fields (optional)
+  available_usdt?: number
+  available_doge?: number
+  available_balance_usdt?: number
+  trading_power_usdt?: number
+  max_position_size_usdt?: number
 }
 
 export const useAccountBalance = () => {
@@ -75,7 +87,12 @@ export const useAccountBalance = () => {
           doge_price: response.data.doge_price || 0,
           total_balance_usdt: response.data.total_balance_usdt || 0,
           invested: response.data.invested || 0,
-          last_updated: response.data.last_updated || new Date().toISOString()
+          last_updated: response.data.last_updated || new Date().toISOString(),
+          available_usdt: response.data.available_usdt,
+          available_doge: response.data.available_doge,
+          available_balance_usdt: response.data.available_balance_usdt,
+          trading_power_usdt: response.data.trading_power_usdt,
+          max_position_size_usdt: response.data.max_position_size_usdt
         }
         setBalance(balanceData)
         setIsOnline(true)
