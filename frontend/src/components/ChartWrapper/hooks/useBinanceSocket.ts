@@ -49,6 +49,7 @@ export function useBinanceSocket(options: BinanceSocketOptions = {}): BinanceSoc
     ws.onopen = () => {
       setIsConnected(true)
       setIsConnecting(false)
+      setError(null)
     }
 
     ws.onmessage = (event) => {
@@ -69,21 +70,33 @@ export function useBinanceSocket(options: BinanceSocketOptions = {}): BinanceSoc
       }
     }
 
-    ws.onerror = () => {
-      setError('WebSocket error')
+    ws.onerror = (error) => {
+      console.warn('WebSocket error:', error)
+      setError('WebSocket connection error')
       setIsConnecting(false)
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       setIsConnected(false)
       setIsConnecting(false)
+
+      // Only log unexpected closures (not manual closures)
+      if (event.code !== 1000) {
+        console.warn('WebSocket closed unexpectedly:', event.code, event.reason)
+        setError(`Connection closed: ${event.reason || 'Unknown reason'}`)
+      }
     }
 
     return () => {
-      try {
-        ws.close(1000, 'component unmount')
-      } catch {}
+      // Mark as manually closing to avoid warning logs
       wsRef.current = null
+      try {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close(1000, 'Component unmounting')
+        }
+      } catch (err) {
+        // Ignore cleanup errors
+      }
     }
   }, [opts.symbol, opts.interval, opts.enableKlines, opts.enableBookTicker])
 

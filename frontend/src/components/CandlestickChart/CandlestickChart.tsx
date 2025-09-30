@@ -402,6 +402,28 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
         width: containerWidth,
         height: 500,
         layout: { background: { type: ColorType.Solid, color: '#1e1e1e' }, textColor: '#d1d4dc' },
+        localization: {
+          locale: 'es-ES',
+          timeFormatter: (time: any) => {
+            // time puede ser BusinessDay o timestamp (segundos)
+            let ms: number
+            if (typeof time === 'number') {
+              ms = time * 1000
+            } else if (time && typeof time === 'object' && 'year' in time) {
+              const { year, month, day } = time as any
+              ms = new Date(year as number, (month as number) - 1, day as number).getTime()
+            } else {
+              return ''
+            }
+            const d = new Date(ms)
+            return d.toLocaleString('es-ES', {
+              hour: '2-digit',
+              minute: '2-digit',
+              day: '2-digit',
+              month: 'short'
+            })
+          }
+        },
         timeScale: {
           timeVisible: true,
           secondsVisible: false,
@@ -414,14 +436,14 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
             if (timeframe === '1m' || timeframe === '3m' || timeframe === '5m') {
               return date.toLocaleTimeString('es-ES', {
                 hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'America/Santiago'
+                minute: '2-digit'
+                // Removed timeZone to use browser's local timezone
               })
             } else if (timeframe === '15m' || timeframe === '30m') {
               return date.toLocaleTimeString('es-ES', {
                 hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'America/Santiago'
+                minute: '2-digit'
+                // Removed timeZone to use browser's local timezone
               })
             } else if (
               timeframe === '1h' ||
@@ -434,29 +456,29 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
               return date.toLocaleDateString('es-ES', {
                 month: 'short',
                 day: 'numeric',
-                hour: '2-digit',
-                timeZone: 'America/Santiago'
+                hour: '2-digit'
+                // Removed timeZone to use browser's local timezone
               })
             } else if (timeframe === '1d' || timeframe === '3d') {
               return date.toLocaleDateString('es-ES', {
                 month: 'short',
-                day: 'numeric',
-                timeZone: 'America/Santiago'
+                day: 'numeric'
+                // Removed timeZone to use browser's local timezone
               })
             } else if (timeframe === '1w') {
               return date.toLocaleDateString('es-ES', {
                 month: 'short',
-                day: 'numeric',
-                timeZone: 'America/Santiago'
+                day: 'numeric'
+                // Removed timeZone to use browser's local timezone
               })
             } else if (timeframe === '1M') {
               return date.toLocaleDateString('es-ES', {
                 year: 'numeric',
-                month: 'short',
-                timeZone: 'America/Santiago'
+                month: 'short'
+                // Removed timeZone to use browser's local timezone
               })
             }
-            return date.toLocaleString('es-ES', { timeZone: 'America/Santiago' })
+            return date.toLocaleString('es-ES') // Removed timeZone to use browser's local timezone
           }
         },
         rightPriceScale: {

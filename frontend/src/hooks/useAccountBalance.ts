@@ -1,6 +1,8 @@
+import { API_CONFIG } from '@config/api'
+import apiClient from '@services/apiClient'
 import { useCallback, useEffect, useState } from 'react'
-import { API_CONFIG } from '../config/api'
-import apiClient from '../services/apiClient'
+import { eventBus, EventType } from '../eventBus'
+import type { PriceUpdateData } from '../eventBus/types'
 
 const log = console
 
@@ -40,6 +42,7 @@ export const useAccountBalance = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null)
 
   console.log('🔍 useAccountBalance hook initialized')
 
@@ -103,18 +106,47 @@ export const useAccountBalance = () => {
     }
   }, []) // Empty dependency array to run only once on mount
 
-  // WebSocket functionality removed - using only API data
+  // Escuchar actualizaciones de precio en tiempo real
+  useEffect(() => {
+    const handlePriceUpdate = (data: PriceUpdateData) => {
+      console.log('💰 Price update received in useAccountBalance:', data)
+      setCurrentPrice(data.price)
+
+      // Actualizar el balance con el nuevo precio si existe
+      if (balance) {
+        setBalance((prev) =>
+          prev
+            ? {
+                ...prev,
+                doge_price: data.price,
+                last_updated: data.timestamp
+              }
+            : null
+        )
+      }
+    }
+
+    eventBus.on(EventType.PRICE_UPDATE, handlePriceUpdate)
+
+    return () => {
+      eventBus.off(EventType.PRICE_UPDATE, handlePriceUpdate)
+    }
+  }, [balance])
 
   // Función para actualizar balance manualmente
   const refreshBalance = useCallback(() => {
     fetchAccountBalance()
   }, [fetchAccountBalance])
 
+  // Usar precio en tiempo real si está disponible, sino el del balance
+  const effectivePrice = currentPrice || balance?.doge_price || 0
+
   return {
-    balance,
+    balance: balance ? { ...balance, doge_price: effectivePrice } : null,
     loading,
     error,
     isOnline,
-    refreshBalance
+    refreshBalance,
+    currentPrice: effectivePrice
   }
 }
