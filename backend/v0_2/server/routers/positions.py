@@ -85,6 +85,27 @@ async def open_position(request: OpenPositionRequest):
         f"Orchestrating position open: {request.symbol} {request.side} {request.quantity}"
     )
 
+    # Basic min-notional validation (filter dust orders)
+    try:
+        min_notional = await stm_service.get_min_notional(request.symbol)
+        if request.type == "LIMIT" and request.price:
+            ref_price = float(request.price)
+        else:
+            acct = await stm_service.get_account_synth()
+            ref_price = (
+                float(acct.get("doge_price", 0)) if isinstance(acct, dict) else 0.0
+            )
+        qty = float(request.quantity)
+        notional = qty * ref_price
+        if notional < min_notional:
+            return OrderResponse(
+                success=False,
+                orderId="",
+                message=f"Order notional {notional:.4f} USDT below minimum {min_notional} USDT",
+            )
+    except Exception:
+        log.warning("Min-notional validation skipped (price/qty parse error)")
+
     # Ensure clientOrderId for idempotency
     if not request.clientOrderId:
         request.clientOrderId = f"srv-{uuid.uuid4().hex[:16]}"

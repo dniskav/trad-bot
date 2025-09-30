@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from backend.shared.logger import get_logger
 from ..models.position import OpenPositionRequest, ClosePositionRequest, OrderResponse
+from backend.shared.settings import env_str
 
 log = get_logger("server.stm_service")
 
@@ -18,6 +19,7 @@ class STMService:
 
     def __init__(self) -> None:
         self.stm_log_enabled = False
+        self._notional_cache: Dict[str, Dict[str, Any]] = {}
 
     async def check_health(self) -> bool:
         """Check if STM service is healthy"""
@@ -73,6 +75,32 @@ class STMService:
             return {"status": "error", "message": str(e), "code": 500}
         except Exception as e:
             return {"status": "error", "message": str(e), "code": 500}
+
+    async def get_min_notional(self, symbol: str) -> float:
+        """Fetch and cache spot min notional for a symbol from Binance exchangeInfo."""
+        try:
+            sym = symbol.upper()
+            cached = self._notional_cache.get(sym)
+            now = datetime.now(timezone.utc).timestamp()
+            if cached and (now - cached.get("ts", 0)) < 3600:
+                return float(cached.get("value", 1.0))
+
+            url = f"https://api.binance.com/api/v3/exchangeInfo?symbol={sym}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=5) as resp:
+                    data = await resp.json()
+                    filters = (data.get("symbols", [{}])[0]).get("filters", [])
+                    min_notional = 1.0
+                    for f in filters:
+                        if f.get("filterType") in ("NOTIONAL", "MIN_NOTIONAL"):
+                            min_notional = float(
+                                f.get("minNotional") or f.get("notional") or 1.0
+                            )
+                            break
+                    self._notional_cache[sym] = {"value": min_notional, "ts": now}
+                    return float(min_notional)
+        except Exception:
+            return 1.0
 
     async def set_socket_logging_state(self, payload: dict) -> dict:
         """Set socket logging state in STM"""
