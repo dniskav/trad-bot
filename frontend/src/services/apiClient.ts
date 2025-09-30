@@ -1,5 +1,5 @@
+import API_CONFIG from '@config/api'
 import axios from 'axios'
-import API_CONFIG from '../config/api'
 
 // Create axios instance
 const apiClient = axios.create({

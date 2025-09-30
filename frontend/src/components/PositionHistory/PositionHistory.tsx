@@ -1,5 +1,5 @@
+import { useApiTradingHistory } from '@hooks'
 import React, { useEffect, useMemo, useState } from 'react'
-import { useApiTradingHistory } from '../../hooks'
 import { HistoryItem } from '../HistoryItem'
 import type { PositionHistoryProps } from './types'
 

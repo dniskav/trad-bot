@@ -1,6 +1,6 @@
+import { API_CONFIG } from '@config/api'
+import { useActivePositions } from '@hooks'
 import React, { useState } from 'react'
-import { API_CONFIG } from '../../config/api'
-import { useActivePositions } from '../../hooks'
 import './styles.css'
 
 interface Position {

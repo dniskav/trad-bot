@@ -1,5 +1,5 @@
+import { useUniqueId } from '@hooks/useUniqueId'
 import React, { useEffect, useState } from 'react'
-import { useUniqueId } from '../../hooks/useUniqueId'
 import './styles.css'
 import type { ToastProps } from './types'
 

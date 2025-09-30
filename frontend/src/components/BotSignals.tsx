@@ -1,6 +1,6 @@
+import { useApiProcessInfo } from '@hooks'
+import { useUniqueId } from '@hooks/useUniqueId'
 import React, { useEffect, useState } from 'react'
-import { useApiProcessInfo } from '../hooks'
-import { useUniqueId } from '../hooks/useUniqueId'
 import { InfoBox } from './InfoBox'
 
 interface BotSignalsProps {

@@ -7,7 +7,7 @@ import { ChartWrapper } from './ChartWrapper'
 import ErrorBoundary from './ErrorBoundary'
 import PlugAndPlayBots from './PlugAndPlayBots'
 import { Toast } from './Toast'
-import WebSocketStatus from './WebSocketStatus'
+import { DetectorBadge } from './WebSocketStatus'
 
 // Signatures para detectar conexiones WebSocket
 const binanceSignatures = ['binance', 'stream', 'dogeusdt']
@@ -39,8 +39,18 @@ const AppContent: React.FC = () => {
       <header className="app-header">
         <div className="header-content">
           <div className="header-left">
-            <WebSocketStatus label="Binance" socketId="binance" urlContains={binanceSignatures} />
-            <WebSocketStatus label="Server" socketId="server" urlContains={serverSignatures} />
+            <DetectorBadge
+              label="Binance"
+              id="binance"
+              urlContains={binanceSignatures}
+              pulseThrottle={500}
+            />
+            <DetectorBadge
+              label="Server"
+              id="server"
+              urlContains={serverSignatures}
+              pulseThrottle={500}
+            />
           </div>
 
           <div className="header-center">

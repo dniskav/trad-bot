@@ -1,5 +1,5 @@
+import { useApiBotActions, useApiBots, useApiProcessInfo } from '@hooks'
 import React, { useEffect, useState } from 'react'
-import { useApiBotActions, useApiBots, useApiProcessInfo } from '../hooks'
 import { PluginBotCard, type BotInfo as PluginBotInfo } from './PluginBotCard'
 import { ServerInfoAccordion } from './ServerInfoAccordion'
 

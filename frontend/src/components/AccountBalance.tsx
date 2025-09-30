@@ -1,5 +1,5 @@
+import { useAccountBalance } from '@hooks/useAccountBalance'
 import React from 'react'
-import { useAccountBalance } from '../hooks/useAccountBalance'
 import { BalanceRow } from './BalanceRow'
 import { BalanceStatus } from './BalanceStatus'
 

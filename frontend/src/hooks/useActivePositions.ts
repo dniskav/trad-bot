@@ -1,6 +1,6 @@
+import { API_CONFIG } from '@config/api'
+import apiClient from '@services/apiClient'
 import { useCallback, useEffect, useState } from 'react'
-import { API_CONFIG } from '../config/api'
-import apiClient from '../services/apiClient'
 
 const log = console
 

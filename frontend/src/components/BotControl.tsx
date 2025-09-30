@@ -1,5 +1,5 @@
+import { useUniqueId } from '@hooks/useUniqueId'
 import React, { useState } from 'react'
-import { useUniqueId } from '../../hooks/useUniqueId'
 
 interface BotControlProps {
   botType: 'conservative' | 'aggressive'
