@@ -138,7 +138,7 @@ class STMService:
             data = request.dict()
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    f"{STM_HTTP}/positions/close", json=data, timeout=10
+                    f"{STM_HTTP}/sapi/v1/margin/close", json=data, timeout=10
                 ) as resp:
                     response_data = await resp.json()
                     return OrderResponse(**response_data)
@@ -332,8 +332,11 @@ class STMService:
                         doge_price = float(account_data.get("doge_price", 0))
 
                         # Calcular balances disponibles (excluyendo fondos bloqueados)
-                        available_usdt = max(0, usdt_balance - usdt_locked)
-                        available_doge = max(0, doge_balance - doge_locked)
+                        # Clamp locked to non-negative to avoid distorted balances
+                        usdt_locked = max(0.0, usdt_locked)
+                        doge_locked = max(0.0, doge_locked)
+                        available_usdt = max(0.0, usdt_balance - usdt_locked)
+                        available_doge = max(0.0, doge_balance - doge_locked)
                         available_balance_usdt = available_usdt + (
                             available_doge * doge_price
                         )

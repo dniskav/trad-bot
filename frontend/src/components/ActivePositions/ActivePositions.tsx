@@ -1,5 +1,6 @@
 import { API_CONFIG } from '@config/api'
 import { useActivePositions } from '@hooks'
+import apiClient from '@services/apiClient'
 import React, { useState } from 'react'
 import './styles.css'
 
@@ -29,30 +30,22 @@ const ActivePositions: React.FC = () => {
   const handleClosePosition = async (positionId: string) => {
     setClosingPosition(positionId)
     try {
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.POSITIONS_CLOSE}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            positionId: positionId,
-            reason: 'manual'
-          })
-        }
-      )
+      const { data } = await apiClient.post(API_CONFIG.ENDPOINTS.POSITIONS_CLOSE, {
+        positionId,
+        reason: 'manual'
+      })
 
-      const data = await response.json()
-
-      if (data.success) {
-        // Refrescar posiciones después de cerrar
+      if (data?.success) {
         refreshPositions()
       } else {
-        alert(`Error: ${data.message || 'No se pudo cerrar la posición'}`)
+        // Forzar refetch en caso de error por posible desincronización
+        refreshPositions()
+        const msg = data?.message || data?.detail || 'No se pudo cerrar la posición'
+        alert(`Error: ${msg}`)
       }
     } catch (err) {
-      alert('Error de conexión al cerrar posición')
+      const msg = (err as any)?.response?.data?.message || (err as Error).message
+      alert(`Error al cerrar posición: ${msg}`)
       console.error('Error closing position:', err)
     } finally {
       setClosingPosition(null)
@@ -88,6 +81,11 @@ const ActivePositions: React.FC = () => {
 
   const getPositionColor = (side: string) => {
     return side === 'BUY' ? '#26a69a' : '#ef5350'
+  }
+
+  const getOperationSide = (position: Position) => {
+    const amt = parseFloat(position.positionAmt)
+    return amt >= 0 ? 'BUY' : 'SELL'
   }
 
   if (loading) {
@@ -189,40 +187,47 @@ const ActivePositions: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {positions.map((position) => (
-              <tr key={position.positionId}>
-                <td className="position-id">{position.positionId.slice(0, 8)}...</td>
-                <td>{position.symbol}</td>
-                <td>
-                  <span
-                    className="side-badge"
-                    style={{
-                      color: getPositionColor(position.positionSide),
-                      fontWeight: 'bold'
-                    }}>
-                    {position.positionSide}
-                  </span>
-                </td>
-                <td>${parseFloat(position.entryPrice).toFixed(5)}</td>
-                <td>{parseFloat(position.positionAmt).toFixed(4)}</td>
-                <td>{formatValue(position)}</td>
-                <td>{position.leverage}x</td>
-                <td>{formatPnL(position.unrealizedProfit)}</td>
-                <td>
-                  <span className="status-badge" style={{ color: '#26a69a' }}>
-                    OPEN
-                  </span>
-                </td>
-                <td>
-                  <button
-                    onClick={() => handleClosePosition(position.positionId)}
-                    disabled={closingPosition === position.positionId}
-                    className="close-button">
-                    {closingPosition === position.positionId ? 'Cerrando...' : 'Cerrar'}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {positions.map((position) => {
+              const pnl = parseFloat(position.unrealizedProfit)
+              const rowClass = pnl > 0 ? 'row-profit' : pnl < 0 ? 'row-loss' : ''
+              return (
+                <tr key={position.positionId} className={rowClass}>
+                  <td className="position-id">{position.positionId.slice(0, 8)}...</td>
+                  <td>{position.symbol}</td>
+                  <td>
+                    {(() => {
+                      const opSide = getOperationSide(position)
+                      const sideLabel = `${position.positionSide} / ${opSide}`
+                      return (
+                        <span
+                          className="side-badge"
+                          style={{ color: getPositionColor(opSide), fontWeight: 'bold' }}>
+                          {sideLabel}
+                        </span>
+                      )
+                    })()}
+                  </td>
+                  <td>${parseFloat(position.entryPrice).toFixed(5)}</td>
+                  <td>{parseFloat(position.positionAmt).toFixed(4)}</td>
+                  <td>{formatValue(position)}</td>
+                  <td>{position.leverage}x</td>
+                  <td>{formatPnL(position.unrealizedProfit)}</td>
+                  <td>
+                    <span className="status-badge" style={{ color: '#26a69a' }}>
+                      OPEN
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => handleClosePosition(position.positionId)}
+                      disabled={closingPosition === position.positionId}
+                      className="close-button">
+                      {closingPosition === position.positionId ? 'Cerrando...' : 'Cerrar'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

@@ -15,6 +15,48 @@ stm_service = STMService()
 # In-memory cache to log PnL changes only when they actually change
 _last_pnl_by_position: Dict[str, float] = {}
 
+# Allowed mutable fields for "position_change" events
+_ALLOWED_POSITION_FIELDS = {
+    "entryPrice",
+    "positionAmt",
+    "unrealizedProfit",
+    "leverage",
+    "positionSide",
+    "updateTime",
+    "pnl",
+    "current_price",
+    "markPrice",
+    "status",
+}
+
+
+def _sanitize_position_change(payload: dict) -> dict:
+    """Whitelist and lightly normalize fields for position_change events."""
+    sanitized = {
+        "type": "position_change",
+        "positionId": payload.get("positionId"),
+        "ts": payload.get("ts"),
+        "fields": {},
+    }
+    fields = payload.get("fields") or {}
+    if not isinstance(fields, dict):
+        return sanitized
+
+    for key, value in fields.items():
+        if key not in _ALLOWED_POSITION_FIELDS:
+            continue
+        # Normalize numeric fields to strings where our API typically returns strings
+        if key in {"entryPrice", "positionAmt", "unrealizedProfit", "markPrice"}:
+            try:
+                sanitized["fields"][key] = f"{float(value)}"
+            except Exception:
+                # Skip invalid numeric values
+                continue
+        else:
+            sanitized["fields"][key] = value
+
+    return sanitized
+
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -35,7 +77,13 @@ async def notify_websocket_clients(request: Request):
         data = await request.json()
         log.info(f"Received notification: {data.get('type')}")
 
-        # Broadcast to all connected WebSocket clients
+        # Normalize and broadcast to all clients
+        # Expected payloads:
+        # { type: 'position_change', positionId, fields: { ... }, ts }
+        # { type: 'position_opened' | 'position_closed', positionId, ts }
+        # { type: 'account_balance_update', data, ts }
+        if data.get("type") == "position_change":
+            data = _sanitize_position_change(data)
         await ws_manager.broadcast(data)
 
         # Handle different event types
@@ -59,6 +107,22 @@ async def notify_websocket_clients(request: Request):
                         log.info(f"PNL change | position={pid} pnl={float(pnl):.8f}")
             except Exception as e:
                 log.warning(f"Failed logging PnL changes: {e}")
+
+        elif event_type == "position_opened" or event_type == "position_closed":
+            # Trigger refetch on clients; nothing to compute here
+            log.info(
+                f"Position lifecycle event: {event_type} id={data.get('positionId')}"
+            )
+
+        elif event_type == "account_balance_update":
+            # Normalize: fetch authoritative balance from STM and rebroadcast
+            try:
+                normalized = await stm_service.get_account_synth()
+                payload = {"type": "account_balance_update", "data": normalized}
+                await ws_manager.broadcast(payload)
+                log.info("📊 Broadcasted normalized account_balance_update to clients")
+            except Exception as e:
+                log.error(f"Failed to normalize account update: {e}")
 
         elif event_type == "execution_report":
             # Log execution report details

@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 from typing import Optional, List, Dict, Any, Callable
+import aiohttp
 from datetime import datetime, timezone
 from backend.shared.persistence import JsonStore
 from backend.shared.logger import get_logger
@@ -778,8 +779,36 @@ class PositionService:
             positions[position_index] = position_data
             self._save_positions(positions)
 
-            # Update account balance
+            # Update account balance (release locks and adjust balances)
             await self._update_account_balance(position_data, "closed")
+            try:
+                account = self._load_account()
+                # Clamp negatives on locked and release them
+                usdt_locked = max(0.0, float(account.get("usdt_locked", 0)))
+                doge_locked = max(0.0, float(account.get("doge_locked", 0)))
+                # On close, release any remaining locks
+                account["usdt_locked"] = 0.0
+                account["doge_locked"] = 0.0
+                # Recompute total balance in USDT
+                doge_price = float(account.get("doge_price", 0))
+                account["total_balance_usdt"] = (
+                    float(account.get("usdt_balance", 0))
+                    + float(account.get("doge_balance", 0)) * doge_price
+                )
+                account["last_updated"] = datetime.now(timezone.utc).isoformat()
+                self._save_account(account)
+                # Notify main server of account balance change after close
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        payload = {"type": "account_balance_update", "data": account}
+                        await session.post(
+                            "http://localhost:8200/ws/notify", json=payload
+                        )
+                except Exception:
+                    pass
+            except Exception:
+                # Non-blocking balance normalization
+                pass
 
             # Notify position change
             await self._notify_position_change("closed", position_data)

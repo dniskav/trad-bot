@@ -12,6 +12,7 @@ export default defineConfig({
       '@config': path.resolve(__dirname, './src/config'),
       '@components': path.resolve(__dirname, './src/components'),
       '@hooks': path.resolve(__dirname, './src/hooks'),
+      '@eventBus': path.resolve(__dirname, './src/eventBus'),
       '@services': path.resolve(__dirname, './src/services'),
       '@utils': path.resolve(__dirname, './src/utils')
     }
@@ -21,7 +22,8 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8200',
-        changeOrigin: true
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
       },
       '/account': {
         target: 'http://127.0.0.1:8200',
@@ -38,7 +40,8 @@ export default defineConfig({
       '/ws': {
         target: 'ws://127.0.0.1:8200',
         ws: true,
-        changeOrigin: true
+        changeOrigin: true,
+        rewrite: (path) => path
       }
     }
   }

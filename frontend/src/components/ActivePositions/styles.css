@@ -113,6 +113,15 @@
   background: #2a2a2a;
 }
 
+/* Binance-like dark green/red backgrounds for PnL */
+.row-profit {
+  background: linear-gradient(90deg, rgba(6, 95, 70, 0.35) 0%, rgba(6, 95, 70, 0.15) 100%);
+}
+
+.row-loss {
+  background: linear-gradient(90deg, rgba(127, 29, 29, 0.35) 0%, rgba(127, 29, 29, 0.15) 100%);
+}
+
 .position-id {
   font-family: monospace;
   font-size: 11px;

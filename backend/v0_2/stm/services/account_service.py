@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime, timezone
 from backend.shared.persistence import JsonStore
 from backend.shared.logger import get_logger
+import aiohttp
 
 log = get_logger("stm.account_service")
 
@@ -101,6 +102,14 @@ class AccountService:
         }
         data = self._compute_balances(data)
         self.store.write(self.account_file, data)
+        # Notify main server about balance update
+        try:
+            async with aiohttp.ClientSession() as session:
+                payload = {"type": "account_balance_update", "data": data}
+                await session.post("http://localhost:8200/ws/notify", json=payload)
+        except Exception:
+            # Non-blocking notify
+            pass
         return {"status": "ok", "data": data}
 
 

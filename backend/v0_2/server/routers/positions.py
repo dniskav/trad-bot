@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 import asyncio
 from backend.shared.logger import get_logger
 from ..services.stm_service import STMService
+from ..services.websocket_manager import WebSocketManager
 from ..models.position import OpenPositionRequest, ClosePositionRequest, OrderResponse
 from fastapi import Body
 import json
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 router = APIRouter(prefix="/positions", tags=["positions"])
 log = get_logger("server.positions")
 stm_service = STMService()
+ws_manager = WebSocketManager()
 
 
 async def _orchestrate_open_async(req: OpenPositionRequest) -> None:
@@ -127,6 +129,18 @@ async def open_position(request: OpenPositionRequest):
         task = asyncio.create_task(_orchestrate_sl_tp_async(position_id, request))
         log.info(f"Background task created: {task}")
 
+        # Notificar a clientes que se abrió una posición
+        try:
+            await ws_manager.broadcast(
+                {
+                    "type": "position_opened",
+                    "positionId": position_id,
+                    "ts": int(datetime.now(timezone.utc).timestamp() * 1000),
+                }
+            )
+        except Exception:
+            pass
+
         # Return immediate response
         return open_resp
 
@@ -144,7 +158,19 @@ async def open_position(request: OpenPositionRequest):
 async def close_position(request: ClosePositionRequest):
     """Close an existing position - proxy to STM"""
     log.info(f"Proxying position close request: {request.positionId}")
-    return await stm_service.close_position(request)
+    resp = await stm_service.close_position(request)
+    try:
+        if getattr(resp, "success", False):
+            await ws_manager.broadcast(
+                {
+                    "type": "position_closed",
+                    "positionId": request.positionId,
+                    "ts": int(datetime.now(timezone.utc).timestamp() * 1000),
+                }
+            )
+    except Exception:
+        pass
+    return resp
 
 
 @router.get("/")

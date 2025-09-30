@@ -6,12 +6,14 @@ import ActivePositions from './ActivePositions/ActivePositions'
 import { ChartWrapper } from './ChartWrapper'
 import ErrorBoundary from './ErrorBoundary'
 import PlugAndPlayBots from './PlugAndPlayBots'
+import ServerSocketConnector from './ServerSocketConnector'
 import { Toast } from './Toast'
 import { DetectorBadge } from './WebSocketStatus'
 
 // Signatures para detectar conexiones WebSocket
 const binanceSignatures = ['binance', 'stream', 'dogeusdt']
-const serverSignatures = ['trading_server', 'account_balance', 'positions_update']
+// El WS del server pasa por Vite proxy en "/ws"
+const serverSignatures = ['/ws']
 
 const AppContent: React.FC = () => {
   // Debug: Contador de montajes
@@ -35,6 +37,8 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="app">
+      {/* Invisible connector to server WS */}
+      <ServerSocketConnector />
       {/* Header */}
       <header className="app-header">
         <div className="header-content">

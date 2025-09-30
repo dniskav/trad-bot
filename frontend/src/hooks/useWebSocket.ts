@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+// Nota: la propagación por EventBus se hará desde los consumidores (p. ej., ServerSocketConnector)
 
 interface UseWebSocketReturn {
   isConnected: boolean
@@ -8,7 +9,10 @@ interface UseWebSocketReturn {
 }
 
 export const useWebSocket = (
-  url: string = 'ws://127.0.0.1:8200/ws',
+  // Route WS through Vite proxy: ws(s)://<host>/ws → proxied to backend 8200
+  url: string = typeof window !== 'undefined'
+    ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
+    : 'ws://127.0.0.1:3000/ws',
   onMessage?: (message: any) => void
 ): UseWebSocketReturn => {
   const [isConnected, setIsConnected] = useState(false)
@@ -27,7 +31,7 @@ export const useWebSocket = (
       setIsConnecting(true)
       setError(null)
 
-      console.log('🔌 Conectando a WebSocket:', url)
+      // console.log('🔌 Conectando a WebSocket:', url)
       const ws = new WebSocket(url)
       wsRef.current = ws
 
@@ -45,6 +49,7 @@ export const useWebSocket = (
           if (onMessage) {
             onMessage(message)
           }
+          // Dejar que el caller maneje la propagación (event bus u otro)
         } catch (err) {
           console.error('❌ Error parseando mensaje WebSocket:', err)
         }

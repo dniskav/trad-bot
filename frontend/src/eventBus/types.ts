@@ -30,6 +30,18 @@ export const EventType = {
   BOOK_TICKER_UPDATE: 'book_ticker_update'
 } as const
 
+// Tipos de mensajes del socket del server/binance para evitar magic strings
+export const SocketMsg = {
+  ACCOUNT_BALANCE_UPDATE: 'account_balance_update',
+  POSITION_CHANGE: 'position_change',
+  POSITION_OPENED: 'position_opened',
+  POSITION_CLOSED: 'position_closed',
+  KLINE: 'kline',
+  BOOK_TICKER: 'bookTicker'
+} as const
+
+export type SocketMsgValue = (typeof SocketMsg)[keyof typeof SocketMsg]
+
 // Type para los valores de EventType
 export type EventTypeValue = (typeof EventType)[keyof typeof EventType]
 
