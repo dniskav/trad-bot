@@ -30,10 +30,11 @@ const PluginBotCard: React.FC<PluginBotCardProps> = ({
 
         <div className="plugin-bot-header-right">
           <button
-            className={`plugin-synthetic-toggle ${botInfo.synthetic_mode ? 'active' : 'inactive'}`}
-            onClick={() => onToggleSynthetic(botName, botInfo.synthetic_mode)}
-            title={botInfo.synthetic_mode ? 'Modo Synthetic' : 'Modo Real'}>
-            {botInfo.synthetic_mode ? '🧪' : '💰'}
+            className={`plugin-synthetic-toggle active`}
+            onClick={(e) => e.preventDefault()}
+            title={'Solo modo Synthetic (STM) por ahora'}
+            disabled>
+            {'🧪'}
           </button>
           <button
             className={`plugin-bot-toggle ${botInfo.is_active ? 'active' : 'inactive'}`}
@@ -58,25 +59,35 @@ const PluginBotCard: React.FC<PluginBotCardProps> = ({
                 : botInfo.positions_count}
             </span>
           </div>
-          <div className="plugin-metric">
-            <span className="plugin-metric-label">Riesgo:</span>
-            <span
-              className="plugin-metric-value"
-              style={{ color: getRiskLevelColor(botInfo.config.risk_level) }}>
-              {getRiskLevelIcon(botInfo.config.risk_level)} {botInfo.config.risk_level}
-            </span>
-          </div>
-          <div className="plugin-metric">
-            <span className="plugin-metric-label">Tamaño:</span>
-            <span className="plugin-metric-value">${botInfo.config.position_size}</span>
-          </div>
+          {/* Campos opcionales: solo si el backend los provee */}
+          {botInfo.config?.max_positions !== undefined && (
+            <div className="plugin-metric">
+              <span className="plugin-metric-label">Max Pos:</span>
+              <span className="plugin-metric-value">{botInfo.config.max_positions}</span>
+            </div>
+          )}
+          {botInfo.config?.position_size !== undefined && (
+            <div className="plugin-metric">
+              <span className="plugin-metric-label">Tamaño:</span>
+              <span className="plugin-metric-value">${botInfo.config.position_size}</span>
+            </div>
+          )}
           <div className="plugin-metric">
             <span className="plugin-metric-label">Símbolo:</span>
             <span className="plugin-metric-value">{botInfo.config.symbol}</span>
           </div>
         </div>
 
-        {botInfo.last_signal && <BotSignal signal={botInfo.last_signal} />}
+        {/* Mostrar siempre la caja de señal: si no hay señal, mostrar HOLD por defecto */}
+        <BotSignal
+          signal={
+            (botInfo as any).last_signal || {
+              action: 'HOLD',
+              confidence: 0,
+              ts: null
+            }
+          }
+        />
 
         <InfoBox
           title="📊 Info"
@@ -96,18 +107,12 @@ const PluginBotCard: React.FC<PluginBotCardProps> = ({
               label: 'Intervalo',
               value: botInfo.config.interval
             },
-            {
-              label: 'Max Posiciones',
-              value: botInfo.config.max_positions
-            },
-            {
-              label: 'Tamaño Posición',
-              value: `$${botInfo.config.position_size}`
-            },
-            {
-              label: 'Nivel Riesgo',
-              value: botInfo.config.risk_level
-            },
+            ...(botInfo.config?.max_positions !== undefined
+              ? [{ label: 'Max Posiciones', value: botInfo.config.max_positions }]
+              : []),
+            ...(botInfo.config?.position_size !== undefined
+              ? [{ label: 'Tamaño Posición', value: `$${botInfo.config.position_size}` }]
+              : []),
             ...(botInfo.is_active
               ? [
                   {
@@ -123,10 +128,6 @@ const PluginBotCard: React.FC<PluginBotCardProps> = ({
                   {
                     label: 'Posiciones',
                     value: botInfo.positions_count
-                  },
-                  {
-                    label: 'Modo',
-                    value: botInfo.synthetic_mode ? 'Synthetic' : 'Real'
                   }
                 ]
               : [])

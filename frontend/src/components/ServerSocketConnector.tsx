@@ -20,6 +20,8 @@ const ServerSocketConnector: React.FC = () => {
       t === SocketMsg.POSITION_CLOSED
     ) {
       eventBus.emit(EventType.WS_SERVER_POSITIONS, message)
+    } else if (message && message.channel === 'strategies') {
+      eventBus.emit(EventType.WS_SERVER_STRATEGIES, message)
     } else if (t === SocketMsg.KLINE) {
       eventBus.emit(EventType.WS_BINANCE_KLINE, message)
     } else if (t === SocketMsg.BOOK_TICKER) {

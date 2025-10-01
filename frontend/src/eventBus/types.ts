@@ -5,6 +5,7 @@ export const EventType = {
   WS_BINANCE_BOOK_TICKER: 'ws:binance:book_ticker',
   WS_SERVER_ACCOUNT_BALANCE: 'ws:server:account_balance',
   WS_SERVER_POSITIONS: 'ws:server:positions',
+  WS_SERVER_STRATEGIES: 'ws:server:strategies',
   WS_SERVER_BOT_STATUS: 'ws:server:bot_status',
 
   // Eventos de API
@@ -36,6 +37,7 @@ export const SocketMsg = {
   POSITION_CHANGE: 'position_change',
   POSITION_OPENED: 'position_opened',
   POSITION_CLOSED: 'position_closed',
+  STRATEGY_EVENT: 'strategies',
   KLINE: 'kline',
   BOOK_TICKER: 'bookTicker'
 } as const

@@ -1,5 +1,10 @@
+import API_CONFIG from '@config/api'
+import { eventBus } from '@eventBus/eventBus'
+import { EventType } from '@eventBus/types'
 import { useApiBotActions, useApiBots, useApiProcessInfo } from '@hooks'
+import apiClient from '@services/apiClient'
 import React, { useEffect, useState } from 'react'
+import AvailableStrategies from './AvailableStrategies'
 import { PluginBotCard, type BotInfo as PluginBotInfo } from './PluginBotCard'
 import { ServerInfoAccordion } from './ServerInfoAccordion'
 
@@ -67,17 +72,15 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', curre
     localStorage.setItem(`bot_${botName}_synthetic`, JSON.stringify(synthetic))
   }
 
-  // Fetch bots data using the new hooks
+  // Fetch bots data using the new hooks and refresh on WS lifecycle
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchAndSet = async () => {
       const botsData = await fetchBots()
       if (botsData) {
-        // Filter out legacy bots (conservative, aggressive)
         const plugAndPlayBots = botsData.filter(
           (bot: any) => !['conservative', 'aggressive'].includes(bot.name)
         )
 
-        // Convert array to object and add additional info
         const botsWithSynthetic = Object.fromEntries(
           plugAndPlayBots.map((bot: any) => [
             bot.name,
@@ -97,13 +100,36 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', curre
             }
           ])
         )
-
-        //        console.log('🤖 PlugAndPlayBots: Setting new bots:', botsWithSynthetic)
         setBots(botsWithSynthetic)
       }
     }
-    fetchData()
-  }, []) // Only run once on mount
+
+    fetchAndSet()
+
+    const wsHandler = (msg: any) => {
+      if (!msg) return
+      const t = msg.type
+      if (
+        t === 'strategy_loaded' ||
+        t === 'strategy_unloaded' ||
+        t === 'strategy_started' ||
+        t === 'strategy_stopped'
+      ) {
+        fetchAndSet()
+      } else if (t === 'strategy_signal' && msg.name && msg.signal) {
+        // Actualizar la señal sin refetch
+        setBots((prev) => {
+          const next = { ...prev }
+          if (next[msg.name]) {
+            ;(next as any)[msg.name] = { ...next[msg.name], last_signal: msg.signal }
+          }
+          return next
+        })
+      }
+    }
+    eventBus.on(EventType.WS_SERVER_STRATEGIES, wsHandler)
+    return () => eventBus.off(EventType.WS_SERVER_STRATEGIES, wsHandler)
+  }, [])
 
   // Update process info when data changes
   useEffect(() => {
@@ -129,6 +155,10 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', curre
           }))
         }
       } else {
+        // Ensure strategy is loaded before start
+        try {
+          await apiClient.post(API_CONFIG.ENDPOINTS.STRATEGY_LOAD(botName))
+        } catch (_) {}
         const syntheticMode = loadSyntheticMode(botName)
         const success = await startBot(botName, syntheticMode)
         if (success) {
@@ -319,25 +349,7 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', curre
     }
   }
 
-  // Show loading state when bots are loading and no data yet
-  if (botsLoading && Object.keys(bots).length === 0) {
-    return (
-      <div className={`plug-and-play-bots ${className}`}>
-        <h3>🔌 Bots Plug-and-Play</h3>
-        <div className="loading">Cargando bots...</div>
-      </div>
-    )
-  }
-
-  // Show error state if there's an error
-  if (botsError) {
-    return (
-      <div className={`plug-and-play-bots ${className}`}>
-        <h3>🔌 Bots Plug-and-Play</h3>
-        <div className="error">❌ {botsError}</div>
-      </div>
-    )
-  }
+  // No early-returns: siempre mostramos “Estrategias disponibles” arriba
 
   const botEntries = Object.entries(bots)
 
@@ -350,18 +362,14 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', curre
   //   error
   // ) // Comentado para reducir spam
 
-  if (botEntries.length === 0) {
-    return (
-      <div className={`plug-and-play-bots ${className}`}>
-        <h3>🔌 Bots Plug-and-Play</h3>
-        <div className="no-bots">No hay bots plug-and-play disponibles</div>
-      </div>
-    )
-  }
+  const showNoBots = botEntries.length === 0
 
   return (
     <div className={`plug-and-play-bots ${className}`}>
-      <h3>🔌 Bots Plug-and-Play ({botEntries.length})</h3>
+      {/* Estrategias disponibles ARRIBA */}
+      <AvailableStrategies />
+
+      <h3 style={{ marginTop: 24 }}>🔌 Bots Plug-and-Play ({botEntries.length})</h3>
 
       {/* Server Info Accordion */}
       {serverInfo && (
@@ -373,22 +381,26 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', curre
       )}
 
       {/* Individual Bot Cards */}
-      <div className="bots-list">
-        {botEntries.map(([botName, botInfo]) => (
-          <PluginBotCard
-            key={botName}
-            botName={botName}
-            botInfo={botInfo as unknown as PluginBotInfo}
-            botsLoading={botsLoading}
-            onToggleBot={handleBotToggle}
-            onToggleSynthetic={handleSyntheticToggle}
-            getRiskLevelColor={getRiskLevelColor}
-            getRiskLevelIcon={getRiskLevelIcon}
-            getBotIcon={getBotIcon}
-            formatUptime={formatUptime}
-          />
-        ))}
-      </div>
+      {showNoBots ? (
+        <div className="no-bots">No hay bots plug-and-play disponibles</div>
+      ) : (
+        <div className="bots-list">
+          {botEntries.map(([botName, botInfo]) => (
+            <PluginBotCard
+              key={botName}
+              botName={botName}
+              botInfo={botInfo as unknown as PluginBotInfo}
+              botsLoading={botsLoading}
+              onToggleBot={handleBotToggle}
+              onToggleSynthetic={handleSyntheticToggle}
+              getRiskLevelColor={getRiskLevelColor}
+              getRiskLevelIcon={getRiskLevelIcon}
+              getBotIcon={getBotIcon}
+              formatUptime={formatUptime}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

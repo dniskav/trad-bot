@@ -11,6 +11,13 @@ export const API_CONFIG = {
     BOT_START: (botName: string) => `/api/${botName}/start`,
     BOT_STOP: (botName: string) => `/api/${botName}/stop`,
     BOT_CONFIG: (botName: string) => `/api/${botName}/config`,
+    // v0.2 Strategy Engine (server)
+    STRATEGIES_LOADED: '/strategies/',
+    STRATEGIES_CONFIGS: '/strategies/configs',
+    STRATEGY_LOAD: (name: string) => `/strategies/load/${name}`,
+    STRATEGY_UNLOAD: (name: string) => `/strategies/unload/${name}`,
+    STRATEGY_START: (name: string) => `/strategies/${name}/start`,
+    STRATEGY_STOP: (name: string) => `/strategies/${name}/stop`,
     POSITION_INFO: '/api/position-info',
     TRADING_HISTORY: '/api/trading/history',
     MARGIN_INFO: '/api/margin-info',

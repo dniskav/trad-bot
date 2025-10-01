@@ -32,13 +32,8 @@ export const useApiBotActions = (): UseApiBotActionsReturn => {
         )
 
         const response = await apiClient.post<BotActionResponse>(
-          API_CONFIG.ENDPOINTS.BOT_START(botName),
-          {},
-          {
-            params: {
-              synthetic_mode: syntheticMode
-            }
-          }
+          API_CONFIG.ENDPOINTS.STRATEGY_START(botName),
+          {}
         )
 
         if (response.data.status === 'success') {
@@ -67,8 +62,9 @@ export const useApiBotActions = (): UseApiBotActionsReturn => {
     try {
       console.log(`🔄 useApiBotActions: Stopping bot ${botName}...`)
 
+      // v0.2 Strategy Engine stop
       const response = await apiClient.post<BotActionResponse>(
-        API_CONFIG.ENDPOINTS.BOT_STOP(botName)
+        API_CONFIG.ENDPOINTS.STRATEGY_STOP(botName)
       )
 
       if (response.data.status === 'success') {
