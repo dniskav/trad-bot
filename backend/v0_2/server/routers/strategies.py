@@ -73,24 +73,42 @@ async def get_strategies(
 
         strategy_responses = []
         for name, strategy_instance in strategies.items():
-            strategy_responses.append(
-                StrategyResponse(
-                    name=name,
-                    description=strategy_instance.config.description,
-                    version=strategy_instance.config.version,
-                    author=strategy_instance.config.author,
-                    symbol=strategy_instance.config.symbol,
-                    interval=strategy_instance.config.interval,
-                    enabled=strategy_instance.config.enabled,
-                    status=strategy_instance.status.value,
-                    last_signal=(
-                        strategy_instance.last_signal.__dict__
-                        if strategy_instance.last_signal
-                        else None
-                    ),
-                    performance=strategy_instance.performance,
-                )
+            # Build config with optional risk management details when available
+            config = strategy_instance.config
+            response = StrategyResponse(
+                name=name,
+                description=config.description,
+                version=config.version,
+                author=config.author,
+                symbol=config.symbol,
+                interval=config.interval,
+                enabled=config.enabled,
+                status=strategy_instance.status.value,
+                last_signal=(
+                    strategy_instance.last_signal.__dict__
+                    if strategy_instance.last_signal
+                    else None
+                ),
+                performance=strategy_instance.performance,
             )
+
+            # Attach risk management fields into performance for front if needed
+            try:
+                rm = getattr(config, 'risk_management', None)
+                if rm:
+                    # expose as part of response dict
+                    response_dict = response.model_dump()
+                    response_dict['risk_management'] = {
+                        'max_positions': getattr(rm, 'max_positions', None),
+                        'position_size': getattr(rm, 'position_size', None),
+                        'stop_loss_pct': getattr(rm, 'stop_loss_pct', None),
+                        'take_profit_pct': getattr(rm, 'take_profit_pct', None)
+                    }
+                    strategy_responses.append(StrategyResponse(**response_dict))
+                else:
+                    strategy_responses.append(response)
+            except Exception:
+                strategy_responses.append(response)
 
         return StrategyListResponse(
             strategies=strategy_responses, total=len(strategy_responses)
