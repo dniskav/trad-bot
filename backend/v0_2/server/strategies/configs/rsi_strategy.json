@@ -1,0 +1,81 @@
+{
+  "name": "rsi_strategy",
+  "description": "RSI Strategy with volume filter",
+  "version": "1.0.0",
+  "author": "Strategy Engine",
+  "symbol": "DOGEUSDT",
+  "interval": "1m",
+  "enabled": true,
+  "indicators": [
+    {
+      "name": "rsi_14",
+      "type": "rsi",
+      "params": {
+        "period": 14
+      },
+      "enabled": true
+    },
+    {
+      "name": "volume_ma_20",
+      "type": "volume",
+      "params": {
+        "type": "volume_ma",
+        "period": 20
+      },
+      "enabled": true
+    },
+    {
+      "name": "volume_ratio",
+      "type": "volume",
+      "params": {
+        "type": "volume_ratio",
+        "period": 20
+      },
+      "enabled": true
+    }
+  ],
+  "signals": [
+    {
+      "signal_type": "BUY",
+      "conditions": [
+        {
+          "indicator": "rsi_14",
+          "operator": "<",
+          "value": 30
+        },
+        {
+          "indicator": "volume_ratio",
+          "operator": ">",
+          "value": 1.2
+        }
+      ],
+      "confidence": 0.6,
+      "enabled": true
+    },
+    {
+      "signal_type": "SELL",
+      "conditions": [
+        {
+          "indicator": "rsi_14",
+          "operator": ">",
+          "value": 70
+        }
+      ],
+      "confidence": 0.5,
+      "enabled": true
+    }
+  ],
+  "risk_management": {
+    "stop_loss_pct": 0.02,
+    "take_profit_pct": 0.03,
+    "max_positions": 3,
+    "position_size": 0.5,
+    "max_daily_loss": 0.05,
+    "enabled": true
+  },
+  "custom_params": {
+    "rsi_oversold": 30,
+    "rsi_overbought": 70,
+    "volume_threshold": 1.2
+  }
+}

@@ -6,10 +6,11 @@ from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
 
 # Import routers
-from .routers import health, websocket, socket, account, positions
+from .routers import health, websocket, socket, account, positions, strategies
 from .services.websocket_manager import WebSocketManager
 from .services.binance_service import BinanceService
 from .services.stm_service import STMService
+from .services.strategy_service import StrategyService
 from .middlewares.logging import log_requests_middleware
 
 log = get_logger("server.v0.2")
@@ -19,6 +20,7 @@ SYMBOL = env_str("SERVER_SYMBOL", "dogeusdt").lower()
 ws_manager = WebSocketManager()
 binance_service = BinanceService(ws_manager)
 stm_service = STMService()
+strategy_service = StrategyService()
 
 
 @asynccontextmanager
@@ -31,6 +33,13 @@ async def lifespan(app: FastAPI):
     stm_healthy = await stm_service.check_health()
     log.info(f"STM /health: {'ok' if stm_healthy else 'down'}")
 
+    # Initialize strategy service
+    await strategy_service.initialize(binance_service)
+
+    # Inject strategy service into router AFTER initialization
+    from .routers.strategies import set_strategy_service
+    set_strategy_service(strategy_service)
+
     # Start background tasks
     asyncio.create_task(stm_service.heartbeat_loop())
     asyncio.create_task(binance_service.bookticker_loop())
@@ -42,6 +51,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     log.info("🛑 Shutting down Server v0.2 services...")
+    await strategy_service.shutdown()
 
 
 app = FastAPI(title="Server v0.2", version="0.1", lifespan=lifespan)
@@ -52,6 +62,7 @@ app.include_router(websocket.router)
 app.include_router(socket.router)
 app.include_router(account.router)
 app.include_router(positions.router)
+app.include_router(strategies.router)
 
 # Add middlewares (order matters - CORS first, then logging)
 app.add_middleware(
