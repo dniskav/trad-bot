@@ -98,7 +98,7 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
     if (!indicators) return null
 
     const availableIndicators = []
-    if (indicators.sma_fast && indicators.sma_fast.length > 0) availableIndicators.push('SMA')
+    if (indicators.sma_fast && indicators.sma_fast.length > 0) availableIndicators.push('SMA(8,21)')
     if (indicators.rsi && indicators.rsi.length > 0) availableIndicators.push('RSI')
     if (indicators.volume && indicators.volume.length > 0) availableIndicators.push('Volumen')
     if (indicators.macd && indicators.macd.macd && indicators.macd.macd.length > 0)
@@ -524,13 +524,13 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       const smaFast = chart.addSeries(LineSeries, {
         color: '#ffff00',
         lineWidth: 1,
-        title: '',
+        title: 'SMA Fast (8)',
         priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
       })
       const smaSlow = chart.addSeries(LineSeries, {
         color: '#ff00ff',
         lineWidth: 1,
-        title: '',
+        title: 'SMA Slow (21)',
         priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
       })
 
@@ -922,11 +922,11 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
           <>
             <div className="legend-item">
               <div className="legend-marker" style={{ backgroundColor: '#ffff00' }}></div>
-              <span></span>
+              <span>SMA Fast (8)</span>
             </div>
             <div className="legend-item">
               <div className="legend-marker" style={{ backgroundColor: '#ff00ff' }}></div>
-              <span></span>
+              <span>SMA Slow (21)</span>
             </div>
             <div className="legend-item">
               <div className="legend-marker" style={{ backgroundColor: '#f39c12' }}></div>
