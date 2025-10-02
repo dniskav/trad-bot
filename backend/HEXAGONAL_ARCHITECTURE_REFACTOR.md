@@ -704,6 +704,14 @@ git checkout -b feature/trading-domain-extraction
 - ✅ IndicatorService - Integración con sistema legacy de indicadores
 - ✅ FileStrategyRepository - Persistencia con migración desde legacy configs
 
+#### **📈 SERVICIOS EN PRODUCCIÓN ACTIVOS**
+
+- ✅ STM Server: Puerto 8100 - healthy ✅ (PID: 3523)
+- ✅ Server v0.2: Puerto 8200 - healthy ✅ (PID: 3540)
+- ✅ Strategy Engine: Carga automática de 4 estrategias funcionando
+- ✅ Indicators Factory: SMA, RSI, MACD, Volume, Trend operativos
+- ✅ WebSockets: Binance connections + STM communication estable
+
 ### 🔄 **PRÓXIMAS FASES PENDIENTES**
 
 #### **💰 FASE 3: ACCOUNT DOMAIN (85%)**
@@ -718,7 +726,7 @@ git checkout -b feature/trading-domain-extraction
 
 - [x] ✅ COMPLETADO - Dividir `StrategyEngine` en servicios específicos - Domain models creados
 - [x] ✅ COMPLETADO - Crear `IndicatorService` independiente - Integración con sistema legacy
-- [x] ✅ COMPLETADO - Analizar StrategyEngine y crear StrategyApplicationService  
+- [x] ✅ COMPLETADO - Analizar StrategyEngine y crear StrategyApplicationService
 - [x] ✅ COMPLETADO - StrategyRepository para persistencia con archivos JSON
 - [ ] Separar `SignalEvaluator`
 - [ ] Crear `StrategyManager` para gestión de lifecycle
@@ -732,16 +740,16 @@ git checkout -b feature/trading-domain-extraction
 
 ### 🎯 **MÉTRICAS DE PROGRESO**
 
-| Componente                  | Progreso | Estado       |
-| --------------------------- | -------- | ------------ |
-| **Trading Domain**          | 95%      | ✅ FUNCIONAL |
-| **Account Domain**          | 85%      | ✅ FUNCIONAL |
-| **Strategy Domain**         | 70%      | 🚧 EN PROGRESO |
-| **Infrastructure Adapters** | 95%      | ✅ FUNCIONAL |
-| **Application Services**    | 100%     | ✅ FUNCIONAL |
-| **Domain Models**           | 98%      | ✅ FUNCIONAL |
-| **DI Container**            | 100%     | ✅ FUNCIONAL |
-| **Integration Testing**     | 100%     | ✅ PASANDO   |
+| Componente                  | Progreso | Estado         | Servicios Activos |
+| --------------------------- | -------- | -------------- | ----------------- |
+| **Trading Domain**          | 95%      | ✅ FUNCIONAL   | Position/Order Mgmt |
+| **Account Domain**          | 85%      | ✅ FUNCIONAL   | Balance/Commission |
+| **Strategy Domain**         | 70%      | 🚧 EN PROGRESO | Indicators/Strategies |
+| **Infrastructure Adapters** | 95%      | ✅ FUNCIONAL   | Data/External APIs |
+| **Application Services**    | 100%     | ✅ FUNCIONAL   | 3 Domains Complete |
+| **Domain Models**           | 98%      | ✅ FUNCIONAL   | Clean Architecture |
+| **DI Container**            | 100%     | ✅ FUNCIONAL   | Dependency Injection |
+| **Integration Testing**     | 100%     | ✅ PASANDO     | Production Live |
 
 ### 🔥 **BENEFICIOS CONSEGUIDOS**
 
@@ -753,7 +761,9 @@ git checkout -b feature/trading-domain-extraction
 
 ---
 
-_Última actualización: octubre 2, 2025_
+_Última actualización: octubre 2, 2025 - 21:33_
 _Rama: feature/hexagonal-architecture-refactor_
 _Contexto: Refactoring incremental hacia Clean Architecture_
 _Estado: ✅ ARQUITECTURA HEXAGONAL FUNCIONAL Y OPERATIVA_
+_Progreso: 3 Dominios principales implementados (Trading, Account, Strategy)_
+_Servicios: ✅ STM (8100) + Server (8200) activos y healthy_
