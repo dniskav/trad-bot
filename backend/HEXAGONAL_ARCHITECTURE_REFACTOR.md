@@ -944,7 +944,7 @@ La versión **v0_3** representa la **evolución final** hacia una arquitectura d
 backend/v0_3/
 ├── shared/                          # 🔄 CÓDIGO COMPARTIDO
 │   ├── domain/                      # Hexangular: models, ports, services
-│   ├── infrastructure/              # DI Container, adapters, utils  
+│   ├── infrastructure/              # DI Container, adapters, utils
 │   ├── logger.py                    # Sistema logging centralizado
 │   ├── settings.py                  # Configuración entorno
 │   ├── persistence.py              # Persistencia JSON unified
@@ -959,10 +959,10 @@ backend/v0_3/
 │   ├── data/                       # Datos persistencia STM
 │   └── requirements.txt            # Dependencias STM
 │
-└── server/                         # 📦 SERVER PAQUETE INDEPENDIENTE  
+└── server/                         # 📦 SERVER PAQUETE INDEPENDIENTE
     ├── app.py                      # FastAPI Server (puerto 8200)
     ├── main.py                     # Entry point Server
-    ├── services/                   # Core server services  
+    ├── services/                   # Core server services
     ├── routers/                    # API endpoints Server
     ├── strategies/                 # Configuraciones estrategias
     └── requirements.txt           # Dependencias Server
@@ -979,7 +979,7 @@ backend/v0_3/
 ### 🧪 **VERIFICACIÓN FUNCIONAL**
 
 ```bash
-# ✅ SERVICIOS v0.3 ACTIVOS  
+# ✅ SERVICIOS v0.3 ACTIVOS
 STM v0.3 (Puerto 8100):    ✅ backend.v0_3.stm.app funcional
 Server v0.3 (Puerto 8200): ✅ backend.v0_3.server.app funcional
 WebSocket Hexagonal:       ✅ "Hexagonal WebSocket Service" activo
@@ -988,20 +988,20 @@ Health Checks:             ✅ Ambos servicios healthy
 
 ### 📊 **COMPARACIÓN DE VERSIONES**
 
-| Aspecto                | v0_1         | v0_2           | **v0_3**               |
-| ---------------------- | ------------ | -------------- | ---------------------- |
-| **Arquitectura**       | Legacy       | Hexagonal      | **Paquetes Independientes** |
-| **Deployment**         | Monolito     | Monolito       | **Microservicios**     |
-| **Escalabilidad**      | Limitada     | Mejorada       | **Horizontal Total**   |
-| **Mantenimiento**      | Complejo     | Simplificado   | **Ultra Simplificado** |
-| **Docker Ready**       | ❌ No        | ✅ Sí          | **✅ Optimizado**      |
-| **K8s Ready**          | ❌ No        | ⚠️ Básico       | **✅ Production**      |
+| Aspecto           | v0_1     | v0_2         | **v0_3**                    |
+| ----------------- | -------- | ------------ | --------------------------- |
+| **Arquitectura**  | Legacy   | Hexagonal    | **Paquetes Independientes** |
+| **Deployment**    | Monolito | Monolito     | **Microservicios**          |
+| **Escalabilidad** | Limitada | Mejorada     | **Horizontal Total**        |
+| **Mantenimiento** | Complejo | Simplificado | **Ultra Simplificado**      |
+| **Docker Ready**  | ❌ No    | ✅ Sí        | **✅ Optimizado**           |
+| **K8s Ready**     | ❌ No    | ⚠️ Básico    | **✅ Production**           |
 
 ### 🔄 **MIGRACIÓN INCREMENTAL**
 
 ```bash
 # El sistema mantiene 3 versiones simultáneas:
-# v0_1: Legacy functional (desarrollo inicial)  
+# v0_1: Legacy functional (desarrollo inicial)
 # v0_2: Hexagonal complete (transición limpia)
 # v0_3: Paquetes independientes (production ready)
 
@@ -1017,14 +1017,14 @@ Health Checks:             ✅ Ambos servicios healthy
 docker build -f docker/stm/Dockerfile -t stm-v0.3 .
 docker build -f docker/server/Dockerfile -t server-v0.3 .
 
-# Orquestación completa  
+# Orquestación completa
 docker-compose -f docker/docker-compose.yml up
 ```
 
 ### 🌟 **VENTAJAS v0_3**
 
 - ✅ **Deployment Independiente**: Cada servicio deployable por separado
-- ✅ **Escalabilidad Horizontal**: Instancias múltiples de STM/Server  
+- ✅ **Escalabilidad Horizontal**: Instancias múltiples de STM/Server
 - ✅ **Separación de Responsabilidades**: Trading core vs Strategy engine
 - ✅ **Containerización Optimizada**: Imágenes específicas por dominio
 - ✅ **Rollback Independiente**: Recovery granular por servicio
@@ -1033,7 +1033,7 @@ docker-compose -f docker/docker-compose.yml up
 ### 🎯 **CASOS DE USO v0_3**
 
 1. **Desarrollo Local**: Ambas versiones coexisten
-2. **Staging**: Testing incremental v0_2 → v0_3  
+2. **Staging**: Testing incremental v0_2 → v0_3
 3. **Producción**: v0_3 para deployments cloud
 4. **CI/CD**: Pipelines independientes por paquete
 5. **Monitoring**: Observabilidad por servicio
@@ -1042,7 +1042,7 @@ docker-compose -f docker/docker-compose.yml up
 
 - 🚀 **v1.0**: Kubernetes production deployment completo
 - 🔐 **Seguridad**: HTTPS, authentication, authorization
-- 📊 **Monitoring**: Prometheus, Grafana, distributed tracing  
+- 📊 **Monitoring**: Prometheus, Grafana, distributed tracing
 - 🌐 **Service Mesh**: Load balancing, circuit breakers
 - 🗄️ **Database**: PostgreSQL/Redis para producción
 
