@@ -1,56 +1,83 @@
 #!/bin/bash
-# Script para iniciar Server con imports robustos y control de procesos
 
-set -euo pipefail
+# Script para iniciar Server v0.2
+# Puerto: 8200
+# Módulo: backend.v0_2.server.app
 
-# Cambiar al directorio del proyecto trading_bot
-cd "$(dirname "$0")"
-export PYTHONPATH="$(pwd)"
-PROJECT_PATH="$(pwd)"
+set -e
 
+# Configuración
 PORT=8200
 MODULE="backend.v0_2.server.app"
+SERVICE_NAME="Server"
 
-kill_pids() {
-  local pids="$1"
-  if [ -z "${pids}" ]; then return 0; fi
-  echo "🔪 Enviando SIGTERM a: ${pids}"
-  kill ${pids} >/dev/null 2>&1 || true
-  sleep 0.3
-  # Forzar si siguen vivos
-  for pid in ${pids}; do
-    if kill -0 ${pid} >/dev/null 2>&1; then
-      echo "⚠️  Forzando SIGKILL a ${pid}"
-      kill -9 ${pid} >/dev/null 2>&1 || true
+# Función de limpieza al salir (Ctrl+C)
+cleanup() {
+    echo
+    echo "🛑 Deteniendo ${SERVICE_NAME}..."
+    if [ ! -z "$SERVER_PID" ]; then
+        kill -TERM $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
     fi
-  done
+    exit 0
 }
 
-echo "🧹 Revisando procesos previos del Server..."
+trap cleanup SIGINT SIGTERM
 
-# 1) Cerrar procesos que ejecuten el módulo del server
-if pgrep -u "$USER" -fl "python.* -m ${MODULE}" >/dev/null 2>&1; then
-  echo "🔎 Encontrado ${MODULE} corriendo"
-  PIDS=$(pgrep -u "$USER" -f "python.* -m ${MODULE}")
-  kill_pids "$PIDS"
-fi
+echo "🧹 Revisando procesos previos del ${SERVICE_NAME}..."
 
-# 2) Liberar el puerto si está ocupado
-if lsof -i :${PORT} -sTCP:LISTEN -u "$USER" >/dev/null 2>&1; then
-  echo "🔧 Liberando puerto ${PORT} ocupado"
-  # Filtrar solo procesos Python del proyecto
-  FILTERED_PIDS=""
-  while read -r pid; do
-    if [ -n "$pid" ]; then
-      cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
-      if [[ "$cmd" == *python* ]] && [[ "$cmd" == *"$PROJECT_PATH"* ]]; then
-        FILTERED_PIDS+="$pid "
-      fi
+# 1) Solo cerrar procesos que ejecuten el módulo Server específico
+SERVER_PIDS=$(pgrep -u "$USER" -f "python.* -m.*${MODULE}" 2>/dev/null || true)
+if [ ! -z "$SERVER_PIDS" ]; then
+    echo "🔎 Encontrado ${SERVICE_NAME} corriendo (PIDs: $SERVER_PIDS)"
+    echo "🔪 Cerrando procesos Server previos..."
+    echo $SERVER_PIDS | xargs kill -TERM 2>/dev/null || true
+    sleep 2
+    
+    # Verificar que se cerraron
+    SERVER_PIDS=$(pgrep -u "$USER" -f "python.* -m.*${MODULE}" 2>/dev/null || true)
+    if [ ! -z "$SERVER_PIDS" ]; then
+        echo "🔪 Terminando procesos Server persistentes..."
+        echo $SERVER_PIDS | xargs kill -9 2>/dev/null || true
+        sleep 1
     fi
-  done < <(lsof -t -i :${PORT} -sTCP:LISTEN -u "$USER")
-  kill_pids "$FILTERED_PIDS"
+else
+    echo "✅ No hay procesos Server previos corriendo"
 fi
 
-echo "🚀 Iniciando Server v0.2 en puerto ${PORT}..."
-echo "PYTHONPATH: $PYTHONPATH"
-python3 -m ${MODULE}
+# 2) Verificar que el puerto esté libre
+if lsof -i :$PORT >/dev/null 2>&1; then
+    echo "⚠️  Puerto $PORT ocupado, intentando liberar..."
+    PORT_PIDS=$(lsof -ti :$PORT 2>/dev/null || true)
+    if [ ! -z "$PORT_PIDS" ]; then
+        echo "🔪 Cerrando procesos en puerto $PORT..."
+        echo $PORT_PIDS | xargs kill -TERM 2>/dev/null || true
+        sleep 2
+        PORT_PIDS=$(lsof -ti :$PORT 2>/dev/null || true)
+        if [ ! -z "$PORT_PIDS" ]; then
+            echo "⚠️  Puerto $PORT aún ocupado por procesos: $PORT_PIDS"
+            echo "❌ No se puede iniciar ${SERVICE_NAME}"
+            exit 1
+            fi
+        fi
+fi
+
+echo "✅ Puerto $PORT liberado"
+
+# 3) Configurar entorno
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+
+echo "🚀 Iniciando ${SERVICE_NAME} v0.2 en puerto $PORT..."
+echo "📝 Para detener: Ctrl+C"
+echo "─────────────────────────────────────"
+
+# 4) Ejecutar en foreground (no background)
+python -m $MODULE &
+SERVER_PID=$!
+
+# 5) Esperar y mostrar logs
+echo "👁️  PID ${SERVICE_NAME}: $SERVER_PID"
+echo "─────────────────────────────────────"
+
+# Mantener el script vivo y mostrar logs
+wait $SERVER_PID
