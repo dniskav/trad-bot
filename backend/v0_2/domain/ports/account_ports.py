@@ -13,6 +13,7 @@ from enum import Enum
 
 class AssetType(Enum):
     """Tipos de activo"""
+
     USDT = "USDT"
     DOGE = "DOGE"
     BTC = "BTC"
@@ -21,6 +22,7 @@ class AssetType(Enum):
 
 class TransactionType(Enum):
     """Tipos de transacción"""
+
     DEPOSIT = "DEPOSIT"
     WITHDRAWAL = "WITHDRAWAL"
     COMMISSION = "COMMISSION"
@@ -33,6 +35,7 @@ class TransactionType(Enum):
 @dataclass
 class AssetBalance:
     """Balance de un activo específico"""
+
     asset: AssetType
     free: float  # Disponible para trading
     locked: float  # Bloqueado en órdenes/posiciones
@@ -43,13 +46,14 @@ class AssetBalance:
 @dataclass
 class Account:
     """Modelo de cuenta completa"""
+
     account_id: str
     total_balance_usdt: float
     current_balance_usdt: float
     initial_balance_usdt: float
     total_pnl: float
     assets: List[AssetBalance]
-    
+
     # Metadatos
     created_at: str
     updated_at: str
@@ -59,6 +63,7 @@ class Account:
 @dataclass
 class BalanceChange:
     """Cambio en balance"""
+
     asset: AssetType
     amount: float
     transaction_type: TransactionType
@@ -81,12 +86,16 @@ class IAccountRepository(ABC):
         pass
 
     @abstractmethod
-    async def update_account_balance(self, account_id: str, balance_change: BalanceChange) -> Account:
+    async def update_account_balance(
+        self, account_id: str, balance_change: BalanceChange
+    ) -> Account:
         """Actualizar balance de cuenta"""
         pass
 
     @abstractmethod
-    async def get_account_history(self, account_id: str, limit: int = 100) -> List[BalanceChange]:
+    async def get_account_history(
+        self, account_id: str, limit: int = 100
+    ) -> List[BalanceChange]:
         """Obtener historial la cuenta"""
         pass
 
@@ -95,17 +104,23 @@ class IBalanceCalculator(ABC):
     """Calculadora de balances y P&L"""
 
     @abstractmethod
-    def calculate_account_total_usdt(self, assets: List[AssetBalance], prices: Dict[AssetType, float]) -> float:
+    def calculate_account_total_usdt(
+        self, assets: List[AssetBalance], prices: Dict[AssetType, float]
+    ) -> float:
         """Calcular balance total en USDT"""
         pass
 
     @abstractmethod
-    def calculate_current_balance_usdt(self, assets: List[AssetBalance], prices: Dict[AssetType, float]) -> float:
+    def calculate_current_balance_usdt(
+        self, assets: List[AssetBalance], prices: Dict[AssetType, float]
+    ) -> float:
         """Calcular balance disponible en USDT"""
         pass
 
     @abstractmethod
-    def calculate_total_pnl(self, initial_balance: float, current_total: float) -> float:
+    def calculate_total_pnl(
+        self, initial_balance: float, current_total: float
+    ) -> float:
         """Calcular P&L total"""
         pass
 
@@ -115,7 +130,9 @@ class IBalanceCalculator(ABC):
         pass
 
     @abstractmethod
-    def calculate_margin_available(self, account: Account, symbols_to_query: List[str]) -> float:
+    def calculate_margin_available(
+        self, account: Account, symbols_to_query: List[str]
+    ) -> float:
         """Calcular margen disponible"""
         pass
 
@@ -124,17 +141,23 @@ class ICommissionCalculator(ABC):
     """Calculadora de comisiones"""
 
     @abstractmethod
-    def calculate_trade_commission(self, asset: AssetType, quantity: float, price: float, is_maker: bool = False) -> float:
+    def calculate_trade_commission(
+        self, asset: AssetType, quantity: float, price: float, is_maker: bool = False
+    ) -> float:
         """Calcular comisión de trade"""
         pass
 
     @abstractmethod
-    def calculate_funding_fee(self, position_size: float, price: float, hours: int = 8) -> float:
+    def calculate_funding_fee(
+        self, position_size: float, price: float, hours: int = 8
+    ) -> float:
         """Calcular funding fee"""
         pass
 
     @abstractmethod
-    def calculate_borrow_fee(self, asset: AssetType, amount: float, days: int = 1) -> float:
+    def calculate_borrow_fee(
+        self, asset: AssetType, amount: float, days: int = 1
+    ) -> float:
         """Calcular fee de préstamo"""
         pass
 
@@ -153,17 +176,23 @@ class IAccountValidator(ABC):
         pass
 
     @abstractmethod
-    async def validate_withdrawal_amount(self, account: Account, asset: AssetType, amount: float) -> bool:
+    async def validate_withdrawal_amount(
+        self, account: Account, asset: AssetType, amount: float
+    ) -> bool:
         """Validar cantidad de retiro"""
         pass
 
     @abstractmethod
-    async def validate_position_margin(self, account: Account, required_margin: float, symbol: str) -> bool:
+    async def validate_position_margin(
+        self, account: Account, required_margin: float, symbol: str
+    ) -> bool:
         """Validar margen disponible para posición"""
         pass
 
     @abstractmethod
-    async def validate_balance_sufficiency(self, account: Account, required_amount: float, asset: AssetType) -> bool:
+    async def validate_balance_sufficiency(
+        self, account: Account, required_amount: float, asset: AssetType
+    ) -> bool:
         """Validar suficientey de balance"""
         pass
 
@@ -172,27 +201,37 @@ class IAccountTransactionHandler(ABC):
     """Manejador de transacciones de cuenta"""
 
     @abstractmethod
-    async def process_deposit(self, account_id: str, asset: AssetType, amount: float) -> BalanceChange:
+    async def process_deposit(
+        self, account_id: str, asset: AssetType, amount: float
+    ) -> BalanceChange:
         """Procesar depósito"""
         pass
 
     @abstractmethod
-    async def process_withdrawal(self, account_id: str, asset: AssetType, amount: float) -> BalanceChange:
+    async def process_withdrawal(
+        self, account_id: str, asset: AssetType, amount: float
+    ) -> BalanceChange:
         """Procesar retiro"""
         pass
 
     @abstractmethod
-    async def process_position_open_cost(self, account_id: str, symbol: str, margin_required: float, commission: float) -> List[BalanceChange]:
+    async def process_position_open_cost(
+        self, account_id: str, symbol: str, margin_required: float, commission: float
+    ) -> List[BalanceChange]:
         """Procesar costo de apertura de posición"""
         pass
 
     @abstractmethod
-    async def process_position_close_profit(self, account_id: str, symbol: str, pnl: float, commission: float) -> List[BalanceChange]:
+    async def process_position_close_profit(
+        self, account_id: str, symbol: str, pnl: float, commission: float
+    ) -> List[BalanceChange]:
         """Procesar profit/loss de cierre de posición"""
         pass
 
     @abstractmethod
-    async def process_funding_fee(self, account_id: str, symbol: str, fee_amount: float) -> BalanceChange:
+    async def process_funding_fee(
+        self, account_id: str, symbol: str, fee_amount: float
+    ) -> BalanceChange:
         """Procesar funding fee"""
         pass
 
@@ -201,17 +240,23 @@ class IAccountReportGenerator(ABC):
     """Generador de reportes de cuentas"""
 
     @abstractmethod
-    async def generate_account_summary(self, account_id: str, days: int = 30) -> Dict[str, Any]:
+    async def generate_account_summary(
+        self, account_id: str, days: int = 30
+    ) -> Dict[str, Any]:
         """Generar resumen de cuenta"""
         pass
 
     @abstractmethod
-    async def generate_pnl_report(self, account_id: str, period: str = "daily") -> Dict[str, Any]:
+    async def generate_pnl_report(
+        self, account_id: str, period: str = "daily"
+    ) -> Dict[str, Any]:
         """Generar reporte de P&L"""
         pass
 
     @abstractmethod
-    async def generate_commission_report(self, account_id: str, days: int = 30) -> Dict[str, Any]:
+    async def generate_commission_report(
+        self, account_id: str, days: int = 30
+    ) -> Dict[str, Any]:
         """Generar reporte de comisiones"""
         pass
 

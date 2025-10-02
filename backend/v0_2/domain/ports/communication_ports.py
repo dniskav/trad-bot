@@ -13,6 +13,7 @@ from .base_types import Position, Order, Signal
 
 class EventType(Enum):
     """Tipos de eventos del dominio"""
+
     POSITION_OPENED = "POSITION_OPENED"
     POSITION_CLOSED = "POSITION_CLOSED"
     POSITION_UPDATED = "POSITION_UPDATED"
@@ -27,6 +28,7 @@ class EventType(Enum):
 
 class NotificationChannel(Enum):
     """Canales de notificación"""
+
     WEBSOCKET = "WEBSOCKET"
     HTTP_WEBHOOK = "HTTP_WEBHOOK"
     EMAIL = "EMAIL"
@@ -36,6 +38,7 @@ class NotificationChannel(Enum):
 @abstractmethod
 class DomainEvent:
     """Evento del dominio"""
+
     def __init__(self, event_type: EventType, data: Dict[str, Any]):
         self.event_type = event_type
         self.data = data
@@ -52,17 +55,23 @@ class IEventPublisher(ABC):
         pass
 
     @abstractmethod
-    async def publish_position_closed(self, position: Position, exit_price: float, pnl: float) -> None:
+    async def publish_position_closed(
+        self, position: Position, exit_price: float, pnl: float
+    ) -> None:
         """Publicar evento de posición cerrada"""
         pass
 
     @abstractmethod
-    async def publish_position_updated(self, position: Position, changes: Dict[str, Any]) -> None:
+    async def publish_position_updated(
+        self, position: Position, changes: Dict[str, Any]
+    ) -> None:
         """Publicar evento de posición actualizada"""
         pass
 
     @abstractmethod
-    async def publish_order_executed(self, order: Order, execution_details: Dict[str, Any]) -> None:
+    async def publish_order_executed(
+        self, order: Order, execution_details: Dict[str, Any]
+    ) -> None:
         """Publicar evento de orden ejecutada"""
         pass
 
@@ -72,12 +81,16 @@ class IEventPublisher(ABC):
         pass
 
     @abstractmethod
-    async def publish_strategy_event(self, strategy_id: str, event_type: str, details: Dict[str, Any]) -> None:
+    async def publish_strategy_event(
+        self, strategy_id: str, event_type: str, details: Dict[str, Any]
+    ) -> None:
         """Publicar evento de estrategia"""
         pass
 
     @abstractmethod
-    async def publish_stringency_event(self, strategy_id: str, event_type: str, details: Dict[str, Any]) -> None:
+    async def publish_stringency_event(
+        self, strategy_id: str, event_type: str, details: Dict[str, Any]
+    ) -> None:
         """Publicar evento de estrategia"""
         pass
 
@@ -110,7 +123,9 @@ class IEventSubscriber(ABC):
             pass
 
         @abstractmethod
-        async def broadcast_message(self, message: Dict[str, Any], channel: str = "general") -> None:
+        async def broadcast_message(
+            self, message: Dict[str, Any], channel: str = "general"
+        ) -> None:
             """Broadcast mensaje a todos los clientes"""
             pass
 
@@ -129,7 +144,9 @@ class IExternalNotificationService(ABC):
     """Servicio de notificaciones externas"""
 
     @abstractmethod
-    async def notify_position_change(self, change_type: str, position_data: Dict[str, Any]) -> None:
+    async def notify_position_change(
+        self, change_type: str, position_data: Dict[str, Any]
+    ) -> None:
         """Notificar cambio de posición al servidor principal"""
         pass
 
@@ -211,22 +228,30 @@ class ILogger(ABC):
     """Logger con niveles específicos"""
 
     @abstractmethod
-    async def log_trading_event(self, event_type: str, data: Dict[str, Any], level: str = "INFO") -> None:
+    async def log_trading_event(
+        self, event_type: str, data: Dict[str, Any], level: str = "INFO"
+    ) -> None:
         """Log evento de trading específico"""
         pass
 
     @abstractmethod
-    async def log_strategy_event(self, strategy_id: str, data: Dict[str, Any], level: str = "INFO") -> None:
+    async def log_strategy_event(
+        self, strategy_id: str, data: Dict[str, Any], level: str = "INFO"
+    ) -> None:
         """Log evento de estrategia específico"""
         pass
 
     @abstractmethod
-    async def log_account_event(self, account_id: str, data: Dict[str, Any], level: str = "INFO") -> None:
+    async def log_account_event(
+        self, account_id: str, data: Dict[str, Any], level: str = "INFO"
+    ) -> None:
         """Log evento de cuenta específico"""
         pass
 
     @abstractmethod
-    async def log_performance_metric(self, metric_name: str, value: float, context: Dict[str, Any]) -> None:
+    async def log_performance_metric(
+        self, metric_name: str, value: float, context: Dict[str, Any]
+    ) -> None:
         """Log métrica de performance"""
         pass
 
@@ -235,12 +260,16 @@ class IRateLimiter(ABC):
     """Rate limiter para APIs externas"""
 
     @abstractmethod
-    async def check_rate_limit(self, endpoint: str, requests_per_minute: int = 1200) -> bool:
+    async def check_rate_limit(
+        self, endpoint: str, requests_per_minute: int = 1200
+    ) -> bool:
         """Verificar límite de requests"""
         pass
 
     @abstractmethod
-    async def wait_for_rate_limit(self, endpoint: str, requests_per_minute: int = 1200) -> None:
+    async def wait_for_rate_limit(
+        self, endpoint: str, requests_per_minute: int = 1200
+    ) -> None:
         """Esperar hasta que se libere el límite"""
         pass
 

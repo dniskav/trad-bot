@@ -11,7 +11,7 @@ from typing import Dict, Type, TypeVar, Callable, Any, Optional, Union
 from datetime import datetime
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class DIContainer:
@@ -25,39 +25,53 @@ class DIContainer:
         self._lock = threading.Lock()
         self._container_id = f"di_container_{datetime.now().timestamp()}"
 
-    def register_singleton(self, interface_type: Type[T], implementation_type: Type[T]) -> None:
+    def register_singleton(
+        self, interface_type: Type[T], implementation_type: Type[T]
+    ) -> None:
         """Registrar servicio como singleton"""
         with self._lock:
             self._services[interface_type] = implementation_type
-            self._lifetime[interface_type] = 'singleton'
-            print(f"📦 Registered singleton: {interface_type.__name__} -> {implementation_type.__name__}")
+            self._lifetime[interface_type] = "singleton"
+            print(
+                f"📦 Registered singleton: {interface_type.__name__} -> {implementation_type.__name__}"
+            )
 
-    def register_transient(self, interface_type: Type[T], implementation_type: Type[T]) -> None:
+    def register_transient(
+        self, interface_type: Type[T], implementation_type: Type[T]
+    ) -> None:
         """Registrar servicio como transient (nueva instancia cada vez)"""
         with self._lock:
             self._services[interface_type] = implementation_type
-            self._lifetime[interface_type] = 'transient'
-            print(f"📦 Registered transient: {interface_type.__name__} -> {implementation_type.__name__}")
+            self._lifetime[interface_type] = "transient"
+            print(
+                f"📦 Registered transient: {interface_type.__name__} -> {implementation_type.__name__}"
+            )
 
-    def register_scoped(self, interface_type: Type[T], implementation_type: Type[T]) -> None:
+    def register_scoped(
+        self, interface_type: Type[T], implementation_type: Type[T]
+    ) -> None:
         """Registrar servicio como scoped (una instancia por request/session)"""
         with self._lock:
             self._services[interface_type] = implementation_type
-            self._lifetime[interface_type] = 'scoped'
-            print(f"📦 Registered scoped: {interface_type.__name__} -> {implementation_type.__name__}")
+            self._lifetime[interface_type] = "scoped"
+            print(
+                f"📦 Registered scoped: {interface_type.__name__} -> {implementation_type.__name__}"
+            )
 
-    def register_factory(self, interface_type: Type[T], factory_function: Callable[..., T]) -> None:
+    def register_factory(
+        self, interface_type: Type[T], factory_function: Callable[..., T]
+    ) -> None:
         """Registrar factory function para crear instancia"""
         with self._lock:
             self._factories[interface_type] = factory_function
-            self._lifetime[interface_type] = 'factory'
+            self._lifetime[interface_type] = "factory"
             print(f"📦 Registered factory: {interface_type.__name__}")
 
     def register_instance(self, interface_type: Type[T], instance: T) -> None:
         """Registrar instancia específica (pre-construida)"""
         with self._lock:
             self._singletons[interface_type] = instance
-            self._lifetime[interface_type] = 'singleton'
+            self._lifetime[interface_type] = "singleton"
             print(f"📦 Registered instance: {interface_type.__name__}")
 
     def get(self, interface_type: Type[T]) -> T:
@@ -75,22 +89,24 @@ class DIContainer:
 
         if interface_type in self._services:
             implementation_type = self._services[interface_type]
-            lifetime = self._lifetime.get(interface_type, 'transient')
+            lifetime = self._lifetime.get(interface_type, "transient")
 
-            if lifetime == 'singleton':
+            if lifetime == "singleton":
                 if interface_type not in self._singletons:
                     instance = self._create_instance(implementation_type)
                     self._singletons[interface_type] = instance
                 return self._singletons[interface_type]
 
-            elif lifetime in ['transient', 'scoped']:
+            elif lifetime in ["transient", "scoped"]:
                 return self._create_instance(implementation_type)
 
         if interface_type in self._factories:
             factory_func = self._factories[interface_type]
             return factory_func(self)
 
-        raise ValueError(f"Service {interface_type.__name__} not registered in container")
+        raise ValueError(
+            f"Service {interface_type.__name__} not registered in container"
+        )
 
     async def _resolve_type_async(self, interface_type: Type[T]) -> T:
         """Resolver tipo de manera asíncrona"""
@@ -99,22 +115,24 @@ class DIContainer:
 
         if interface_type in self._services:
             implementation_type = self._services[interface_type]
-            lifetime = self._lifetime.get(interface_type, 'transient')
+            lifetime = self._lifetime.get(interface_type, "transient")
 
-            if lifetime == 'singleton':
+            if lifetime == "singleton":
                 if interface_type not in self._singletons:
                     instance = await self._create_instance_async(implementation_type)
                     self._singletons[interface_type] = instance
                 return self._singletons[interface_type]
 
-            elif lifetime in ['transient', 'scoped']:
+            elif lifetime in ["transient", "scoped"]:
                 return await self._create_instance_async(implementation_type)
 
         if interface_type in self._factories:
             factory_func = self._factories[interface_type]
             return factory_func(self)
 
-        raise ValueError(f"Service {interface_type.__name__} not registered in container")
+        raise ValueError(
+            f"Service {interface_type.__name__} not registered in container"
+        )
 
     def _create_instance(self, implementation_type: Type[T]) -> T:
         """Crear instancia usando inyección de dependencias"""
@@ -123,12 +141,15 @@ class DIContainer:
             if inspect.iscoroutinefunction(implementation_type.__init__):
                 # Para tipos async, crear wrapper temporal
                 import asyncio
+
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     # Si estamos en un loop, necesitamos usar create_task
                     return self._create_instance_sync_fallback(implementation_type)
                 else:
-                    return loop.run_until_complete(self._create_instance_async(implementation_type))
+                    return loop.run_until_complete(
+                        self._create_instance_async(implementation_type)
+                    )
             else:
                 return self._create_instance_sync(implementation_type)
         except Exception as e:
@@ -141,7 +162,11 @@ class DIContainer:
         signature = inspect.signature(constructor)
 
         # Excluir 'self'
-        params = {name: param for name, param in signature.parameters.items() if name != 'self'}
+        params = {
+            name: param
+            for name, param in signature.parameters.items()
+            if name != "self"
+        }
         kwargs = {}
 
         for param_name, param in params.items():
@@ -178,13 +203,19 @@ class DIContainer:
         signature = inspect.signature(constructor)
 
         # Excluir 'self'
-        params = {name: param for name, param in signature.parameters.items() if name != 'self'}
+        params = {
+            name: param
+            for name, param in signature.parameters.items()
+            if name != "self"
+        }
         kwargs = {}
 
         for param_name, param in params.items():
             if param.annotation != param.empty:
                 if inspect.iscoroutinefunction(self._resolve_type_async):
-                    kwargs[param_name] = await self._resolve_type_async(param.annotation)
+                    kwargs[param_name] = await self._resolve_type_async(
+                        param.annotation
+                    )
                 else:
                     kwargs[param_name] = self._resolve_type(param.annotation)
 
@@ -200,15 +231,19 @@ class DIContainer:
         """Obtener lista de servicios registrados"""
         services = {}
         for interface_type, implementation_type in self._services.items():
-            lifetime = self._lifetime.get(interface_type, 'transient')
-            services[interface_type.__name__] = f"{implementation_type.__name__} ({lifetime})"
+            lifetime = self._lifetime.get(interface_type, "transient")
+            services[interface_type.__name__] = (
+                f"{implementation_type.__name__} ({lifetime})"
+            )
         return services
 
     def contains_service(self, interface_type: Type[T]) -> bool:
         """Verificar si servicio está registrado"""
-        return (interface_type in self._services or 
-                interface_type in self._factories or 
-                interface_type in self._singletons)
+        return (
+            interface_type in self._services
+            or interface_type in self._factories
+            or interface_type in self._singletons
+        )
 
     async def shutdown(self) -> None:
         """Cerrar container y limpiar recursos"""
@@ -232,48 +267,50 @@ def get_container() -> DIContainer:
 
 def register_services(container: DIContainer) -> DIContainer:
     """Configurar servicios específicos de la aplicación"""
-    
+
     # Aquí se registrarán los servicios una vez que tengamos las implementaciones
     # Por ahora dejamos comentado para referencia
-    
+
     # Ejemplo de registro futuro:
-    
+
     # === TRADING DOMAIN ===
     # container.register_transient(IPositionRepository, FilePositionRepository)
     # container.register_singleton(IMarketDataProvider, BinanceMarketDataAdapter)
     # container.register_transient(ICommissionCalculator, BinanceCommissionCalculator)
-    
+
     # === STRATEGY DOMAIN ===
     # container.register_transient(IStrategyEngine, StrategyEngine)
     # container.register_singleton(IIndicatorService, TechnicalIndicatorService)
     # container.register_transient(ISignalEvaluator, SignalEvaluator)
-    
+
     # === ACCOUNT DOMAIN ===
     # container.register_singleton(IAccountRepository, FileAccountRepository)
     # container.register_transient(IBalanceCalculator, BalanceCalculator)
     # container.register_transient(IAccountValidator, AccountValidator)
-    
+
     # === COMMUNICATION DOMAIN ===
     # container.register_singleton(IEventPublisher, DomainEventPublisher)
     # container.register_singleton(IWebSocketManager, WebSocketManager)
     # container.register_transient(IExternalNotificationService, STMNotificationService)
-    
-    print(f"🚀 DI Container configured with {len(container._services)} service registrations")
+
+    print(
+        f"🚀 DI Container configured with {len(container._services)} service registrations"
+    )
     return container
 
 
 if __name__ == "__main__":
     # Test del container
     container = DIContainer()
-    
+
     # Test básico
     class TestService:
         def __init__(self):
             self.id = "test_service"
-    
+
     class TestInterface:
         pass
-    
+
     container.register_singleton(TestInterface, TestService)
     instance = container.get(TestInterface)
     print(f"✅ Container test successful: {instance.id}")

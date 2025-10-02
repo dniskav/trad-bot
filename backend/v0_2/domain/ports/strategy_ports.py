@@ -13,6 +13,7 @@ from enum import Enum
 
 class StrategyStatus(Enum):
     """Estados de estrategia"""
+
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
     PAUSED = "PAUSED"
@@ -21,6 +22,7 @@ class StrategyStatus(Enum):
 
 class SignalType(Enum):
     """Tipos de señal de trading"""
+
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
@@ -29,7 +31,14 @@ class SignalType(Enum):
 @abstractmethod
 class Signal:
     """Señal de trading generada"""
-    def __init__(self, signal_type: SignalType, confidence: float, strategy_name: str, metadata: Dict[str, Any]):
+
+    def __init__(
+        self,
+        signal_type: SignalType,
+        confidence: float,
+        strategy_name: str,
+        metadata: Dict[str, Any],
+    ):
         self.signal_type = signal_type
         self.confidence = confidence
         self.strategy_name = strategy_name
@@ -95,12 +104,20 @@ class IIndicatorService(ABC):
         pass
 
     @abstractmethod
-    async def calculate_macd(self, prices: List[float], fast_period: int = 12, slow_period: int = 26, signal_period: int = 9) -> Dict[str, float]:
+    async def calculate_macd(
+        self,
+        prices: List[float],
+        fast_period: int = 12,
+        slow_period: int = 26,
+        signal_period: int = 9,
+    ) -> Dict[str, float]:
         """Calcular MACD"""
         pass
 
     @abstractmethod
-    async def calculate_bollinger_bands(self, prices: List[float], period: int = 20, std_dev: float = 2.0) -> Dict[str, float]:
+    async def calculate_bollinger_bands(
+        self, prices: List[float], period: int = 20, std_dev: float = 2.0
+    ) -> Dict[str, float]:
         """Calcular Bandas de Bollinger"""
         pass
 
@@ -109,22 +126,30 @@ class ISignalEvaluator(ABC):
     """Evaluador de señales de trading"""
 
     @abstractmethod
-    async def evaluate_buy_conditions(self, market_data: MarketData, strategy_config: Dict[str, Any]) -> Optional[Signal]:
+    async def evaluate_buy_conditions(
+        self, market_data: MarketData, strategy_config: Dict[str, Any]
+    ) -> Optional[Signal]:
         """Evaluar condiciones de compra"""
         pass
 
     @abstractmethod
-    async def evaluate_sell_conditions(self, market_data: MarketData, strategy_config: Dict[str, Any]) -> Optional[Signal]:
+    async def evaluate_sell_conditions(
+        self, market_data: MarketData, strategy_config: Dict[str, Any]
+    ) -> Optional[Signal]:
         """Evaluar condiciones de venta"""
         pass
 
     @abstractmethod
-    async def evaluate_hold_conditions(self, market_data: MarketData, strategy_config: Dict[str, Any]) -> Optional[Signal]:
+    async def evaluate_hold_conditions(
+        self, market_data: MarketData, strategy_config: Dict[str, Any]
+    ) -> Optional[Signal]:
         """Evaluar condiciones de mantener posición"""
         pass
 
     @abstractmethod
-    async def validate_signal_strength(self, signal: Signal, market_data: MarketData) -> bool:
+    async def validate_signal_strength(
+        self, signal: Signal, market_data: MarketData
+    ) -> bool:
         """Validar fortaleza de señal"""
         pass
 
@@ -133,12 +158,16 @@ class IStrategyRepository(ABC):
     """Repositorio para estrategias"""
 
     @abstractmethod
-    async def load_strategy_config(self, strategy_name: str) -> Optional[Dict[str, Any]]:
+    async def load_strategy_config(
+        self, strategy_name: str
+    ) -> Optional[Dict[str, Any]]:
         """Cargar configuración de estrategia"""
         pass
 
     @abstractmethod
-    async def save_strategy_config(self, strategy_name: str, config: Dict[str, Any]) -> bool:
+    async def save_strategy_config(
+        self, strategy_name: str, config: Dict[str, Any]
+    ) -> bool:
         """Guardar configuración de estrategia"""
         pass
 
@@ -157,17 +186,23 @@ class IRiskManager(ABC):
     """Gestor de riesgo para estrategias"""
 
     @abstractmethod
-    async def validate_position_size(self, strategy_id: str, symbol: str, quantity: float, account_balance: float) -> bool:
+    async def validate_position_size(
+        self, strategy_id: str, symbol: str, quantity: float, account_balance: float
+    ) -> bool:
         """Validar tamaño de posición"""
         pass
 
     @abstractmethod
-    async def calculate_stop_loss(self, entry_price: float, strategy_config: Dict[str, Any]) -> float:
+    async def calculate_stop_loss(
+        self, entry_price: float, strategy_config: Dict[str, Any]
+    ) -> float:
         """Calcular stop loss basado en configuración"""
         pass
 
     @abstractmethod
-    async def calculate_take_profit(self, entry_price: float, strategy_config: Dict[str, Any]) -> float:
+    async def calculate_take_profit(
+        self, entry_price: float, strategy_config: Dict[str, Any]
+    ) -> float:
         """Calcular take profit basado en configuración"""
         pass
 
@@ -186,7 +221,9 @@ class IStrategyPerformanceTracker(ABC):
     """Tracker de performance de estrategias"""
 
     @abstractmethod
-    async def record_strategy_execution(self, strategy_id: str, signal: Signal, executed: bool, result: Dict[str, Any]) -> None:
+    async def record_strategy_execution(
+        self, strategy_id: str, signal: Signal, executed: bool, result: Dict[str, Any]
+    ) -> None:
         """Registrar ejecución de estrategia"""
         pass
 
@@ -196,7 +233,9 @@ class IStrategyPerformanceTracker(ABC):
         pass
 
     @abstractmethod
-    async def get_strategy_statistics(self, strategy_id: str, days: int = 30) -> Dict[str, Any]:
+    async def get_strategy_statistics(
+        self, strategy_id: str, days: int = 30
+    ) -> Dict[str, Any]:
         """Obtener estadísticas de estrategia"""
         pass
 

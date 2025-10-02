@@ -12,12 +12,14 @@ from dataclasses import dataclass
 
 class OrderSide(Enum):
     """Lados de orden"""
+
     BUY = "BUY"
     SELL = "SELL"
 
 
 class OrderType(Enum):
     """Tipos de orden"""
+
     MARKET = "MARKET"
     LIMIT = "LIMIT"
     STOP_MARKET = "STOP_MARKET"
@@ -27,6 +29,7 @@ class OrderType(Enum):
 
 class OrderStatus(Enum):
     """Estados de orden"""
+
     PENDING = "PENDING"
     FILLED = "FILLED"
     CANCELLED = "CANCELLED"
@@ -36,6 +39,7 @@ class OrderStatus(Enum):
 
 class PositionStatus(Enum):
     """Estados de posición"""
+
     OPEN = "open"
     CLOSED = "closed"
     STOPPED = "stopped"
@@ -45,6 +49,7 @@ class PositionStatus(Enum):
 @dataclass
 class OrderResult:
     """Resultado de ejecución de orden"""
+
     success: bool
     order_id: Optional[str] = None
     message: Optional[str] = None
@@ -57,26 +62,27 @@ class OrderResult:
 @dataclass
 class Position:
     """Modelo de dominio para posición"""
+
     position_id: str
     symbol: str
     side: OrderSide
     quantity: float
     entry_price: float
     leverage: int = 1
-    
+
     # Risk Management
     stop_loss_price: Optional[float] = None
     take_profit_price: Optional[float] = None
-    
+
     # Status
     status: PositionStatus = PositionStatus.OPEN
     pnl: float = 0.0
-    
+
     # Timestamps
     created_at: str = datetime.now().isoformat()
     updated_at: str = datetime.now().isoformat()
     closed_at: Optional[str] = None
-    
+
     def calculate_pnl(self, current_price: float) -> float:
         """Calcular P&L basado en precio actual"""
         if self.side == OrderSide.BUY:
@@ -88,6 +94,7 @@ class Position:
 @dataclass
 class Order:
     """Modelo de dominio para orden"""
+
     order_id: str
     position_id: Optional[str]
     symbol: str
@@ -100,7 +107,7 @@ class Order:
     executed_price: Optional[float] = None
     executed_quantity: Optional[float] = None
     commission: Optional[float] = None
-    
+
     # Metadata
     created_at: str = datetime.now().isoformat()
     updated_at: str = datetime.now().isoformat()
@@ -109,6 +116,7 @@ class Order:
 @dataclass
 class MarketData:
     """Datos de mercado"""
+
     symbol: str
     current_price: float
     volume: float
@@ -120,6 +128,7 @@ class MarketData:
 @dataclass
 class Candlestick:
     """Datos de vela"""
+
     symbol: str
     interval: str
     open: float
@@ -132,11 +141,12 @@ class Candlestick:
 
 
 # Generic types para repositorios
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class RepositoryResult(Generic[T]):
     """Resultado genérico de operaciones de repositorio"""
+
     success: bool
     data: Optional[T] = None
     error: Optional[str] = None

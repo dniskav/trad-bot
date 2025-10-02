@@ -24,7 +24,9 @@ class IPositionRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_active_positions(self, symbol: Optional[str] = None) -> List[Position]:
+    async def get_active_positions(
+        self, symbol: Optional[str] = None
+    ) -> List[Position]:
         """Obtener posiciones activas, opcionalmente filtradas por símbolo"""
         pass
 
@@ -34,7 +36,9 @@ class IPositionRepository(ABC):
         pass
 
     @abstractmethod
-    async def close_position(self, position_id: str, exit_price: float, reason: str = "manual") -> None:
+    async def close_position(
+        self, position_id: str, exit_price: float, reason: str = "manual"
+    ) -> None:
         """Cerrar posición"""
         pass
 
@@ -77,7 +81,9 @@ class IMarketDataProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_candlestick_data(self, symbol: str, interval: str, limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_candlestick_data(
+        self, symbol: str, interval: str, limit: int = 100
+    ) -> List[Dict[str, Any]]:
         """Obtener datos de velas para análisis técnico"""
         pass
 
@@ -91,17 +97,23 @@ class ITradingExecutor(ABC):
     """Ejecutor de operaciones de trading"""
 
     @abstractmethod
-    async def execute_market_order(self, symbol: str, side: str, quantity: float) -> OrderResult:
+    async def execute_market_order(
+        self, symbol: str, side: str, quantity: float
+    ) -> OrderResult:
         """Ejecutar orden market"""
         pass
 
     @abstractmethod
-    async def execute_limit_order(self, symbol: str, side: str, quantity: float, price: float) -> OrderResult:
+    async def execute_limit_order(
+        self, symbol: str, side: str, quantity: float, price: float
+    ) -> OrderResult:
         """Ejecutar orden limit"""
         pass
 
     @abstractmethod
-    async def execute_stop_order(self, symbol: str, side: str, quantity: float, stop_price: float) -> OrderResult:
+    async def execute_stop_order(
+        self, symbol: str, side: str, quantity: float, stop_price: float
+    ) -> OrderResult:
         """Ejecutar orden stop"""
         pass
 
@@ -134,17 +146,23 @@ class IExecutionValidator(ABC):
     """Validador de ejecución de órdenes"""
 
     @abstractmethod
-    async def validate_position_size(self, symbol: str, quantity: float, leverage: int) -> bool:
+    async def validate_position_size(
+        self, symbol: str, quantity: float, leverage: int
+    ) -> bool:
         """Validar tamaño de posición con leverage"""
         pass
 
     @abstractmethod
-    async def validate_min_notional(self, symbol: str, quantity: float, price: float) -> bool:
+    async def validate_min_notional(
+        self, symbol: str, quantity: float, price: float
+    ) -> bool:
         """Validar mínima notional requerida"""
         pass
 
     @abstractmethod
-    async def validate_margin_requirement(self, account_id: str, required_margin: float) -> bool:
+    async def validate_margin_requirement(
+        self, account_id: str, required_margin: float
+    ) -> bool:
         """Validar margin disponible"""
         pass
 
@@ -163,6 +181,8 @@ class IPositionTracker(ABC):
         pass
 
     @abstractmethod
-    async def execute_risk_management(self, position: Position, current_price: float) -> Optional[OrderResult]:
+    async def execute_risk_management(
+        self, position: Position, current_price: float
+    ) -> Optional[OrderResult]:
         """Ejecutar gestión de riesgo automática"""
         pass
