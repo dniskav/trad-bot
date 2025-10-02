@@ -14,30 +14,39 @@ stm_service = STMService()
 # In-memory cache to log PnL changes only when they actually change
 _last_pnl_by_position: Dict[str, float] = {}
 
+
 # Función helper para obtener servicio WebSocket con fallback
 async def get_websocket_service():
     """Obtener servicio WebSocket hexagonal o legacy como fallback"""
     try:
         # Intentar obtener servicio hexagonal
         from ..websocket_service_integration import websocket_service_factory
+
         service = await websocket_service_factory()
-        
+
         # Verificar si es el servicio hexagonal (WebSocketAdapter compatible)
         if hasattr(service, "connect") and hasattr(service, "broadcast"):
             log.info("Using Hexagonal WebSocket Service")
             return service
         else:
             # Es el servicio hexagonal, crear adapter
-            from ..infrastructure.adapters.communication.websocket_service import WebSocketServiceAdapter
+            from ..infrastructure.adapters.communication.websocket_service import (
+                WebSocketServiceAdapter,
+            )
+
             adapter = WebSocketServiceAdapter(service)
             log.info("Using Hexagonal WebSocket Service (via adapter)")
             return adapter
-            
+
     except Exception as e:
-        log.warning(f"Hexagonal WebSocket service not available, using legacy singleton: {e}")
+        log.warning(
+            f"Hexagonal WebSocket service not available, using legacy singleton: {e}"
+        )
         # Fallback a servicio legacy
         from ..services.websocket_manager import WebSocketManager
+
         return WebSocketManager()
+
 
 # Allowed mutable fields for "position_change" events
 _ALLOWED_POSITION_FIELDS = {
@@ -86,11 +95,11 @@ def _sanitize_position_change(payload: dict) -> dict:
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time data broadcasting"""
     ws_service = await get_websocket_service()
-    
+
     # Conectar cliente
     client_id = await ws_service.connect(websocket)
     log.info(f"WebSocket client connected: {client_id}")
-    
+
     try:
         while True:
             # Keep connection alive; we don't expect incoming messages
@@ -249,7 +258,7 @@ async def websocket_service_status():
     """Estado del servicio WebSocket (hexagonal o legacy)"""
     try:
         ws_service = await get_websocket_service()
-        
+
         # Intentar obtener status si es servicio hexagonal
         if hasattr(ws_service, "get_service_status"):
             status = await ws_service.get_service_status()
@@ -259,19 +268,12 @@ async def websocket_service_status():
             status = {
                 "service_status": "legacy",
                 "active_connections": len(ws_service.connections),
-                "service_type": "Legacy WebSocketManager (singleton)"
+                "service_type": "Legacy WebSocketManager (singleton)",
             }
             service_type = "Legacy WebSocket Manager"
-        
-        return {
-            "status": "success",
-            "service_type": service_type,
-            "data": status
-        }
-        
+
+        return {"status": "success", "service_type": service_type, "data": status}
+
     except Exception as e:
         log.error(f"Error getting WebSocket service status: {e}")
-        return {
-            "status": "error",
-            "error": str(e)
-        }
+        return {"status": "error", "error": str(e)}

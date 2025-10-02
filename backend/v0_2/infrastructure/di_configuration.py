@@ -264,12 +264,8 @@ def configure_communication_domain(container: DIContainer) -> None:
 
     # === WEBSOCKET SERVICE (Hexagonal - No Singleton) ===
     from ..adapters.communication.websocket_service import WebSocketService
-    
-    container.register_singleton(
-        WebSocketService,
-        WebSocketService,
-        []
-    )
+
+    container.register_singleton(WebSocketService, WebSocketService, [])
 
     print("📡 Communication Domain configured")
 

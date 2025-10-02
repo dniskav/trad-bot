@@ -428,7 +428,7 @@ def setup_dependencies():
 #### 💰 Account Domain Extraction
 
 - [x] ✅ COMPLETADO - Extraer lógica de accounts de servicios mezclados - AccountAggregate creado
-- [x] ✅ COMPLETADO - Crear `BalanceService` independiente - BalanceCalculator implementado  
+- [x] ✅ COMPLETADO - Crear `BalanceService` independiente - BalanceCalculator implementado
 - [x] ✅ COMPLETADO - Separar lógica de cálculo de comisiones - CommissionCalculator creado
 - [x] ✅ COMPLETADO - Implementar `CommissionCalculator` - StandardCommissionCalculator funcional
 

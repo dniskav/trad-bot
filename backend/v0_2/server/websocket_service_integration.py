@@ -11,7 +11,7 @@ from backend.shared.logger import get_logger
 log = get_logger("websocket.integration")
 
 # Instancia global del servicio para inyección
-_websocket_service: Optional['WebSocketService'] = None
+_websocket_service: Optional["WebSocketService"] = None
 
 
 async def websocket_service_factory():
@@ -20,14 +20,14 @@ async def websocket_service_factory():
     Compatible con FastAPI Depends
     """
     global _websocket_service
-    
+
     if _websocket_service is None:
         _websocket_service = await create_websocket_service()
-    
+
     return _websocket_service
 
 
-def get_websocket_service() -> Optional['WebSocketService']:
+def get_websocket_service() -> Optional["WebSocketService"]:
     """Obtener la instancia del servicio si existe"""
     return _websocket_service
 
@@ -35,38 +35,38 @@ def get_websocket_service() -> Optional['WebSocketService']:
 async def initialize_websocket_hexagonal():
     """Inicializar el servicio WebSocket hexagonalmente sin singleton"""
     global _websocket_service
-    
+
     try:
         _websocket_service = await create_websocket_service()
         await _websocket_service.start()
-        
+
         log.info("🚀 Hexagonal WebSocket Service initialized successfully")
         return _websocket_service
-        
+
     except Exception as e:
         log.error(f"Failed to initialize Hexagonal WebSocket Service: {e}")
         raise
 
 
-async def create_websocket_service() -> 'WebSocketService':
+async def create_websocket_service() -> "WebSocketService":
     """
     Crear nueva instancia de WebSocketService
-    
+
     Returns:
         WebSocketService: Nueva instancia configurada sin singleton
     """
     try:
         from backend.v0_2.infrastructure.adapters.communication.websocket_service import (
-            WebSocketService, 
-            WebSocketServiceAdapter
+            WebSocketService,
+            WebSocketServiceAdapter,
         )
-        
+
         # Crear nueva instancia sin singleton
         websocket_service = WebSocketService()
-        
+
         log.info("✅ WebSocket Service created (hexagonal - no singleton)")
         return websocket_service
-        
+
     except Exception as e:
         log.error(f"Error creating WebSocket Service: {e}")
         raise
@@ -75,7 +75,7 @@ async def create_websocket_service() -> 'WebSocketService':
 async def shutdown_websocket_service():
     """Shutdown del servicio WebSocket hexagonal"""
     global _websocket_service
-    
+
     if _websocket_service:
         try:
             await _websocket_service.stop()
@@ -92,34 +92,34 @@ async def websocket_service_dependency():
     Proporciona servicio WebSocket hexagonal
     """
     global _websocket_service
-    
+
     if _websocket_service is None:
         log.warning("WebSocket Service not initialized, creating on demand...")
         _websocket_service = await create_websocket_service()
         await _websocket_service.start()
-    
+
     return _websocket_service
 
 
 def create_legacy_websocket_adapter():
     """
     Crear adapter para código legacy que esperaba WebSocketManager singleton
-    
+
     Returns:
         WebSocketServiceAdapter: Adapter compatible con código legacy
     """
     try:
         from backend.v0_2.infrastructure.adapters.communication.websocket_service import (
-            WebSocketServiceAdapter
+            WebSocketServiceAdapter,
         )
-        
+
         global _websocket_service
-        
+
         if _websocket_service is None:
             raise ValueError("WebSocket Service not initialized")
-        
+
         return WebSocketServiceAdapter(_websocket_service)
-        
+
     except Exception as e:
         log.error(f"Error creating legacy WebSocket adapter: {e}")
         raise
@@ -136,14 +136,17 @@ async def get_websocket_manager():
         websocket_service = await websocket_service_dependency()
         adapter = create_legacy_websocket_adapter()
         return adapter
-        
+
     except Exception as e:
         log.warning(f"Failed to use hexagonal WebSocket service: {e}")
-        
+
         # Fallback al WebSocketManager legacy como último recurso
         try:
             from backend.v0_2.server.services.websocket_manager import WebSocketManager
+
             return WebSocketManager()
         except Exception as fallback_error:
-            log.error(f"Fallback to legacy WebSocketManager also failed: {fallback_error}")
+            log.error(
+                f"Fallback to legacy WebSocketManager also failed: {fallback_error}"
+            )
             raise e
