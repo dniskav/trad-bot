@@ -8,7 +8,7 @@ set -e
 
 # Configuración
 PORT=8200
-MODULE="backend.v0_2.server.app"
+MODULE="backend.server-package.app"
 SERVICE_NAME="Server"
 
 # Función de limpieza al salir (Ctrl+C)
@@ -64,8 +64,8 @@ fi
 
 echo "✅ Puerto $PORT liberado"
 
-# 3) Configurar entorno
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+# 3) Configurar entorno  
+export PYTHONPATH="/Users/daniel/Desktop/projects/trading_bot/backend:${PYTHONPATH}"
 
 echo "🚀 Iniciando ${SERVICE_NAME} v0.2 en puerto $PORT..."
 echo "📝 Para detener: Ctrl+C"

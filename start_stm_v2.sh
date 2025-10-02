@@ -8,7 +8,7 @@ set -e
 
 # Configuración
 PORT=8100
-MODULE="backend.v0_2.stm.app"
+MODULE="backend.stm-package.app"
 SERVICE_NAME="STM"
 
 # Función de limpieza al salir (Ctrl+C)
@@ -64,8 +64,8 @@ fi
 
 echo "✅ Puerto $PORT liberado"
 
-# 3) Configurar entorno
-export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+# 3) Configurar entorno  
+export PYTHONPATH="/Users/daniel/Desktop/projects/trading_bot/backend:${PYTHONPATH}"
 
 echo "🚀 Iniciando ${SERVICE_NAME} en puerto $PORT..."
 echo "📝 Para detener: Ctrl+C"
