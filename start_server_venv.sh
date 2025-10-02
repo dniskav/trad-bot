@@ -1,37 +1,74 @@
 #!/bin/bash
-# Script para iniciar Server con venv y control de procesos
 
-set -euo pipefail
+# Script para iniciar Server v0.2 con venv
+# Puerto: 8200
+# Módulo: backend.v0_2.server.app
+# Venv: trading_bot_env
 
-# Cambiar al directorio del proyecto trading_bot
-cd "$(dirname "$0")"
-PROJECT_PATH="$(pwd)"
+set -e
 
 # Configuración
 PORT=8200
 MODULE="backend.v0_2.server.app"
 VENV_DIR="trading_bot_env"
+SERVICE_NAME="Server"
 
-# Función para matar procesos
-kill_pids() {
-  local pids="$1"
-  if [ -z "${pids}" ]; then return 0; fi
-  echo "🔪 Enviando SIGTERM a: ${pids}"
-  kill ${pids} >/dev/null 2>&1 || true
-  sleep 0.3
-  # Forzar si siguen vivos
-  for pid in ${pids}; do
-    if kill -0 ${pid} >/dev/null 2>&1; then
-      echo "⚠️  Forzando SIGKILL a ${pid}"
-      kill -9 ${pid} >/dev/null 2>&1 || true
+# Función de limpieza al salir (Ctrl+C)
+cleanup() {
+    echo
+    echo "🛑 Deteniendo ${SERVICE_NAME}..."
+    if [ ! -z "$SERVER_PID" ]; then
+        kill -TERM $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
     fi
-  done
+    exit 0
 }
 
-# Función para verificar compatibilidad de Python
-check_python_compatibility() {
-  echo "🔍 Verificando compatibilidad de Python..."
-  python3 -c "
+trap cleanup SIGINT SIGTERM
+
+echo "🧹 Revisando procesos previos del ${SERVICE_NAME}..."
+
+# 1) Solo cerrar procesos que ejecuten el módulo Server específico
+SERVER_PIDS=$(pgrep -u "$USER" -f "python.* -m.*${MODULE}" 2>/dev/null || true)
+if [ ! -z "$SERVER_PIDS" ]; then
+    echo "🔎 Encontrado ${SERVICE_NAME} corriendo (PIDs: $SERVER_PIDS)"
+    echo "🔪 Cerrando procesos Server previos..."
+    echo $SERVER_PIDS | xargs kill -TERM 2>/dev/null || true
+    sleep 2
+    
+    # Verificar que se cerraron
+    SERVER_PIDS=$(pgrep -u "$USER" -f "python.* -m.*${MODULE}" 2>/dev/null || true)
+    if [ ! -z "$SERVER_PIDS" ]; then
+        echo "🔪 Terminando procesos Server persistentes..."
+        echo $SERVER_PIDS | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+else
+    echo "✅ No hay procesos Server previos corriendo"
+fi
+
+# 2) Verificar que el puerto esté libre
+if lsof -i :$PORT >/dev/null 2>&1; then
+    echo "⚠️  Puerto $PORT ocupado, intentando liberar..."
+    PORT_PIDS=$(lsof -ti :$PORT 2>/dev/null || true)
+    if [ ! -z "$PORT_PIDS" ]; then
+        echo "🔪 Cerrando procesos en puerto $PORT..."
+        echo $PORT_PIDS | xargs kill -TERM 2>/dev/null || true
+        sleep 2
+        PORT_PIDS=$(lsof -ti :$PORT 2>/dev/null || true)
+        if [ ! -z "$PORT_PIDS" ]; then
+            echo "⚠️  Puerto $PORT aún ocupado por procesos: $PORT_PIDS"
+            echo "❌ No se puede iniciar ${SERVICE_NAME}"
+            exit 1
+        fi
+    fi
+fi
+
+echo "✅ Puerto $PORT liberado"
+
+# 3) Verificar compatibilidad y crear venv
+echo "🔍 Verificando compatibilidad de Python..."
+python3 -c "
 import sys
 version = sys.version_info
 print(f'Python version: {version.major}.{version.minor}.{version.micro}')
@@ -43,85 +80,50 @@ elif version < (3, 8, 10):
 else:
     print('✅ Python version compatible')
 "
-}
 
-# Función para crear venv si no existe
-create_venv() {
-  if [ ! -d "${VENV_DIR}" ]; then
+# Creamos venv si no existe
+if [ ! -d "${VENV_DIR}" ]; then
     echo "📦 Creando entorno virtual en ${VENV_DIR}..."
     python3 -m venv "${VENV_DIR}"
     echo "✅ Entorno virtual creado"
-  else
+else
     echo "✅ Entorno virtual ya existe en ${VENV_DIR}"
-  fi
-}
+fi
 
-# Función para instalar dependencias
-install_deps() {
-  echo "📥 Instalando dependencias en el venv..."
-  source "${VENV_DIR}/bin/activate"
-  
-  # Actualizar pip
-  pip install --upgrade pip
-  
-  # Instalar dependencias si existe requirements.txt
-  if [ -f "requirements.txt" ]; then
+# Instalamos dependencias
+echo "📥 Instalando dependencias en el venv..."
+source "${VENV_DIR}/bin/activate"
+
+# Actualizar pip
+pip install --upgrade pip
+
+# Instalar dependencias si existe requirements.txt
+if [ -f "requirements.txt" ]; then
     pip install -r requirements.txt
-  else
+else
     # Instalar dependencias básicas
     pip install fastapi uvicorn websockets aiohttp python-dotenv
     echo "⚠️  No se encontró requirements.txt, instalando dependencias básicas"
-  fi
-  
-  deactivate
-  echo "✅ Dependencias instaladas"
-}
-
-# Función para activar venv y ejecutar
-run_with_venv() {
-  echo "🚀 Iniciando Server v0.2 en puerto ${PORT} con venv..."
-  
-  # Activar venv
-  source "${VENV_DIR}/bin/activate"
-  
-  # Configurar PYTHONPATH
-  export PYTHONPATH="$(pwd)"
-  echo "PYTHONPATH: $PYTHONPATH"
-  echo "Python: $(which python)"
-  echo "Pip: $(which pip)"
-  
-  # Ejecutar el servidor
-  exec python -m ${MODULE}
-}
-
-echo "🧹 Revisando procesos previos del Server..."
-
-# 1) Cerrar procesos que ejecuten el módulo del server
-if pgrep -u "$USER" -fl "python.*${MODULE}" >/dev/null 2>&1; then
-  echo "🔎 Encontrado ${MODULE} corriendo"
-  PIDS=$(pgrep -u "$USER" -f "python.*${MODULE}")
-  kill_pids "$PIDS"
 fi
 
-# 2) Liberar el puerto si está ocupado
-if lsof -i :${PORT} -sTCP:LISTEN -u "$USER" >/dev/null 2>&1; then
-  echo "🔧 Liberando puerto ${PORT} ocupado"
-  FILTERED_PIDS=""
-  while read -r pid; do
-    if [ -n "$pid" ]; then
-      cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
-      if [[ "$cmd" == *python* ]] && [[ "$cmd" == *"$PROJECT_PATH"* ]]; then
-        FILTERED_PIDS+="$pid "
-      fi
-    fi
-  done < <(lsof -t -i :${PORT} -sTCP:LISTEN -u "$USER")
-  kill_pids "$FILTERED_PIDS"
-fi
+deactivate
+echo "✅ Dependencias instaladas"
 
-# 3) Verificar compatibilidad y crear venv
-check_python_compatibility
-create_venv
-install_deps
+# 4) Configurar entorno y ejecutar
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
-# 4) Ejecutar con venv
-run_with_venv
+echo "🚀 Iniciando ${SERVICE_NAME} en puerto $PORT con venv..."
+echo "📝 Para detener: Ctrl+C"
+echo "─────────────────────────────────────"
+
+# Ejecutar en foreground con venv
+source "${VENV_DIR}/bin/activate"
+python -m $MODULE &
+SERVER_PID=$!
+
+# Esperar y mostrar logs
+echo "👁️  PID ${SERVICE_NAME}: $SERVER_PID"
+echo "─────────────────────────────────────"
+
+# Mantener el script vivo y mostrar logs
+wait $SERVER_PID
