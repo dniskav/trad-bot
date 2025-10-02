@@ -38,20 +38,27 @@ class DomainEventPublisher(IEventPublisher):
             "quantity": str(position.quantity.amount),
             "entry_price": str(position.entry_price.value),
             "leverage": position.leverage,
-            "stop_loss": str(position.stop_loss_price.value) if position.stop_loss_price else None,
-            "take_profit": str(position.take_profit_price.value) if position.take_profit_price else None,
-            "timestamp": datetime.now().isoformat()
+            "stop_loss": (
+                str(position.stop_loss_price.value)
+                if position.stop_loss_price
+                else None
+            ),
+            "take_profit": (
+                str(position.take_profit_price.value)
+                if position.take_profit_price
+                else None
+            ),
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
         await self._broadcast_event(event_data)
         await self._notify_smt(position)
-        log.info(f"📈 Position opened: {position.symbol} {position.side.value} {position.quantity.amount}")
+        log.info(
+            f"📈 Position opened: {position.symbol} {position.side.value} {position.quantity.amount}"
+        )
 
     async def publish_position_closed(
-        self, 
-        position: PositionAggregate, 
-        exit_price: float, 
-        pnl: float
+        self, position: PositionAggregate, exit_price: float, pnl: float
     ) -> None:
         """Publicar evento de posición cerrada"""
         event_data = {
@@ -64,17 +71,15 @@ class DomainEventPublisher(IEventPublisher):
             "exit_price": str(exit_price),
             "pnl": str(pnl),
             "duration_seconds": self._calculate_duration(position),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
         await self._broadcast_event(event_data)
         await self._notify_smt(event_data)
         log.info(f"📉 Position closed: {position.symbol} P&L: {pnl:.4f}")
 
     async def publish_position_updated(
-        self, 
-        position: PositionAggregate, 
-        changes: Dict[str, Any]
+        self, position: PositionAggregate, changes: Dict[str, Any]
     ) -> None:
         """Publicar evento de posición actualizada"""
         event_data = {
@@ -83,16 +88,14 @@ class DomainEventPublisher(IEventPublisher):
             "symbol": position.symbol,
             "changes": changes,
             "current_pnl": str(position.pnl.amount),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
         await self._broadcast_event(event_data)
         log.info(f"🔄 Position updated: {position.symbol} {changes}")
 
     async def publish_order_executed(
-        self, 
-        order: OrderAggregate, 
-        execution_details: Dict[str, Any]
+        self, order: OrderAggregate, execution_details: Dict[str, Any]
     ) -> None:
         """Publicar evento de orden ejecutada"""
         event_data = {
@@ -102,15 +105,21 @@ class DomainEventPublisher(IEventPublisher):
             "side": order.side.value,
             "order_type": order.order_type.value,
             "status": order.status.value,
-            "executed_price": str(order.executed_price.value) if order.executed_price else None,
-            "executed_quantity": str(order.executed_quantity.amount) if order.executed_quantity else None,
+            "executed_price": (
+                str(order.executed_price.value) if order.executed_price else None
+            ),
+            "executed_quantity": (
+                str(order.executed_quantity.amount) if order.executed_quantity else None
+            ),
             "commission": str(order.commission.amount) if order.commission else None,
             "execution_details": execution_details,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
         await self._broadcast_event(event_data)
-        log.info(f"⚡ Order executed: {order.symbol} {order.side.value} {order.order_type.value}")
+        log.info(
+            f"⚡ Order executed: {order.symbol} {order.side.value} {order.order_type.value}"
+        )
 
     async def publish_signal_generated(self, signal) -> None:
         """Publicar evento de señal generada"""
@@ -120,34 +129,30 @@ class DomainEventPublisher(IEventPublisher):
             "confidence": signal.confidence,
             "strategy_name": signal.strategy_name,
             "metadata": signal.metadata,
-            "timestamp": signal.timestamp
+            "timestamp": signal.timestamp,
         }
-        
+
         await self._broadcast_event(event_data)
-        log.info(f"📊 Signal generated: {signal.signal_type.value} {signal.strategy_name} ({signal.confidence:.2f})")
+        log.info(
+            f"📊 Signal generated: {signal.signal_type.value} {signal.strategy_name} ({signal.confidence:.2f})"
+        )
 
     async def publish_strategy_event(
-        self, 
-        strategy_id: str, 
-        event_type: str, 
-        details: Dict[str, Any]
+        self, strategy_id: str, event_type: str, details: Dict[str, Any]
     ) -> None:
         """Publicar evento de estrategia"""
         event_data = {
             "event_type": event_type,
             "strategy_id": strategy_id,
             "details": details,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
-        
+
         await self._broadcast_event(event_data)
         log.info(f"🤖 Strategy event: {strategy_id} {event_type}")
 
     async def publish_stringency_event(
-        self, 
-        strategy_id: str, 
-        event_type: str, 
-        details: Dict[str, Any]
+        self, strategy_id: str, event_type: str, details: Dict[str, Any]
     ) -> None:
         """Publicar evento de estrategia (mantiene compatibilidad con typo)"""
         await self.publish_strategy_event(strategy_id, event_type, details)
@@ -158,7 +163,7 @@ class DomainEventPublisher(IEventPublisher):
         """Broadcast evento a todos los suscriptores"""
         # Agregar a historial
         self._add_to_history(event_data)
-        
+
         # Notificar suscriptores
         for subscriber in self._subscribers:
             try:
@@ -176,12 +181,12 @@ class DomainEventPublisher(IEventPublisher):
             critical_events = [
                 EventType.POSITION_OPENED.value,
                 EventType.POSITION_CLOSED.value,
-                EventType.ORDER_EXECUTED.value
+                EventType.ORDER_EXECUTED.value,
             ]
-            
+
             if event_data.get("event_type") in critical_events:
                 await self._send_to_server(event_data)
-                
+
         except Exception as e:
             log.error(f"Error notifying server: {e}")
 
@@ -189,13 +194,13 @@ class DomainEventPublisher(IEventPublisher):
         """Enviar evento al servidor principal (formato Binance-compatible)"""
         try:
             import aiohttp
-            
+
             # Solo enviar si tenemos información suficiente
             if event_data.get("event_type") == EventType.POSITION_OPENED.value:
                 await self._send_position_init_msg(event_data)
             elif event_data.get("event_type") == EventType.POSITION_CLOSED.value:
                 await self._send_position_balance_msg(event_data)
-                
+
         except Exception as e:
             log.error(f"Failed to send position event to server: {e}")
 
@@ -203,7 +208,7 @@ class DomainEventPublisher(IEventPublisher):
         """Enviar mensaje de position init al servidor"""
         try:
             import aiohttp
-            
+
             # Construir mensaje compatible con Binance Streaming
             stm_msg = {
                 "stream": "accountPos",
@@ -216,13 +221,13 @@ class DomainEventPublisher(IEventPublisher):
                     "up": "0.0",
                     "mt": "ISOLATED",
                     "iw": "0.0",
-                    "ps": "BOTH"
-                }
+                    "ps": "BOTH",
+                },
             }
-            
+
             # Enviar al servidor si tenemos WebSocket connection disponible
             await self._broadcast_to_websocket(stm_msg)
-            
+
         except Exception as e:
             log.error(f"Position init message error: {e}")
 
@@ -230,7 +235,7 @@ class DomainEventPublisher(IEventPublisher):
         """Enviar mensaje de account position al servidor"""
         try:
             import aiohttp
-            
+
             stm_msg = {
                 "stream": "accountPos",
                 "data": {
@@ -242,12 +247,12 @@ class DomainEventPublisher(IEventPublisher):
                     "up": event_data.get("pnl", "0"),
                     "mt": "ISOLATED",
                     "iw": "0.0",
-                    "ps": "BOTH"
-                }
+                    "ps": "BOTH",
+                },
             }
-            
+
             await self._broadcast_to_websocket(stm_msg)
-            
+
         except Exception as e:
             log.error(f"Position balance message error: {e}")
 
@@ -261,7 +266,10 @@ class DomainEventPublisher(IEventPublisher):
         """Calcular duración de posición en segundos"""
         try:
             from datetime import datetime
-            start_time = datetime.fromisoformat(str(position.created_at).replace('Z', '+00:00'))
+
+            start_time = datetime.fromisoformat(
+                str(position.created_at).replace("Z", "+00:00")
+            )
             end_time = datetime.now()
             return (end_time - start_time).total_seconds()
         except:
@@ -270,10 +278,10 @@ class DomainEventPublisher(IEventPublisher):
     def _add_to_history(self, event_data: Dict[str, Any]) -> None:
         """Agregar evento al historial"""
         self._event_history.append(event_data)
-        
+
         # Mantener historial limitado
         if len(self._event_history) > self._max_history_size:
-            self._event_history = self._event_history[-self._max_history_size:]
+            self._event_history = self._event_history[-self._max_history_size :]
 
     def get_event_history(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Obtener historial de eventos"""
@@ -292,31 +300,36 @@ if __name__ == "__main__":
     # Test del publisher
     async def test_publisher():
         publisher = DomainEventPublisher()
-        
+
         print("📡 Testing DomainEventPublisher...")
-        
+
         # Test position opened event
-        from ...domain.models.position import PositionAggregate, OrderSide, Quantity, Price
-        
+        from ...domain.models.position import (
+            PositionAggregate,
+            OrderSide,
+            Quantity,
+            Price,
+        )
+
         test_position = PositionAggregate(
             position_id="test_event_123",
             symbol="DOGEUSDT",
             side=OrderSide.BUY,
             quantity=Quantity.from_float(100.0),
             entry_price=Price.from_float(0.085, "DOGEUSDT"),
-            leverage=5
+            leverage=5,
         )
-        
+
         await publisher.publish_position_opened(test_position)
-        
+
         # Test position closed event
         await publisher.publish_position_closed(test_position, 0.090, 5.0)
-        
+
         # Ver estadísticas
         stats = publisher.get_event_stats()
         print(f"✅ Event stats: {stats}")
-        
+
         print("🎯 Publisher test complete!")
-    
+
     # Comentado para evitar imports circulares
     # asyncio.run(test_publisher())

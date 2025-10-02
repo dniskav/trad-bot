@@ -697,12 +697,32 @@ git checkout -b feature/trading-domain-extraction
 - ✅ Services Resolution - DI Container resolviendo dependencias sin errores
 - ✅ Real Production Testing - Servicios operativos con nueva arquitectura
 
-#### **🚀 FASE 4: STRATEGY DOMAIN INICIAL (COMPLETADA 70%)**
+#### **🚀 FASE 4: STRATEGY DOMAIN CORE (COMPLETADA 90%)**
 
 - ✅ Strategy Domain Models - StrategyConfig, StrategyInstance, TradingSignal
 - ✅ StrategyApplicationService - Gestión completa de estrategias
 - ✅ IndicatorService - Integración con sistema legacy de indicadores
 - ✅ FileStrategyRepository - Persistencia con migración desde legacy configs
+
+#### **🚀 NUEVOS SERVICIOS IMPLEMENTADOS (90%)**
+
+**SignalEvaluatorService**:
+- ✅ Evaluación independiente de señales con confianza calculada
+- ✅ Soporte para diferentes operadores y lógica AND/OR
+- ✅ Cálculo automático de fuerza de señal basada en indicadores
+- ✅ Caché de evaluación y validación de configuraciones
+
+**StrategyManager**:
+- ✅ Gestión completa del lifecycle de estrategias (start/stop/restart)
+- ✅ Ejecución automática con loops de timing configurables
+- ✅ Monitoreo de salud con recuperación automática
+- ✅ Manejo avanzado de errores y estados de estrategias
+
+**DI Container Integration**:
+- ✅ Todos los servicios Strategy Domain conectados al container
+- ✅ Mock implementations para RiskManager y PerformanceTracker
+- ✅ EventPublisher centralizado para comunicación inter-servicios
+- ✅ Resolución automática de dependencias funcionando
 
 #### **📈 SERVICIOS EN PRODUCCIÓN ACTIVOS**
 
@@ -722,14 +742,16 @@ git checkout -b feature/trading-domain-extraction
 - [x] ✅ COMPLETADO - Implementar `AccountValidator` y `TransactionHandler`
 - [x] ✅ COMPLETADO - Domain models funcionando: AccountAggregate, AssetBalance
 
-#### **🤖 FASE 4: STRATEGY DOMAIN REFACTORING (70%)**
+#### **🤖 FASE 4: STRATEGY DOMAIN REFACTORING (90%)**
 
 - [x] ✅ COMPLETADO - Dividir `StrategyEngine` en servicios específicos - Domain models creados
 - [x] ✅ COMPLETADO - Crear `IndicatorService` independiente - Integración con sistema legacy
 - [x] ✅ COMPLETADO - Analizar StrategyEngine y crear StrategyApplicationService
 - [x] ✅ COMPLETADO - StrategyRepository para persistencia con archivos JSON
-- [ ] Separar `SignalEvaluator`
-- [ ] Crear `StrategyManager` para gestión de lifecycle
+- [x] ✅ COMPLETADO - Separar `SignalEvaluator` como servicio independiente
+- [x] ✅ COMPLETADO - Crear `StrategyManager` para gestión de lifecycle completo
+- [x] ✅ COMPLETADO - Conectar todos los Strategy Services al DI Container
+- [ ] Router Integration - Conectar routers existentes con nuevos Application Services
 
 #### **📡 FASE 5: COMMUNICATION REFACTORING (25%)**
 
@@ -740,16 +762,16 @@ git checkout -b feature/trading-domain-extraction
 
 ### 🎯 **MÉTRICAS DE PROGRESO**
 
-| Componente                  | Progreso | Estado         | Servicios Activos |
-| --------------------------- | -------- | -------------- | ----------------- |
-| **Trading Domain**          | 95%      | ✅ FUNCIONAL   | Position/Order Mgmt |
-| **Account Domain**          | 85%      | ✅ FUNCIONAL   | Balance/Commission |
-| **Strategy Domain**         | 70%      | 🚧 EN PROGRESO | Indicators/Strategies |
-| **Infrastructure Adapters** | 95%      | ✅ FUNCIONAL   | Data/External APIs |
-| **Application Services**    | 100%     | ✅ FUNCIONAL   | 3 Domains Complete |
-| **Domain Models**           | 98%      | ✅ FUNCIONAL   | Clean Architecture |
-| **DI Container**            | 100%     | ✅ FUNCIONAL   | Dependency Injection |
-| **Integration Testing**     | 100%     | ✅ PASANDO     | Production Live |
+| Componente                  | Progreso | Estado         | Servicios Activos     |
+| --------------------------- | -------- | -------------- | --------------------- |
+| **Trading Domain**          | 95%      | ✅ FUNCIONAL   | Position/Order Mgmt   |
+| **Account Domain**          | 85%      | ✅ FUNCIONAL   | Balance/Commission    |
+| **Strategy Domain**         | 90%      | 🚧 EN PROGRESO | Indicators/Strategies |
+| **Infrastructure Adapters** | 95%      | ✅ FUNCIONAL   | Data/External APIs    |
+| **Application Services**    | 100%     | ✅ FUNCIONAL   | 3 Domains Complete    |
+| **Domain Models**           | 98%      | ✅ FUNCIONAL   | Clean Architecture    |
+| **DI Container**            | 100%     | ✅ FUNCIONAL   | Dependency Injection  |
+| **Integration Testing**     | 100%     | ✅ PASANDO     | Production Live       |
 
 ### 🔥 **BENEFICIOS CONSEGUIDOS**
 

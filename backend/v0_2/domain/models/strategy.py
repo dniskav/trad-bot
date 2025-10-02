@@ -88,10 +88,10 @@ class IndicatorConfig:
             fast = self.params.get("fast_period", 12)
             slow = self.params.get("slow_period", 26)
             signal = self.params.get("signal_period", 9)
-            
+
             if not all(isinstance(p, int) and p > 0 for p in [fast, slow, signal]):
                 errors.append("MACD periods must be positive integers")
-            
+
             if fast >= slow:
                 errors.append("MACD fast period must be smaller than slow period")
 
@@ -109,9 +109,7 @@ class SignalCondition:
 
     def validate_condition(self) -> bool:
         """Validar condición de señal"""
-        valid_operators = (
-            ">", "<", "==", ">=", "<=", "crosses_above", "crosses_below"
-        )
+        valid_operators = (">", "<", "==", ">=", "<=", "crosses_above", "crosses_below")
         return self.operator in valid_operators
 
 
@@ -218,7 +216,9 @@ class StrategyConfig:
         # Validar indicadores
         for indicator in self.indicators:
             indicator_errors = indicator.validate_config()
-            errors.extend([f"Indicator {indicator.name}: {e}" for e in indicator_errors])
+            errors.extend(
+                [f"Indicator {indicator.name}: {e}" for e in indicator_errors]
+            )
 
         # Validar señales
         for signal in self.signals:
@@ -282,7 +282,7 @@ class StrategyInstance:
     last_signal_at: Optional[datetime] = None
     signals_generated: int = 0
     signals_successful: int = 0
-    
+
     # Métricas de performance
     total_pnl: Money = field(default_factory=lambda: Money.zero("USDT"))
     win_rate: float = 0.0
@@ -291,24 +291,20 @@ class StrategyInstance:
 
     # Datos de mercado cache
     market_data: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Estados internos
     indicators: Dict[str, Any] = field(default_factory=dict)
     error_count: int = 0
     last_error: Optional[str] = None
 
-    def update_performance_metrics(
-        self, 
-        pnl_change: Money, 
-        success: bool
-    ) -> None:
+    def update_performance_metrics(self, pnl_change: Money, success: bool) -> None:
         """Actualizar métricas de performance"""
-        
+
         self.total_pnl = self.total_pnl + pnl_change
-        
+
         if success:
             self.signals_successful += 1
-        
+
         # Calcular win Rate
         if self.signals_generated > 0:
             self.win_rate = self.signals_successful / self.signals_generated
@@ -319,10 +315,12 @@ class StrategyInstance:
             if current_drawdown > abs(self.max_drawdown.amount):
                 self.max_drawdown = Money(Decimal(str(current_drawdown)), "USDT")
 
-    def set_status(self, new_status: StrategyStatus, error: Optional[str] = None) -> None:
+    def set_status(
+        self, new_status: StrategyStatus, error: Optional[str] = None
+    ) -> None:
         """Cambiar estado de la estrategia"""
         self.status = new_status
-        
+
         if error:
             self.error_count += 1
             self.last_error = error
@@ -338,23 +336,26 @@ class StrategyInstance:
             "strategy_id": self.strategy_id,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
-            "last_signal_at": self.last_signal_at.isoformat() if self.last_signal_at else None,
+            "last_signal_at": (
+                self.last_signal_at.isoformat() if self.last_signal_at else None
+            ),
             "signals_generated": self.signals_generated,
             "signals_successful": self.signals_successful,
             "win_rate": self.win_rate,
             "total_pnl": str(self.total_pnl.amount),
             "max_drawdown": str(self.max_drawdown.amount),
             "error_count": self.error_count,
-            "last_error": self.last_error
+            "last_error": self.last_error,
         }
 
     def is_healthy(self) -> bool:
         """Verificar si la estrategia está saludable"""
         return (
-            self.status == StrategyStatus.ACTIVE and
-            self.error_count < 5 and  # Menos de 5 errores
-            self.last_signal_at and 
-            (datetime.now() - self.last_signal_at).total_seconds() < 3600  # Señal en la última hora
+            self.status == StrategyStatus.ACTIVE
+            and self.error_count < 5  # Menos de 5 errores
+            and self.last_signal_at
+            and (datetime.now() - self.last_signal_at).total_seconds()
+            < 3600  # Señal en la última hora
         )
 
 

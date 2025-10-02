@@ -27,7 +27,7 @@ class BinanceMarketDataProvider(IMarketDataProvider):
         self._current_price_cache: Optional[float] = None
         self._current_ticker_cache: Optional[Dict[str, Any]] = None
         self._price_update_callbacks: List[callable] = []
-        
+
         # SSL context para websockets
         self.ssl_context = ssl.create_default_context()
         self.ssl_context.check_hostname = False
@@ -40,50 +40,48 @@ class BinanceMarketDataProvider(IMarketDataProvider):
             # Si ya tenemos el precio en cache para este símbolo, usarlo
             if symbol_upper == self.symbol.upper() and self._current_price_cache:
                 return self._current_price_cache
-            
+
             # Hacer request a REST API de Binance
             url = f"{self.base_url}/api/v3/ticker/price?symbol={symbol_upper}"
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=5) as response:
                     if response.status == 200:
                         data = await response.json()
                         price = float(data.get("price", 0))
-                        
+
                         # Cache para símbolo principal
                         if symbol_upper == self.symbol.upper():
                             self._current_price_cache = price
-                            
+
                         return price
                     else:
                         raise Exception(f"Binance API error: {response.status}")
-                        
+
         except Exception as e:
             # Si hay error, retornar precio por defecto basado en símbolo
-            default_prices = {
-                "DOGEUSDT": 0.085,
-                "BTCUSDT": 45000.0,
-                "ETHUSDT": 2500.0
-            }
+            default_prices = {"DOGEUSDT": 0.085, "BTCUSDT": 45000.0, "ETHUSDT": 2500.0}
             return default_prices.get(symbol.upper(), 1.0)
 
-    async def get_candlestick_data(self, symbol: str, interval: str = "1m", limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_candlestick_data(
+        self, symbol: str, interval: str = "1m", limit: int = 100
+    ) -> List[Dict[str, Any]]:
         """Obtener datos de velas para análisis técnico"""
         try:
             symbol_upper = symbol.upper()
             url = f"{self.base_url}/api/v3/klines"
-            
+
             params = {
                 "symbol": symbol_upper,
                 "interval": interval,
-                "limit": min(limit, 1000)  # Binance máximo es 1000
+                "limit": min(limit, 1000),  # Binance máximo es 1000
             }
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, params=params, timeout=10) as response:
                     if response.status == 200:
                         data = await response.json()
-                        
+
                         # Convertir formato de Binance a formato estándar
                         candles = []
                         for kline in data:
@@ -101,14 +99,14 @@ class BinanceMarketDataProvider(IMarketDataProvider):
                                 "number_of_trades": int(kline[8]),
                                 "taker_buy_base_asset_volume": float(kline[9]),
                                 "taker_buy_quote_asset_volume": float(kline[10]),
-                                "ignore": bool(kline[11])
+                                "ignore": bool(kline[11]),
                             }
                             candles.append(candle)
-                        
+
                         return candles
                     else:
                         raise Exception(f"Binance klines API error: {response.status}")
-                        
+
         except Exception as e:
             # En caso de error, retornar datos mock
             return self._generate_mock_candles(symbol, interval, limit)
@@ -117,18 +115,18 @@ class BinanceMarketDataProvider(IMarketDataProvider):
         """Obtener datos de ticker (precio bid/ask/volumen)"""
         try:
             symbol_upper = symbol.upper()
-            
+
             # Cache ticker si es el símbolo principal
             if symbol_upper == self.symbol.upper() and self._current_ticker_cache:
                 return self._current_ticker_cache
-                            
+
             url = f"{self.base_url}/api/v3/ticker/bookTicker?symbol={symbol_upper}"
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=5) as response:
                     if response.status == 200:
                         ticker_data = await response.json()
-                        
+
                         # Enriquecer datos con información adicional
                         enriched_data = {
                             "symbol": ticker_data.get("symbol"),
@@ -136,17 +134,17 @@ class BinanceMarketDataProvider(IMarketDataProvider):
                             "bid_qty": float(ticker_data.get("bidQty", 0)),
                             "ask_price": float(ticker_data.get("askPrice", 0)),
                             "ask_qty": float(ticker_data.get("askQty", 0)),
-                            "timestamp": datetime.now().isoformat()
+                            "timestamp": datetime.now().isoformat(),
                         }
-                        
+
                         # Cache para símbolo principal
                         if symbol_upper == self.symbol.upper():
                             self._current_ticker_cache = enriched_data
-                            
+
                         return enriched_data
                     else:
                         raise Exception(f"Binance ticker API error: {response.status}")
-                        
+
         except Exception as e:
             return self._generate_mock_ticker(symbol)
 
@@ -157,28 +155,28 @@ class BinanceMarketDataProvider(IMarketDataProvider):
     async def start_websocket_subscription(self) -> None:
         """Iniciar suscripción WebSocket para actualizaciones en tiempo real"""
         symbol_upper = self.symbol.upper()
-        
+
         # Suscribir para actualizaciones de ticker
         ticker_ws_url = f"{self.ws_base_url}/{self.symbol}@bookTicker"
-        
+
         while True:
             try:
                 async with websockets.connect(
-                    ticker_ws_url, 
-                    ping_interval=20, 
-                    ssl=self.ssl_context
+                    ticker_ws_url, ping_interval=20, ssl=self.ssl_context
                 ) as websocket:
-                    print(f"🔌 BinanceMarketDataProvider WebSocket connected: {symbol_upper}")
-                    
+                    print(
+                        f"🔌 BinanceMarketDataProvider WebSocket connected: {symbol_upper}"
+                    )
+
                     async for message in websocket:
                         try:
                             data = json.loads(message)
-                            
+
                             # Actualizar precio en cache
                             new_price = float(data.get("a", 0))  # ask price
                             if new_price > 0:
                                 self._current_price_cache = new_price
-                                
+
                                 # Actualizar ticker cache
                                 self._current_ticker_cache = {
                                     "symbol": symbol_upper,
@@ -186,9 +184,9 @@ class BinanceMarketDataProvider(IMarketDataProvider):
                                     "bid_qty": float(data.get("B", 0)),
                                     "ask_price": float(data.get("a", 0)),
                                     "ask_qty": float(data.get("A", 0)),
-                                    "timestamp": datetime.now().isoformat()
+                                    "timestamp": datetime.now().isoformat(),
                                 }
-                                
+
                                 # Notificar callbacks
                                 for callback in self._price_update_callbacks:
                                     try:
@@ -197,31 +195,38 @@ class BinanceMarketDataProvider(IMarketDataProvider):
                                         else:
                                             callback(new_price, symbol_upper)
                                     except Exception as callback_error:
-                                        print(f"Warning: Callback error: {callback_error}")
-                                        
+                                        print(
+                                            f"Warning: Callback error: {callback_error}"
+                                        )
+
                         except json.JSONDecodeError:
                             continue
                         except Exception as ws_error:
                             print(f"WebSocket message processing error: {ws_error}")
                             continue
-                            
+
             except Exception as connection_error:
-                print(f"WebSocket connection error: {connection_error}. Retrying in 5s...")
+                print(
+                    f"WebSocket connection error: {connection_error}. Retrying in 5s..."
+                )
                 await asyncio.sleep(5)
 
-    def _generate_mock_candles(self, symbol: str, interval: str, limit: int) -> List[Dict[str, Any]]:
+    def _generate_mock_candles(
+        self, symbol: str, interval: str, limit: int
+    ) -> List[Dict[str, Any]]:
         """Generar datos mock de velas para casos de error"""
         import random
+
         base_price = 0.085 if "DOGE" in symbol.upper() else 1.0
-        
+
         candles = []
         current_time = datetime.now().timestamp() * 1000
-        
+
         for i in range(limit):
             # Crear variación para mock data
             price_variation = random.uniform(-0.02, 0.02)
             candle_price = abs(base_price + (base_price * price_variation))
-            
+
             candle = {
                 "symbol": symbol.upper(),
                 "interval": interval,
@@ -236,23 +241,23 @@ class BinanceMarketDataProvider(IMarketDataProvider):
                 "number_of_trades": random.randint(100, 1000),
                 "taker_buy_base_asset_volume": random.uniform(40000, 400000),
                 "taker_buy_quote_asset_volume": random.uniform(30000, 300000),
-                "ignore": False
+                "ignore": False,
             }
             candles.append(candle)
-            
+
         return candles
 
     def _generate_mock_ticker(self, symbol: str) -> Dict[str, Any]:
         """Generar datos mock de ticker para casos de error"""
         base_price = 0.085 if "DOGE" in symbol.upper() else 1.0
-        
+
         return {
             "symbol": symbol.upper(),
             "bid_price": base_price * 0.999,
             "bid_qty": 1000.0,
             "ask_price": base_price * 1.001,
             "ask_qty": 1000.0,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
 
@@ -260,32 +265,34 @@ if __name__ == "__main__":
     # Test del provider
     async def test_provider():
         provider = BinanceMarketDataProvider()
-        
+
         print("📊 Testing BinanceMarketDataProvider...")
-        
+
         # Test get current price
         try:
             price = await provider.get_current_price("DOGEUSDT")
             print(f"✅ Current DOGE price: ${price}")
         except Exception as e:
             print(f"❌ Error getting current price: {e}")
-        
+
         # Test get ticker data
         try:
             ticker = await provider.get_ticker_data("DOGEUSDT")
             print(f"✅ Ticker data: {ticker}")
         except Exception as e:
             print(f"❌ Error getting ticker: {e}")
-        
+
         # Test get candlesticks
         try:
             candles = await provider.get_candlestick_data("DOGEUSDT", "1m", 5)
             print(f"✅ Candlestick data: {len(candles)} candles")
             if candles:
-                print(f"   Latest candle: Open={candles[-1]['open']}, Close={candles[-1]['close']}")
+                print(
+                    f"   Latest candle: Open={candles[-1]['open']}, Close={candles[-1]['close']}"
+                )
         except Exception as e:
             print(f"❌ Error getting candlesticks: {e}")
-        
+
         print("🎯 Provider test complete!")
-    
+
     asyncio.run(test_provider())

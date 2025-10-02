@@ -100,7 +100,9 @@ def configure_trading_domain(container: DIContainer) -> None:
 
     from ..adapters.domain.commission_calculator import StandardCommissionCalculator
 
-    container.register_singleton(IAccountCommissionCalculator, StandardCommissionCalculator)
+    container.register_singleton(
+        IAccountCommissionCalculator, StandardCommissionCalculator
+    )
 
     from ..adapters.domain.account_validator import StandardAccountValidator
 
@@ -142,16 +144,61 @@ def configure_trading_domain(container: DIContainer) -> None:
 def configure_strategy_domain(container: DIContainer) -> None:
     """Configurar dependencias del dominio de estrategias"""
 
-    # === STRATEGY SERVICES ===
-    # from ..domain.services.strategy_engine import StrategyEngine
-    # container.register_transient(IStrategyEngine, StrategyEngine)
+    # === STRATEGY REPOSITORY ===
+    from ...domain.ports.strategy_ports import IStrategyRepository
+    from ..adapters.data.file_strategy_repository import FileStrategyRepository
+    container.register_singleton(IStrategyRepository, FileStrategyRepository)
 
-    # from ..domain.services.indicator_service import TechnicalIndicatorService
-    # container.register_singleton(IIndicatorService, TechnicalIndicatorService)
+    # === STRATEGY ENGINE (Mock Implementation) ===
+    from ...domain.ports.strategy_ports import IStrategyEngine
+    from ..adapters.domain.strategy_manager import StrategyManager
+    container.register_transient(IStrategyEngine, StrategyManager)
+
+    # === INDICATOR SERVICE ===
+    from ...domain.ports.strategy_ports import IIndicatorService
+    from ..adapters.domain.indicator_service import IndicatorService
+    container.register_transient(IIndicatorService, IndicatorService)
+
+    # === SIGNAL EVALUATOR SERVICE ===
+    from ...domain.ports.strategy_ports import ISignalEvaluator
+    from ..adapters.domain.signal_evaluator_service import SignalEvaluatorService
+    container.register_transient(ISignalEvaluator, SignalEvaluatorService)
+
+    # === RISK MANAGER (Mock Implementation) ===
+    from ...domain.ports.strategy_ports import IRiskManager
+    class MockRiskManager:
+        async def apply_risk_management(self, signal, balance):
+            return signal  # Mock: no risk management
+    container.register_transient(IRiskManager, MockRiskManager)
+
+    # === PERFORMANCE TRACKER (Mock Implementation) ===
+    from ...domain.ports.strategy_ports import IStrategyPerformanceTracker
+    class MockPerformanceTracker:
+        async def record_signal_generated(self, strategy_id, signal):
+            pass  # Mock: no tracking
+        async def get_strategy_performance(self, strategy_id):
+            return {}
+    container.register_transient(IStrategyPerformanceTracker, MockPerformanceTracker)
+
+    # === STRATEGY MANAGER ===
+    container.register_singleton("StrategyManager", StrategyManager)
 
     # === APPLICATION LAYER ===
-    # from ..application.services.strategy_application_service import StrategyApplicationService
-    # container.register_transient(StrategyApplicationService, StrategyApplicationService)
+    from ...domain.ports.communication_ports import IEventPublisher
+    from ..application.services.strategy_service import StrategyApplicationService
+    container.register_singleton(
+        StrategyApplicationService,
+        StrategyApplicationService,
+        [
+            IStrategyEngine,
+            IIndicatorService,
+            ISignalEvaluator,
+            IStrategyRepository,
+            IRiskManager,
+            IStrategyPerformanceTracker,
+            IEventPublisher,
+        ],
+    )
 
     print("🤖 Strategy Domain configured")
 
@@ -177,16 +224,20 @@ def configure_account_domain(container: DIContainer) -> None:
 def configure_communication_domain(container: DIContainer) -> None:
     """Configurar dependencias del dominio de comunicación"""
 
-    # === COMMUNICATION SERVICES ===
-    # from ..infrastructure.adapters.communication.event_publisher import DomainEventPublisher
-    # container.register_singleton(IEventPublisher, DomainEventPublisher)
-
-    # from ..infrastructure.adapters.communication.websocket_manager import WebSocketManagerAdapter
-    # container.register_singleton(IWebSocketManager, WebSocketManagerAdapter)
-
-    # === EXTERNAL SERVICES ===
-    # from ..infrastructure.adapters.external.stm_notification_service import STMNotificationService
-    # container.register_transient(IExternalNotificationService, STMNotificationService)
+    # === EVENT PUBLISHER (Mock Implementation) ===
+    from ...domain.ports.communication_ports import IEventPublisher
+    
+    class MockEventPublisher:
+        async def publish_account_event(self, account_id, event_type, data=None):
+            print(f"Event: {event_type} for account {account_id}: {data}")
+        
+        async def publish_strategy_event(self, strategy_id, event_type, data=None):
+            print(f"Strategy Event: {event_type} for strategy {strategy_id}: {data}")
+            
+        async def publish_trading_event(self, event_type, data=None):
+            print(f"Trading Event: {event_type}: {data}")
+    
+    container.register_singleton(IEventPublisher, MockEventPublisher)
 
     print("📡 Communication Domain configured")
 
