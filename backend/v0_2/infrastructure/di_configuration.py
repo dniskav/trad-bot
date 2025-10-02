@@ -59,22 +59,75 @@ def configure_trading_domain(container: DIContainer) -> None:
     # Una vez que tengamos los adapters, se registrarán así:
 
     # === REPOSITORY LAYER ===
-    from ..infrastructure.adapters.data.file_position_repository import FilePositionRepository
+    from ..infrastructure.adapters.data.file_position_repository import (
+        FilePositionRepository,
+    )
+
     container.register_singleton(IPositionRepository, FilePositionRepository)
 
     from ..infrastructure.adapters.data.file_order_repository import FileOrderRepository
+
     container.register_singleton(IOrderRepository, FileOrderRepository)
 
     # === INFRASTRUCTURE LAYER ===
-    from ..infrastructure.adapters.external.binance_market_data_provider import BinanceMarketDataProvider
+    from ..infrastructure.adapters.external.binance_market_data_provider import (
+        BinanceMarketDataProvider,
+    )
+
     container.register_singleton(IMarketDataProvider, BinanceMarketDataProvider)
 
-    from ..infrastructure.adapters.trading.stm_trading_executor import STMTradingExecutor
+    from ..infrastructure.adapters.trading.stm_trading_executor import (
+        STMTradingExecutor,
+    )
+
     container.register_transient(ITradingExecutor, STMTradingExecutor)
 
     # === COMMUNICATION LAYER ===
-    from ..infrastructure.adapters.communication.domain_event_publisher import DomainEventPublisher
+    from ..infrastructure.adapters.communication.domain_event_publisher import (
+        DomainEventPublisher,
+    )
+
     container.register_singleton(IEventPublisher, DomainEventPublisher)
+
+    # === ACCOUNT DOMAIN ADAPTERS ===
+    from ..adapters.data.file_account_repository import FileAccountRepository
+
+    container.register_singleton(IAccountRepository, FileAccountRepository)
+
+    from ..adapters.domain.balance_calculator import SimpleBalanceCalculator
+
+    container.register_transient(IBalanceCalculator, SimpleBalanceCalculator)
+
+    from ..adapters.domain.commission_calculator import StandardCommissionCalculator
+
+    container.register_singleton(IAccountCommissionCalculator, StandardCommissionCalculator)
+
+    from ..adapters.domain.account_validator import StandardAccountValidator
+
+    container.register_transient(IAccountValidator, StandardAccountValidator)
+
+    from ..adapters.domain.transaction_handler import StandardTransactionHandler
+
+    container.register_transient(IAccountTransactionHandler, StandardTransactionHandler)
+
+    from ..adapters.domain.market_data_pricer import BinanceMarketDataPricer
+
+    container.register_singleton(IMarketDataPricer, BinanceMarketDataPricer)
+
+    # === APPLICATION SERVICES ===
+    container.register_singleton(
+        AccountApplicationService,
+        AccountApplicationService,
+        [
+            IAccountRepository,
+            IBalanceCalculator,
+            IAccountCommissionCalculator,
+            IAccountValidator,
+            IAccountTransactionHandler,
+            IMarketDataPricer,
+            IEventPublisher,
+        ],
+    )
 
     # === DOMAIN SERVICES ===
     # from ..domain.services.commission_calculator import BinanceCommissionCalculator

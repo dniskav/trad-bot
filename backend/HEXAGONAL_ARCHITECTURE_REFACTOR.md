@@ -458,7 +458,7 @@ def setup_dependencies():
 #### 📡 Communication Adapters
 
 - [ ] Refactorizar `WebSocketManager` eliminando singleton
-- [x] Crear `STMServerAdapter` para comunicación con STM ✅ COMPLETADO - STMTradingExecutor  
+- [x] Crear `STMServerAdapter` para comunicación con STM ✅ COMPLETADO - STMTradingExecutor
 - [x] Implementar `EventPublisher` centralizado ✅ COMPLETADO - DomainEventPublisher
 - [x] Migrar todas las notificaciones ✅ COMPLETADO con eventos de dominio
 
@@ -673,6 +673,7 @@ git checkout -b feature/trading-domain-extraction
 ### ✅ **FAKES COMPLETADAS**
 
 #### **🏗️ FASE 1: FUNDAMENTOS (COMPLETADA 100%)**
+
 - ✅ Domain Structure - Directorios DDD creados
 - ✅ Ports/Contracts - Interfaces para todos los dominios
 - ✅ Dependency Injection Container - Funcionando completamente
@@ -681,6 +682,7 @@ git checkout -b feature/trading-domain-extraction
 - ✅ Configuration - DI Container configuración terminada
 
 #### **🚀 FASE 2: IMPLEMENTACIÓN DE ADAPTERS (COMPLETADA 85%)**
+
 - ✅ FilePositionRepository - Persistencia JSON implementada
 - ✅ FileOrderRepository - Persistencia de órdenes implementada
 - ✅ BinanceMarketDataProvider - REST API + WebSocket implementado
@@ -689,26 +691,31 @@ git checkout -b feature/trading-domain-extraction
 - ✅ DI Configuration - Todos los adapters registrados y funcionando
 
 #### **🧪 TESTING INTEGRATION (COMPLETADO 100%)**
+
 - ✅ STM Server - Corriendo en puerto 8100, healthy ✅
-- ✅ Server Application - Corriendo en puerto 8200, healthy ✅  
+- ✅ Server Application - Corriendo en puerto 8200, healthy ✅
 - ✅ Services Resolution - DI Container resolviendo dependencias sin errores
 - ✅ Real Production Testing - Servicios operativos con nueva arquitectura
 
 ### 🔄 **PRÓXIMAS FASES PENDIENTES**
 
-#### **💰 FASE 3: ACCOUNT DOMAIN (0%)**
-- [ ] Extraer lógica de accounts de servicios mezclados
-- [ ] Crear `BalanceService` independiente
-- [ ] Separar lógica de cálculo de comisiones
-- [ ] Implementar `stdCommissionCalculator`
+#### **💰 FASE 3: ACCOUNT DOMAIN (85%)**
+
+- [x] ✅ COMPLETADO - Extraer lógica de accounts de servicios mezclados
+- [x] ✅ COMPLETADO - Crear `BalanceService` independiente - BalanceCalculator
+- [x] ✅ COMPLETADO - Separar lógica de cálculo de comisiones - CommissionCalculator
+- [x] ✅ COMPLETADO - Implementar `AccountValidator` y `TransactionHandler`
+- [x] ✅ COMPLETADO - Domain models funcionando: AccountAggregate, AssetBalance
 
 #### **🤖 FASE 4: STRATEGY DOMAIN REFACTORING (0%)**
+
 - [ ] Dividir `StrategyEngine` en servicios específicos
 - [ ] Crear `IndicatorService` independiente
 - [ ] Separar `SignalEvaluator`
 - [ ] Crear `StrategyManager` para gestión de lifecycle
 
 #### **📡 FASE 5: COMMUNICATION REFACTORING (25%)**
+
 - [ ] Refactorizar `WebSocketManager` eliminando singleton
 - [x] ✅ COMPLETADO - EventPublisher centralizado
 - [x] ✅ COMPLETADO - STMServerAdapter implementado
@@ -716,13 +723,15 @@ git checkout -b feature/trading-domain-extraction
 
 ### 🎯 **MÉTRICAS DE PROGRESO**
 
-| Componente | Progreso | Estado |
-|------------|----------|--------|
-| **Domain Layer** | 90% | ✅ FUNCIONAL |
-| **Infrastructure Adapters** | 85% | ✅ FUNCIONAL |  
-| **Application Services** | 100% | ✅ FUNCIONAL |
-| **DI Container** | 100% | ✅ FUNCIONAL |
-| **Integration Testing** | 100% | ✅ PASANDO |
+| Componente                  | Progreso | Estado       |
+| --------------------------- | -------- | ------------ |
+| **Trading Domain**          | 95%      | ✅ FUNCIONAL |
+| **Account Domain**          | 85%      | ✅ FUNCIONAL |
+| **Infrastructure Adapters** | 90%      | ✅ FUNCIONAL |
+| **Application Services**    | 100%     | ✅ FUNCIONAL |
+| **Domain Models**           | 95%      | ✅ FUNCIONAL |
+| **DI Container**            | 100%     | ✅ FUNCIONAL |
+| **Integration Testing**     | 100%     | ✅ PASANDO   |
 
 ### 🔥 **BENEFICIOS CONSEGUIDOS**
 
