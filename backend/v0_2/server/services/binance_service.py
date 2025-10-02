@@ -2,7 +2,6 @@ import asyncio
 import json
 import ssl
 import websockets
-import aiohttp
 from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
 from .websocket_manager import WebSocketManager
@@ -17,7 +16,6 @@ class BinanceService:
     def __init__(self, ws_manager: WebSocketManager) -> None:
         self.ws_manager = ws_manager
         self.binance_log_enabled = False
-        self.strategy_service = None  # Will be injected by strategy service
 
     async def bookticker_loop(self) -> None:
         """Connect to Binance bookTicker WebSocket and broadcast data"""
@@ -103,15 +101,6 @@ class BinanceService:
                             }
                             await self.ws_manager.broadcast(payload)
 
-                            # Forward kline data to strategy service for real-time updates
-                            if (
-                                hasattr(self, "strategy_service")
-                                and self.strategy_service
-                            ):
-                                self.strategy_service.handle_websocket_kline_data(
-                                    payload
-                                )
-
                             if self.binance_log_enabled and payload["kline"]["closed"]:
                                 log.info(
                                     f"🕯️  (server) kline {interval} close o={k.get('o')} c={k.get('c')}"
@@ -123,35 +112,6 @@ class BinanceService:
             except Exception as e:
                 log.warning(f"⚠️  (server) Binance kline desconectado: {e}. retry 2s")
                 await asyncio.sleep(2)
-
-    async def get_historical_klines(
-        self, interval: str = "1m", limit: int = 1000
-    ) -> list:
-        """Fetch historical klines from Binance REST API"""
-        url = "https://api.binance.com/api/v3/klines"
-        params = {"symbol": SYMBOL.upper(), "interval": interval, "limit": limit}
-
-        # Create SSL context that doesn't verify certificates (same as WebSocket)
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-
-        try:
-            connector = aiohttp.TCPConnector(ssl=ssl_context)
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(url, params=params) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        log.info(
-                            f"📊 Fetched {len(data)} historical klines for {SYMBOL.upper()}"
-                        )
-                        return data
-                    else:
-                        log.error(f"Failed to fetch klines: {response.status}")
-                        return []
-        except Exception as e:
-            log.error(f"Error fetching historical klines: {e}")
-            return []
 
     def set_logging_enabled(self, enabled: bool) -> None:
         """Enable or disable Binance logging"""

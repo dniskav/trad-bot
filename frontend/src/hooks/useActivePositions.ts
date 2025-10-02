@@ -76,33 +76,26 @@ export const useActivePositions = () => {
         return
       }
       if (t === SocketMsg.POSITION_CHANGE && (!msg.positionId || !msg.fields)) {
-        // ⚠️ FIX: Ya NO usar HTTP para position_change genérico
-        console.log('🔔 Generic position_change event ignored (no fields/id) - updates via WebSocket')
+        // Algunos cambios no incluyen diff ni id; usar refetch como fallback
+        console.log('🔁 Refetch due to generic position_change (no fields/id)')
+        if (debounceRef.current) window.clearTimeout(debounceRef.current)
+        debounceRef.current = window.setTimeout(() => {
+          fetchActivePositions()
+        }, 250)
         return
       }
-      
-      if (t === SocketMsg.POSITION_OPENED) {
-        // ⚠️ FIX: Actualizar lista localmente SIN HTTP cuando se abre una posición
-        console.log('🔔 POSITION_OPENED event:', msg.positionId, '- Adding to local state (NO HTTP)')
-        if (msg.position && msg.positionId) {
-          setPositions((prev) => [...prev, msg.position])
-        }
-        return
-      }
-      
-      if (t === SocketMsg.POSITION_CLOSED) {
-        // ⚠️ FIX: Remover de lista localmente SIN HTTP cuando se cierra una posición
-        console.log('🔔 POSITION_CLOSED event:', msg.positionId, '- Removing from local state (NO HTTP)')
-        if (msg.positionId) {
-          setPositions((prev) => prev.filter(p => p.positionId !== msg.positionId))
-        }
-        return
+      if (t === SocketMsg.POSITION_OPENED || t === SocketMsg.POSITION_CLOSED) {
+        console.log('🔁 Refetch positions due to lifecycle event', t)
+        if (debounceRef.current) window.clearTimeout(debounceRef.current)
+        debounceRef.current = window.setTimeout(() => {
+          fetchActivePositions()
+        }, 250)
       }
     }
 
     eventBus.on(EventType.WS_SERVER_POSITIONS, handler)
     return () => eventBus.off(EventType.WS_SERVER_POSITIONS, handler)
-  }, []) // ⚠️ FIJO: Sin dependencias para evitar ciclo infinito
+  }, [fetchActivePositions])
 
   // Subscribe to Binance bookTicker to update PnL in real time on the client
   useEffect(() => {
@@ -138,14 +131,14 @@ export const useActivePositions = () => {
   // Cargar posiciones al montar el componente
   useEffect(() => {
     fetchActivePositions()
-  }, []) // ⚠️ FIJO: Solo una vez al montar
+  }, [fetchActivePositions])
 
   // WebSocket functionality removed - using only API data
 
   // Función para actualizar posiciones manualmente
   const refreshPositions = useCallback(() => {
     fetchActivePositions()
-  }, []) // ⚠️ FIJO: Sin dependencias
+  }, [fetchActivePositions])
 
   return {
     positions,

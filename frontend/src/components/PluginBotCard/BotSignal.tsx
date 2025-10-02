@@ -7,11 +7,6 @@ interface BotSignalProps {
     action?: 'BUY' | 'SELL' | 'HOLD' | string
     reasoning?: string
     confidence?: number
-    metadata?: {
-      conditions_met?: number
-      total_conditions?: number
-      [key: string]: any
-    }
   }
 }
 
@@ -37,13 +32,6 @@ const BotSignal: React.FC<BotSignalProps> = ({ signal }) => {
       </div>
       <div className="signal-confidence">
         Confianza: {Number((signal.confidence || 0) * 100).toFixed(1)}%
-        {signal.metadata?.total_conditions !== undefined && (
-          <span>
-            {`  (Condiciones: ${signal.metadata?.conditions_met ?? 0}/${
-              signal.metadata?.total_conditions
-            })`}
-          </span>
-        )}
       </div>
     </div>
   )

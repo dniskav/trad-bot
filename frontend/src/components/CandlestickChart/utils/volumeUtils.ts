@@ -77,22 +77,18 @@ export const validateVolumeData = (volumes: number[], timestamps: number[]): boo
 /**
  * Filtra datos de volumen para el chart con colores basados en dirección del precio
  */
-export const filterVolumeDataForChart = (
-  volumes: number[],
-  timestamps: number[],
-  candlesData?: any[]
-) => {
+export const filterVolumeDataForChart = (volumes: number[], timestamps: number[], candlesData?: any[]) => {
   return volumes
     .map((value, index) => {
       // Determinar color basado en dirección del precio (si tenemos datos de velas)
       let color = '#9b59b6' // Color por defecto (morado)
-
+      
       if (candlesData && candlesData[index]) {
         const candle = candlesData[index]
         // Verde si cerró arriba (bullish), rojo si cerró abajo (bearish)
         color = candle.close >= candle.open ? '#26a69a' : '#ef5350'
       }
-
+      
       return {
         time: (timestamps[index] / 1000) as any,
         value,

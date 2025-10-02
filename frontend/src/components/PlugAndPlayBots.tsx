@@ -109,21 +109,13 @@ const PlugAndPlayBots: React.FC<PlugAndPlayBotsProps> = ({ className = '', curre
     const wsHandler = (msg: any) => {
       if (!msg) return
       const t = msg.type
-      if (t === 'strategy_loaded' || t === 'strategy_unloaded') {
-        // Solo refetch cuando se carga/descarga una estrategia
+      if (
+        t === 'strategy_loaded' ||
+        t === 'strategy_unloaded' ||
+        t === 'strategy_started' ||
+        t === 'strategy_stopped'
+      ) {
         fetchAndSet()
-      } else if (t === 'strategy_started' || t === 'strategy_stopped') {
-        // Actualizar estado activo sin refetch completo
-        setBots((prev) => {
-          const next = { ...prev }
-          if (next[msg.name]) {
-            ;(next as any)[msg.name] = {
-              ...next[msg.name],
-              is_active: t === 'strategy_started'
-            }
-          }
-          return next
-        })
       } else if (t === 'strategy_signal' && msg.name && msg.signal) {
         // Actualizar la señal sin refetch
         setBots((prev) => {

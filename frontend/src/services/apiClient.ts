@@ -13,15 +13,12 @@ const apiClient = axios.create({
 // Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
-    // ⚠️ FIX: Removed automatic cache-busting to reduce timestamp spam
-    // Only add timestamp when explicitly requested (useCache: false)
-    if (config.method === 'get' && config.params?.useCache === false) {
+    // Add timestamp to prevent caching
+    if (config.method === 'get') {
       config.params = {
         ...config.params,
         _t: Date.now()
       }
-      // Remove the useCache flag after processing
-      delete config.params.useCache
     }
 
     console.log(`🌐 API Request: ${config.method?.toUpperCase()} ${config.url}`)

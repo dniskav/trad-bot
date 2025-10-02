@@ -46,8 +46,8 @@
   "risk_management": {
     "stop_loss_pct": 0.02,
     "take_profit_pct": 0.03,
-    "max_positions": 999,
-    "position_size": 2.0,
+    "max_positions": 3,
+    "position_size": 0.5,
     "max_daily_loss": 0.05,
     "enabled": true
   },

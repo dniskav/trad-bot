@@ -4,7 +4,6 @@ import asyncio
 from backend.shared.logger import get_logger
 from ..services.stm_service import STMService
 from ..services.websocket_manager import WebSocketManager
-from ..services.queue_service import queue_service
 from ..models.position import OpenPositionRequest, ClosePositionRequest, OrderResponse
 from fastapi import Body
 import json
@@ -79,64 +78,6 @@ async def _orchestrate_sl_tp_async(position_id: str, req: OpenPositionRequest) -
         log.error(f"Traceback: {traceback.format_exc()}")
 
 
-async def _handle_open_position_task(data: dict) -> dict:
-    """Handle position opening task from queue"""
-    try:
-        request_data = data["request"]
-        client_order_id = data["client_order_id"]
-
-        # Reconstruct OpenPositionRequest
-        request = OpenPositionRequest(**request_data)
-        request.clientOrderId = client_order_id
-
-        log.info(
-            f"🔄 Processing queued position opening: {request.symbol} {request.side} {request.quantity}"
-        )
-
-        # Quick health check
-        healthy = await stm_service.check_health()
-        if not healthy:
-            raise Exception("STM is not available")
-
-        # Open position with timeout
-        open_resp = await asyncio.wait_for(
-            stm_service.open_position(request), timeout=10.0
-        )
-
-        if not open_resp.success or not open_resp.positionId:
-            raise Exception(f"Failed to open position: {open_resp.message}")
-
-        position_id = open_resp.positionId
-
-        # Process SL/TP synchronously to ensure completion
-        if request.stopLoss or request.takeProfit:
-            await _orchestrate_sl_tp_async(position_id, request)
-
-        # Notify WebSocket clients
-        try:
-            await ws_manager.broadcast(
-                {
-                    "type": "position_opened",
-                    "positionId": position_id,
-                    "ts": int(datetime.now(timezone.utc).timestamp() * 1000),
-                }
-            )
-        except Exception:
-            pass
-
-        log.info(f"✅ Queued position opening completed: {position_id}")
-
-        return {
-            "success": True,
-            "positionId": position_id,
-            "message": "Position opened successfully",
-        }
-
-    except Exception as e:
-        log.error(f"❌ Queued position opening failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
 @router.post("/open", response_model=OrderResponse)
 async def open_position(request: OpenPositionRequest):
     """Open a new position and, if provided, orchestrate SL/TP creation (Binance-like)."""
@@ -169,43 +110,69 @@ async def open_position(request: OpenPositionRequest):
     if not request.clientOrderId:
         request.clientOrderId = f"srv-{uuid.uuid4().hex[:16]}"
 
+    # Quick health check (max 1s total)
+    healthy = False
     try:
-        # Enqueue the position opening task
-        task_id = await queue_service.enqueue(
-            "open_position",
-            {"request": request.dict(), "client_order_id": request.clientOrderId},
-        )
+        healthy = await asyncio.wait_for(stm_service.check_health(), timeout=1.0)
+    except asyncio.TimeoutError:
+        healthy = False
 
-        log.info(f"📥 Position opening task enqueued: {task_id}")
-
+    if not healthy:
+        # STM not available - respond immediately and process in background
+        asyncio.create_task(_orchestrate_open_async(request))
         return OrderResponse(
             success=True,
             orderId=request.clientOrderId,
-            message=f"Position opening queued (task: {task_id}). You will be notified via WebSocket when completed.",
+            message="Accepted: opening in background; you will be notified via WS",
         )
 
-    except Exception as e:
-        log.error(f"❌ Failed to enqueue position opening: {e}")
+    # STM is healthy - try to open synchronously with short timeout
+    try:
+        # Use asyncio.wait_for to limit the timeout to 3 seconds
+        open_resp = await asyncio.wait_for(
+            stm_service.open_position(request), timeout=3.0
+        )
+
+        if not open_resp.success or not open_resp.positionId:
+            # STM responded but failed - fallback to background
+            asyncio.create_task(_orchestrate_open_async(request))
+            return OrderResponse(
+                success=True,
+                orderId=request.clientOrderId,
+                message="Accepted: STM failed, retrying in background; you will be notified via WS",
+            )
+
+        # Success - respond immediately to client, then process SL/TP in background
+        position_id = open_resp.positionId
+
+        # Start background task for SL/TP
+        log.info(f"Starting background SL/TP task for position {position_id}")
+        task = asyncio.create_task(_orchestrate_sl_tp_async(position_id, request))
+        log.info(f"Background task created: {task}")
+
+        # Notificar a clientes que se abrió una posición
+        try:
+            await ws_manager.broadcast(
+                {
+                    "type": "position_opened",
+                    "positionId": position_id,
+                    "ts": int(datetime.now(timezone.utc).timestamp() * 1000),
+                }
+            )
+        except Exception:
+            pass
+
+        # Return immediate response
+        return open_resp
+
+    except asyncio.TimeoutError:
+        # STM is slow - respond immediately and process in background
+        asyncio.create_task(_orchestrate_open_async(request))
         return OrderResponse(
-            success=False,
+            success=True,
             orderId=request.clientOrderId,
-            message=f"Failed to queue position opening: {str(e)}",
+            message="Accepted: STM slow, opening in background; you will be notified via WS",
         )
-
-
-@router.get("/queue/stats")
-async def get_queue_stats():
-    """Get queue statistics"""
-    return await queue_service.get_queue_stats()
-
-
-@router.get("/queue/task/{task_id}")
-async def get_task_status(task_id: str):
-    """Get the status of a specific task"""
-    task = await queue_service.get_task_status(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
 
 
 @router.post("/close", response_model=OrderResponse)

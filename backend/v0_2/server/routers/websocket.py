@@ -82,30 +82,8 @@ async def notify_websocket_clients(request: Request):
         # { type: 'position_change', positionId, fields: { ... }, ts }
         # { type: 'position_opened' | 'position_closed', positionId, ts }
         # { type: 'account_balance_update', data, ts }
-        
-        # Handle STM position_change format and convert to frontend format
         if data.get("type") == "position_change":
-            # STM sends: { type: 'position_change', change_type: 'updated', position: {...} }
-            # Frontend expects: { type: 'position_change', positionId: '...', fields: {...} }
-            if "change_type" in data and "position" in data:
-                position = data["position"]
-                position_id = position.get("positionId")
-                if position_id:
-                    # Convert STM format to frontend format
-                    normalized_data = {
-                        "type": "position_change",
-                        "positionId": position_id,
-                        "fields": position,
-                        "ts": data.get("ts")
-                    }
-                    data = _sanitize_position_change(normalized_data)
-                else:
-                    # Skip if no positionId
-                    return {"status": "skipped", "reason": "no_position_id"}
-            else:
-                # Already in frontend format
-                data = _sanitize_position_change(data)
-        
+            data = _sanitize_position_change(data)
         await ws_manager.broadcast(data)
 
         # Handle different event types
