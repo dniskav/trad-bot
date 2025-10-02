@@ -832,11 +832,10 @@ const CandlestickChart: React.FC<CandlestickChartProps> = ({
       })
 
       const volumeSeries = volumeChart.addSeries(HistogramSeries, {
-        color: '#9b59b6',
         title: 'Volume'
       })
 
-      const chartData = filterVolumeDataForChart(volumes, timestamps)
+      const chartData = filterVolumeDataForChart(volumes, timestamps, candleData)
       volumeSeries.setData(chartData)
 
       const handleResize = () => {
