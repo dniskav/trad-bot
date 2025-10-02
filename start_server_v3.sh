@@ -1,15 +1,19 @@
 #!/bin/bash
 
-# Script para iniciar Server v0.2
+# Script para iniciar Server v0.3
+# Puerto<｜tool▁sep｜>content
+#!/bin/bash
+
+# Script para iniciar Server v0.3
 # Puerto: 8200
-# Módulo: backend.v0_2.server.app
+# Módulo: backend.v0_3.server.app
 
 set -e
 
 # Configuración
 PORT=8200
-MODULE="backend.server-package.app"
-SERVICE_NAME="Server"
+MODULE="backend.v0_3.server.app"
+SERVICE_NAME="Server v0.3"
 
 # Función de limpieza al salir (Ctrl+C)
 cleanup() {
@@ -58,8 +62,8 @@ if lsof -i :$PORT >/dev/null 2>&1; then
             echo "⚠️  Puerto $PORT aún ocupado por procesos: $PORT_PIDS"
             echo "❌ No se puede iniciar ${SERVICE_NAME}"
             exit 1
-            fi
         fi
+    fi
 fi
 
 echo "✅ Puerto $PORT liberado"
@@ -67,7 +71,7 @@ echo "✅ Puerto $PORT liberado"
 # 3) Configurar entorno  
 export PYTHONPATH="/Users/daniel/Desktop/projects/trading_bot/backend:${PYTHONPATH}"
 
-echo "🚀 Iniciando ${SERVICE_NAME} v0.2 en puerto $PORT..."
+echo "🚀 Iniciando ${SERVICE_NAME} en puerto $PORT..."
 echo "📝 Para detener: Ctrl+C"
 echo "─────────────────────────────────────"
 

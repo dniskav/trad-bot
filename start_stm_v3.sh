@@ -1,23 +1,23 @@
 #!/bin/bash
 
-# Script para iniciar Server v0.2
-# Puerto: 8200
-# Módulo: backend.v0_2.server.app
+# Script para iniciar STM v0.3 (Synthetic Trading Manager)
+# Puerto: 8100
+# Módulo: backend.v0_3.stm.app
 
 set -e
 
 # Configuración
-PORT=8200
-MODULE="backend.server-package.app"
-SERVICE_NAME="Server"
+PORT=8100
+MODULE="backend.v0_3.stm.app"
+SERVICE_NAME="STM v0.3"
 
 # Función de limpieza al salir (Ctrl+C)
 cleanup() {
     echo
     echo "🛑 Deteniendo ${SERVICE_NAME}..."
-    if [ ! -z "$SERVER_PID" ]; then
-        kill -TERM $SERVER_PID 2>/dev/null || true
-        wait $SERVER_PID 2>/dev/null || true
+    if [ ! -z "$STM_PID" ]; then
+        kill -TERM $STM_PID 2>/dev/null || true
+        wait $STM_PID 2>/dev/null || true
     fi
     exit 0
 }
@@ -26,23 +26,23 @@ trap cleanup SIGINT SIGTERM
 
 echo "🧹 Revisando procesos previos del ${SERVICE_NAME}..."
 
-# 1) Solo cerrar procesos que ejecuten el módulo Server específico
-SERVER_PIDS=$(pgrep -u "$USER" -f "python.* -m.*${MODULE}" 2>/dev/null || true)
-if [ ! -z "$SERVER_PIDS" ]; then
-    echo "🔎 Encontrado ${SERVICE_NAME} corriendo (PIDs: $SERVER_PIDS)"
-    echo "🔪 Cerrando procesos Server previos..."
-    echo $SERVER_PIDS | xargs kill -TERM 2>/dev/null || true
+# 1) Solo cerrar procesos que ejecuten el módulo STM específico
+STM_PIDS=$(pgrep -u "$USER" -f "python.* -m.*${MODULE}" 2>/dev/null || true)
+if [ ! -z "$STM_PIDS" ]; then
+    echo "🔎 Encontrado ${SERVICE_NAME} corriendo (PIDs: $STM_PIDS)"
+    echo "🔪 Cerrando procesos STM previos..."
+    echo $STM_PIDS | xargs kill -TERM 2>/dev/null || true
     sleep 2
     
     # Verificar que se cerraron
-    SERVER_PIDS=$(pgrep -u "$USER" -f "python.* -m.*${MODULE}" 2>/dev/null || true)
-    if [ ! -z "$SERVER_PIDS" ]; then
-        echo "🔪 Terminando procesos Server persistentes..."
-        echo $SERVER_PIDS | xargs kill -9 2>/dev/null || true
+    STM_PIDS=$(pgrep -u "$USER" -f "python.* -m.*${MODULE}" 2>/dev/null || true)
+    if [ ! -z "$STM_PIDS" ]; then
+        echo "🔪 Terminando procesos STM persistentes..."
+        echo $STM_PIDS | xargs kill -9 2>/dev/null || true
         sleep 1
     fi
 else
-    echo "✅ No hay procesos Server previos corriendo"
+    echo "✅ No hay procesos STM previos corriendo"
 fi
 
 # 2) Verificar que el puerto esté libre
@@ -58,8 +58,8 @@ if lsof -i :$PORT >/dev/null 2>&1; then
             echo "⚠️  Puerto $PORT aún ocupado por procesos: $PORT_PIDS"
             echo "❌ No se puede iniciar ${SERVICE_NAME}"
             exit 1
-            fi
         fi
+    fi
 fi
 
 echo "✅ Puerto $PORT liberado"
@@ -67,17 +67,17 @@ echo "✅ Puerto $PORT liberado"
 # 3) Configurar entorno  
 export PYTHONPATH="/Users/daniel/Desktop/projects/trading_bot/backend:${PYTHONPATH}"
 
-echo "🚀 Iniciando ${SERVICE_NAME} v0.2 en puerto $PORT..."
+echo "🚀 Iniciando ${SERVICE_NAME} en puerto $PORT..."
 echo "📝 Para detener: Ctrl+C"
 echo "─────────────────────────────────────"
 
 # 4) Ejecutar en foreground (no background)
 python -m $MODULE &
-SERVER_PID=$!
+STM_PID=$!
 
 # 5) Esperar y mostrar logs
-echo "👁️  PID ${SERVICE_NAME}: $SERVER_PID"
+echo "👁️  PID ${SERVICE_NAME}: $STM_PID"
 echo "─────────────────────────────────────"
 
 # Mantener el script vivo y mostrar logs
-wait $SERVER_PID
+wait $STM_PID
