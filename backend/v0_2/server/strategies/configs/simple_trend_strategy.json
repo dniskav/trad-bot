@@ -1,0 +1,61 @@
+{
+  "name": "simple_trend_strategy",
+  "description": "Simple trend-based strategy with price momentum analysis (based on SimpleBot)",
+  "version": "2.0.0",
+  "author": "Strategy Engine",
+  "symbol": "DOGEUSDT",
+  "interval": "1m",
+  "enabled": true,
+  "indicators": [
+    {
+      "name": "price_trend",
+      "type": "trend",
+      "params": {
+        "lookback_periods": 3,
+        "min_price_change": 0.001
+      },
+      "enabled": true
+    }
+  ],
+  "signals": [
+    {
+      "signal_type": "BUY",
+      "conditions": [
+        {
+          "indicator": "price_trend",
+          "operator": ">",
+          "value": 0.001
+        }
+      ],
+      "confidence": 0.6,
+      "enabled": true
+    },
+    {
+      "signal_type": "SELL",
+      "conditions": [
+        {
+          "indicator": "price_trend",
+          "operator": "<",
+          "value": -0.001
+        }
+      ],
+      "confidence": 0.6,
+      "enabled": true
+    }
+  ],
+  "risk_management": {
+    "stop_loss_pct": 0.02,
+    "take_profit_pct": 0.03,
+    "max_positions": 3,
+    "position_size": 0.5,
+    "max_daily_loss": 0.05,
+    "enabled": true
+  },
+  "custom_params": {
+    "lookback_periods": 3,
+    "min_price_change": 0.001,
+    "binance_fee_rate": 0.001,
+    "strategy_type": "trend_following",
+    "description": "Analyzes price momentum over 3 periods to detect trends. Generates BUY signals on upward trends (>0.1%) and SELL signals on downward trends (<-0.1%). Based on the original SimpleBot logic."
+  }
+}

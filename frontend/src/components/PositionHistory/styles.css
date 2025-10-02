@@ -1,0 +1,100 @@
+.position-history {
+  padding: 12px 0;
+}
+.statistics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.stat-card {
+  background: var(--binance-dark-2, #111);
+  border: 1px solid var(--binance-gray-2, #333);
+  border-radius: 8px;
+  padding: 10px;
+}
+.stat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.stat-title {
+  font-weight: 700;
+}
+.stat-content {
+  display: grid;
+  gap: 6px;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.history-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, auto));
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+.filter-group {
+  display: grid;
+  gap: 6px;
+}
+.history-list {
+  display: grid;
+  gap: 6px;
+}
+.history-item {
+  display: none; /* legacy block hidden, replaced by .history-row */
+}
+.history-header {
+  display: none;
+}
+.history-bot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.position-type.long {
+  color: #26a69a;
+  font-weight: 700;
+}
+.position-type.short {
+  color: #ef5350;
+  font-weight: 700;
+}
+.status-indicator.open {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+.history-details {
+  display: none;
+}
+.price-info,
+.pnl-info,
+.time-info {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: 6px;
+  align-items: center;
+}
+.fees-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.no-history {
+  opacity: 0.8;
+  text-align: center;
+  padding: 16px;
+  border: 1px dashed var(--binance-gray-2, #333);
+  border-radius: 8px;
+}
+.synthetic-flag,
+.plugin-flag {
+  margin-left: 6px;
+}

@@ -1,0 +1,78 @@
+{
+  "name": "macd_strategy",
+  "description": "MACD Strategy with signal line crossover",
+  "version": "1.0.0",
+  "author": "Strategy Engine",
+  "symbol": "DOGEUSDT",
+  "interval": "1m",
+  "enabled": true,
+  "indicators": [
+    {
+      "name": "macd",
+      "type": "macd",
+      "params": {
+        "fast_period": 12,
+        "slow_period": 26,
+        "signal_period": 9
+      },
+      "enabled": true
+    },
+    {
+      "name": "rsi_14",
+      "type": "rsi",
+      "params": {
+        "period": 14
+      },
+      "enabled": true
+    }
+  ],
+  "signals": [
+    {
+      "signal_type": "BUY",
+      "conditions": [
+        {
+          "indicator": "macd",
+          "operator": ">",
+          "value": 0
+        },
+        {
+          "indicator": "rsi_14",
+          "operator": "<",
+          "value": 80
+        }
+      ],
+      "confidence": 0.6,
+      "enabled": true
+    },
+    {
+      "signal_type": "SELL",
+      "conditions": [
+        {
+          "indicator": "macd",
+          "operator": "<",
+          "value": 0
+        },
+        {
+          "indicator": "rsi_14",
+          "operator": ">",
+          "value": 20
+        }
+      ],
+      "confidence": 0.6,
+      "enabled": true
+    }
+  ],
+  "risk_management": {
+    "stop_loss_pct": 0.02,
+    "take_profit_pct": 0.04,
+    "max_positions": 2,
+    "position_size": 0.4,
+    "max_daily_loss": 0.04,
+    "enabled": true
+  },
+  "custom_params": {
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9
+  }
+}

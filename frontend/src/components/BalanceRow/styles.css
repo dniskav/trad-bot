@@ -1,0 +1,37 @@
+.balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.balance-label {
+  color: #ccc;
+  font-weight: normal;
+}
+
+.balance-value {
+  font-weight: bold;
+  text-align: right;
+}
+
+.balance-value.current {
+  font-size: 0.9rem;
+}
+
+.balance-value.pnl {
+  font-size: 0.9rem;
+}
+
+.balance-value.change {
+  font-size: 0.8rem;
+}
+
+.balance-value.status {
+  font-weight: bold;
+}
+
+.balance-value.doge-rate {
+  color: #9c27b0;
+  font-weight: 600;
+}

@@ -1,0 +1,99 @@
+/* One-line compact history row */
+.history-row {
+  display: grid;
+  grid-template-columns: 80px auto auto auto auto auto 1fr;
+  column-gap: clamp(4px, 1.2vw, 2rem);
+  row-gap: 0;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid var(--binance-gray-2, #333);
+  border-radius: 6px;
+  background: #0c0c0c;
+  font-size: 11px;
+  line-height: 1.15;
+}
+.history-row .row-col {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+.history-row .bot {
+  width: 80px;
+  min-width: 80px;
+}
+.history-row .prices {
+  min-width: auto;
+}
+.history-row .status {
+  min-width: auto;
+}
+.history-row .reason {
+  min-width: 120px;
+}
+.history-row .pnl {
+  min-width: auto;
+}
+.history-row .side {
+  min-width: auto;
+}
+.history-row .dates {
+  min-width: 0;
+}
+.history-row .row-col .value,
+.history-row .row-col .bot-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-row .label {
+  opacity: 0.7;
+}
+.history-row .value {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.history-row .sep {
+  opacity: 0.4;
+}
+.history-row .bot .bot-name {
+  font-weight: 600;
+  font-size: 12px;
+}
+.history-row .bot .mode-flag {
+  opacity: 0.85;
+}
+
+/* Fine-tune column widths to reduce empty space */
+.history-row .prices {
+  min-width: 160px;
+}
+.history-row .pnl {
+  min-width: 150px;
+  justify-content: flex-start;
+}
+.history-row .status {
+  min-width: 80px;
+  justify-content: flex-start;
+}
+.history-row .dates {
+  min-width: 200px;
+}
+
+/* Status text colors */
+.history-row .status .value.status-open {
+  color: #ffffff;
+}
+.history-row .status .value.status-closed {
+  color: #bdbdbd;
+}
+
+/* Backgrounds by status */
+.history-row.open {
+  background: #0c0c0c;
+}
+.history-row.tp {
+  background: linear-gradient(0deg, rgba(0, 255, 136, 0.1), rgba(0, 255, 136, 0.1)), #0c0c0c;
+}
+.history-row.sl {
+  background: linear-gradient(0deg, rgba(255, 68, 68, 0.1), rgba(255, 68, 68, 0.1)), #0c0c0c;
+}
