@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import asyncio
 from backend.shared.logger import get_logger
 from ..services.stm_service import STMService
@@ -14,6 +14,122 @@ router = APIRouter(prefix="/positions", tags=["positions"])
 log = get_logger("server.positions")
 stm_service = STMService()
 ws_manager = WebSocketManager()
+
+# Función helper para obtener el servicio de Trading apropiado
+async def get_trading_service():
+    """Obtener servicio de Trading (hexagonal o legacy como fallback)"""
+    
+    # Intentar usar integración hexagonal si está disponible
+    try:
+        from ..trading_service_integration import get_positions_service as hexagonal_service
+        
+        service = await hexagonal_service()
+        
+        # Verificar si es el servicio hexagonal
+        if hasattr(service, "trading_service"):
+            log.info("Using Trading Hexagonal Service")
+            return service
+        else:
+            log.info("Using Trading Legacy Service (via adapter)")
+            return service
+            
+    except Exception as e:
+        log.warning(f"Hexagonal trading service not available, using legacy: {e}")
+        # Fallback a servicio legacy
+        return STMService()
+
+# Estado de los endpoints para logging
+trading_endpoint_status = {"service_type": "unknown", "last_check": "never"}
+
+
+@router.get("/hexagonal/open/{symbol}")
+async def open_position_hexagonal(
+    symbol: str,
+    side: str = "BUY",
+    quantity: float = 100.0,
+    trading_service = Depends(get_trading_service)
+):
+    """Abrir posición usando arquitectura hexagonal"""
+    
+    try:
+        # Actualizar estado del endpoint
+        service_name = type(trading_service).__name__
+        trading_endpoint_status["service_type"] = service_name
+        trading_endpoint_status["last_check"] = "now"
+        
+        log.info(f"Trading service used: {service_name}")
+        
+        # Preparar datos de request
+        req_data = {
+            "symbol": symbol,
+            "side": side,
+            "quantity": quantity,
+            "orderType": "MARKET",
+            "clientOrderId": str(uuid.uuid4())
+        }
+        
+        # Call method - hexagonal service has trading_service attribute
+        if hasattr(trading_service, "trading_service"):
+            result = await trading_service.open_position(req_data)
+        else:
+            # Legacy service - convertir a formato esperado
+            request_obj = OpenPositionRequest(**req_data)
+            result = await trading_service.open_position(request_obj)
+        
+        if result.get("success"):
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "error", "message": result.get("message", "Unknown error")}
+            
+    except Exception as e:
+        log.error(f"Error opening position: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hexagonal/list")
+async def list_positions_hexagonal(
+    status: Optional[str] = None,
+    trading_service = Depends(get_trading_service)
+):
+    """Listar posiciones usando arquitectura hexagonal"""
+    
+    try:
+        # Actualizar estado del endpoint
+        service_name = type(trading_service).__name__
+        log.info(f"Trading service used: {service_name}")
+        
+        # Call method - hexagonal service has trading_service attribute
+        if hasattr(trading_service, "trading_service"):
+            result = await trading_service.get_positions(status=status)
+        else:
+            # Legacy service
+            result = await trading_service.get_positions(status=status)
+        
+        if result.get("success"):
+            return {"status": "success", "data": result}
+        else:
+            return {"status": "success", "data": {"positions": [], "total": 0}}
+            
+    except Exception as e:
+        log.error(f"Error listing positions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/status")
+async def get_trading_status():
+    """Obtener estado del servicio de trading"""
+    
+    try:
+        return {
+            "endpoint_status": trading_endpoint_status,
+            "integration_types": ["hexagonal", "legacy"],
+            "fallback_available": True,
+            "timestamp": "now"
+        }
+        
+    except Exception as e:
+        log.error(f"Error getting trading status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 async def _orchestrate_open_async(req: OpenPositionRequest) -> None:
