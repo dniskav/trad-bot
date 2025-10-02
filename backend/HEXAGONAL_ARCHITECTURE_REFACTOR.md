@@ -697,6 +697,13 @@ git checkout -b feature/trading-domain-extraction
 - ✅ Services Resolution - DI Container resolviendo dependencias sin errores
 - ✅ Real Production Testing - Servicios operativos con nueva arquitectura
 
+#### **🚀 FASE 4: STRATEGY DOMAIN INICIAL (COMPLETADA 70%)**
+
+- ✅ Strategy Domain Models - StrategyConfig, StrategyInstance, TradingSignal
+- ✅ StrategyApplicationService - Gestión completa de estrategias
+- ✅ IndicatorService - Integración con sistema legacy de indicadores
+- ✅ FileStrategyRepository - Persistencia con migración desde legacy configs
+
 ### 🔄 **PRÓXIMAS FASES PENDIENTES**
 
 #### **💰 FASE 3: ACCOUNT DOMAIN (85%)**
@@ -707,10 +714,12 @@ git checkout -b feature/trading-domain-extraction
 - [x] ✅ COMPLETADO - Implementar `AccountValidator` y `TransactionHandler`
 - [x] ✅ COMPLETADO - Domain models funcionando: AccountAggregate, AssetBalance
 
-#### **🤖 FASE 4: STRATEGY DOMAIN REFACTORING (0%)**
+#### **🤖 FASE 4: STRATEGY DOMAIN REFACTORING (70%)**
 
-- [ ] Dividir `StrategyEngine` en servicios específicos
-- [ ] Crear `IndicatorService` independiente
+- [x] ✅ COMPLETADO - Dividir `StrategyEngine` en servicios específicos - Domain models creados
+- [x] ✅ COMPLETADO - Crear `IndicatorService` independiente - Integración con sistema legacy
+- [x] ✅ COMPLETADO - Analizar StrategyEngine y crear StrategyApplicationService  
+- [x] ✅ COMPLETADO - StrategyRepository para persistencia con archivos JSON
 - [ ] Separar `SignalEvaluator`
 - [ ] Crear `StrategyManager` para gestión de lifecycle
 
@@ -727,9 +736,10 @@ git checkout -b feature/trading-domain-extraction
 | --------------------------- | -------- | ------------ |
 | **Trading Domain**          | 95%      | ✅ FUNCIONAL |
 | **Account Domain**          | 85%      | ✅ FUNCIONAL |
-| **Infrastructure Adapters** | 90%      | ✅ FUNCIONAL |
+| **Strategy Domain**         | 70%      | 🚧 EN PROGRESO |
+| **Infrastructure Adapters** | 95%      | ✅ FUNCIONAL |
 | **Application Services**    | 100%     | ✅ FUNCIONAL |
-| **Domain Models**           | 95%      | ✅ FUNCIONAL |
+| **Domain Models**           | 98%      | ✅ FUNCIONAL |
 | **DI Container**            | 100%     | ✅ FUNCIONAL |
 | **Integration Testing**     | 100%     | ✅ PASANDO   |
 
