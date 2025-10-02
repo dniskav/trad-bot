@@ -136,7 +136,20 @@ def configure_trading_domain(container: DIContainer) -> None:
     # container.register_singleton(ICommissionCalculator, BinanceCommissionCalculator)
 
     # === APPLICATION LAYER ===
-    container.register_transient(TradingApplicationService, TradingApplicationService)
+    container.register_singleton(
+        TradingApplicationService,
+        TradingApplicationService,
+        [
+            IPositionRepository,
+            IOrderRepository,
+            IMarketDataProvider,
+            ITradingExecutor,
+            ICommissionCalculator,
+            IExecutionValidator,
+            IPositionTracker,
+            IEventPublisher,
+        ],
+    )
 
     print("🏦 Trading Domain configured")
 
