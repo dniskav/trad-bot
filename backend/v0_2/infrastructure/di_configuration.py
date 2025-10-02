@@ -147,37 +147,46 @@ def configure_strategy_domain(container: DIContainer) -> None:
     # === STRATEGY REPOSITORY ===
     from ...domain.ports.strategy_ports import IStrategyRepository
     from ..adapters.data.file_strategy_repository import FileStrategyRepository
+
     container.register_singleton(IStrategyRepository, FileStrategyRepository)
 
     # === STRATEGY ENGINE (Mock Implementation) ===
     from ...domain.ports.strategy_ports import IStrategyEngine
     from ..adapters.domain.strategy_manager import StrategyManager
+
     container.register_transient(IStrategyEngine, StrategyManager)
 
     # === INDICATOR SERVICE ===
     from ...domain.ports.strategy_ports import IIndicatorService
     from ..adapters.domain.indicator_service import IndicatorService
+
     container.register_transient(IIndicatorService, IndicatorService)
 
     # === SIGNAL EVALUATOR SERVICE ===
     from ...domain.ports.strategy_ports import ISignalEvaluator
     from ..adapters.domain.signal_evaluator_service import SignalEvaluatorService
+
     container.register_transient(ISignalEvaluator, SignalEvaluatorService)
 
     # === RISK MANAGER (Mock Implementation) ===
     from ...domain.ports.strategy_ports import IRiskManager
+
     class MockRiskManager:
         async def apply_risk_management(self, signal, balance):
             return signal  # Mock: no risk management
+
     container.register_transient(IRiskManager, MockRiskManager)
 
     # === PERFORMANCE TRACKER (Mock Implementation) ===
     from ...domain.ports.strategy_ports import IStrategyPerformanceTracker
+
     class MockPerformanceTracker:
         async def record_signal_generated(self, strategy_id, signal):
             pass  # Mock: no tracking
+
         async def get_strategy_performance(self, strategy_id):
             return {}
+
     container.register_transient(IStrategyPerformanceTracker, MockPerformanceTracker)
 
     # === STRATEGY MANAGER ===
@@ -186,6 +195,7 @@ def configure_strategy_domain(container: DIContainer) -> None:
     # === APPLICATION LAYER ===
     from ...domain.ports.communication_ports import IEventPublisher
     from ..application.services.strategy_service import StrategyApplicationService
+
     container.register_singleton(
         StrategyApplicationService,
         StrategyApplicationService,
@@ -226,17 +236,17 @@ def configure_communication_domain(container: DIContainer) -> None:
 
     # === EVENT PUBLISHER (Mock Implementation) ===
     from ...domain.ports.communication_ports import IEventPublisher
-    
+
     class MockEventPublisher:
         async def publish_account_event(self, account_id, event_type, data=None):
             print(f"Event: {event_type} for account {account_id}: {data}")
-        
+
         async def publish_strategy_event(self, strategy_id, event_type, data=None):
             print(f"Strategy Event: {event_type} for strategy {strategy_id}: {data}")
-            
+
         async def publish_trading_event(self, event_type, data=None):
             print(f"Trading Event: {event_type}: {data}")
-    
+
     container.register_singleton(IEventPublisher, MockEventPublisher)
 
     print("📡 Communication Domain configured")

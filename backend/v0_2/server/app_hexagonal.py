@@ -38,27 +38,31 @@ async def lifespan(app: FastAPI):
 
     # Initialize strategy service (legacy)
     await strategy_service.initialize(binance_service)
-    
+
     # Initialize hexagonal strategy service integration
     try:
         await strategy_service_integration.initialize(binance_service)
-        hexagonal_strategy_service = strategy_service_integration.get_strategy_service_adapter()
+        hexagonal_strategy_service = (
+            strategy_service_integration.get_strategy_service_adapter()
+        )
         log.info("🆕 Using hexagonal Strategy Service")
-        
+
         # Inject hexagonal strategy service into router
         from .routers.strategies import set_strategy_service
+
         set_strategy_service(hexagonal_strategy_service)
-        
+
     except Exception as e:
         log.error(f"❌ Failed to initialize hexagonal strategy service: {e}")
         log.info("⚠️ Falling back to legacy Strategy Service")
-        
+
         # Fallback: usar service legacy
         global hexagonal_strategy_service
         hexagonal_strategy_service = strategy_service
-        
+
         # Inject legacy strategy service into router
         from .routers.strategies import set_strategy_service
+
         set_strategy_service(strategy_service)
 
     # Start background tasks
@@ -72,13 +76,13 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     log.info("🛑 Shutting down Server v0.2 services...")
-    
-    # Shutdown hexagonal integration 
+
+    # Shutdown hexagonal integration
     try:
         await strategy_service_integration.shutdown()
     except Exception as e:
         log.error(f"Error shutting down hexagonal integration: {e}")
-    
+
     # Shutdown legacy service
     await strategy_service.shutdown()
 
