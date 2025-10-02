@@ -12,6 +12,7 @@ from ..strategies import StrategyEngine, StrategyInstance
 from ..services.websocket_manager import WebSocketManager
 from ..services.stm_service import STMService
 from ..services.binance_service import BinanceService
+from ..models.position import OrderResponse
 from backend.shared.logger import get_logger
 from backend.shared.settings import env_str
 
@@ -23,11 +24,7 @@ class StrategyService:
 
     def __init__(self):
         self.logger = log
-        self.strategy_engine = StrategyEngine(
-            config_dir=env_str(
-                "STRATEGY_CONFIG_DIR", "backend/v0_2/server/strategies/configs"
-            )
-        )
+        self.strategy_engine = None  # Will be initialized with binance_service
         self.stm_service = STMService()
         self.binance_service = None  # Will be injected
         self.is_initialized = False
@@ -40,10 +37,24 @@ class StrategyService:
 
         self.binance_service = binance_service
 
+        # Inject strategy service into binance service for WebSocket data forwarding
+        self.binance_service.strategy_service = self
+
+        # Initialize strategy engine with binance service
+        self.strategy_engine = StrategyEngine(
+            config_dir=env_str(
+                "STRATEGY_CONFIG_DIR", "backend/v0_2/server/strategies/configs"
+            ),
+            binance_service=binance_service,
+        )
+
         # Set trade execution callback
         self.strategy_engine.set_trade_execution_callback(self.execute_trade_signal)
 
         await self.strategy_engine.start()
+
+        # Subscribe to WebSocket events for real-time data
+        await self._subscribe_to_websocket_events()
 
         # Load previously loaded strategies from persistence (but keep them STOPPED)
         try:
@@ -175,6 +186,12 @@ class StrategyService:
             bool: True if trade was executed successfully
         """
         try:
+            # Ignore HOLD signals
+            if getattr(signal, "signal_type", None) is None:
+                return False
+            if signal.signal_type.value not in ("BUY", "SELL"):
+                return False
+
             # Broadcast strategy signal to clients (pre-execution)
             try:
                 await self.ws_manager.broadcast(
@@ -191,12 +208,54 @@ class StrategyService:
                 )
             except Exception as _:
                 pass
+            # Determine symbol and ensure minimum notional by converting USDT -> qty
+            symbol = (
+                signal.metadata.get("symbol")
+                or env_str("SERVER_SYMBOL", "DOGEUSDT").upper()
+            )
+
+            # Get current reference price
+            price: float = 0.0
+            try:
+                if self.strategy_engine and self.strategy_engine.market_data.get(
+                    "current_price"
+                ):
+                    price = float(
+                        self.strategy_engine.market_data.get("current_price") or 0
+                    )
+                elif getattr(self.strategy_engine, "historical_klines", None):
+                    last = self.strategy_engine.historical_klines[-1]
+                    price = float(last[4])  # close
+            except Exception:
+                price = 0.0
+
+            # Guard: if price missing, do not execute
+            if price <= 0:
+                self.logger.error(
+                    "Price not available to compute min notional quantity"
+                )
+                return False
+
+            # Fetch min notional and compute minimum quantity
+            try:
+                min_notional = await self.stm_service.get_min_notional(symbol)
+            except Exception:
+                min_notional = 1.0
+
+            # Position size from metadata (usdt budget) if provided; otherwise use min_notional
+            usdt_target = float(signal.metadata.get("position_size") or min_notional)
+            # Ensure at least min notional
+            notional = max(usdt_target, float(min_notional))
+            quantity = max(notional / price, 0.0)
+
             # Convert strategy signal to STM order format
             order_data = {
-                "symbol": signal.metadata.get("symbol", "DOGEUSDT"),
+                "botId": signal.strategy_name,  # Add botId for tracking
+                "strategy": signal.strategy_name,  # Add strategy name
+                "symbol": symbol,
                 "side": signal.signal_type.value,
                 "type": "MARKET",
-                "quantity": str(signal.metadata.get("position_size", 0.5)),
+                "quantity": str(quantity),
                 "leverage": 1,
                 "isIsolated": False,
                 "stopLoss": {
@@ -209,10 +268,56 @@ class StrategyService:
                 },
             }
 
-            # Execute order through STM
-            result = await self.stm_service.open_position(order_data)
+            # Debug: Log SL/TP values being sent
+            self.logger.info(
+                f"Sending order with SL: {signal.stop_loss}, TP: {signal.take_profit}"
+            )
+            if signal.stop_loss is None or signal.take_profit is None:
+                self.logger.warning(
+                    f"SL/TP is None - SL: {signal.stop_loss}, TP: {signal.take_profit}"
+                )
 
-            if result and result.get("success"):
+            # Execute order through server endpoint (which orchestrates SL/TP)
+            import aiohttp
+
+            try:
+                self.logger.info(
+                    f"Creating position via server endpoint: {order_data['symbol']}, {order_data['side']}, {order_data['quantity']}"
+                )
+
+                # Use server endpoint instead of direct STM call
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        "http://localhost:8200/positions/open",
+                        json=order_data,
+                        timeout=10,
+                    ) as response:
+                        response_data = await response.json()
+                        result = OrderResponse(**response_data)
+            except Exception as e:
+                self.logger.error(f"Error creating OpenPositionRequest: {e}")
+                self.logger.error(f"Order data: {order_data}")
+                return False
+
+            if result and result.success:
+                # Apply SL/TP after position is opened (like Swagger does)
+                position_id = result.positionId
+                if position_id and (signal.stop_loss or signal.take_profit):
+                    self.logger.info(f"Setting SL/TP for position {position_id}")
+
+                    # Set stop loss if provided
+                    if signal.stop_loss:
+                        sl_result = await self.stm_service.set_stop_loss(
+                            position_id, str(signal.stop_loss)
+                        )
+                        self.logger.info(f"SL result: {sl_result}")
+
+                    # Set take profit if provided
+                    if signal.take_profit:
+                        tp_result = await self.stm_service.set_take_profit(
+                            position_id, str(signal.take_profit)
+                        )
+                        self.logger.info(f"TP result: {tp_result}")
                 self.logger.info(
                     f"✅ Trade executed: {signal.signal_type.value} at {signal.entry_price}"
                 )
@@ -268,7 +373,7 @@ class StrategyService:
             await self._broadcast_strategy_event("strategy_loaded", strategy_name)
             self._persist_loaded_names()
         return loaded
-    
+
     async def unload_strategy(self, strategy_name: str) -> bool:
         """Unload a strategy by name"""
         unloaded = await self.strategy_engine.unload_strategy(strategy_name)
@@ -276,7 +381,7 @@ class StrategyService:
             await self._broadcast_strategy_event("strategy_unloaded", strategy_name)
             self._persist_loaded_names()
         return unloaded
-    
+
     def get_available_configs(self) -> List[str]:
         """Get list of available strategy config files"""
         return self.strategy_engine.get_available_configs()
@@ -295,6 +400,48 @@ class StrategyService:
             "available_configs": self.get_available_configs(),
         }
 
+    async def _subscribe_to_websocket_events(self):
+        """Subscribe to WebSocket events for real-time market data"""
+        try:
+            # Create a custom WebSocket manager for strategy engine
+            # This will listen to Binance WebSocket events and forward them to strategy engine
+            self.logger.info("🔌 Subscribing to WebSocket events for real-time data")
+
+            # Start a background task to listen for WebSocket events
+            asyncio.create_task(self._websocket_event_listener())
+
+        except Exception as e:
+            self.logger.error(f"Error subscribing to WebSocket events: {e}")
+
+    async def _websocket_event_listener(self):
+        """Listen for WebSocket events and forward to strategy engine"""
+        try:
+            # This is a simplified approach - in a real implementation,
+            # you'd want to use a proper event bus or message queue
+            # For now, we'll use a polling approach to check for new data
+
+            while self.is_initialized:
+                try:
+                    # Check if we have new WebSocket data from Binance service
+                    # This is a placeholder - the actual implementation would
+                    # use a proper event subscription mechanism
+                    await asyncio.sleep(1)  # Poll every second
+
+                except Exception as e:
+                    self.logger.error(f"Error in WebSocket event listener: {e}")
+                    await asyncio.sleep(5)  # Wait longer on error
+
+        except Exception as e:
+            self.logger.error(f"WebSocket event listener stopped: {e}")
+
+    def handle_websocket_kline_data(self, kline_data: dict):
+        """Handle kline data from WebSocket and forward to strategy engine"""
+        try:
+            if self.strategy_engine and self.is_initialized:
+                self.strategy_engine.update_market_data_from_websocket(kline_data)
+        except Exception as e:
+            self.logger.error(f"Error handling WebSocket kline data: {e}")
+
     async def _broadcast_strategy_event(self, event_type: str, name: str) -> None:
         """Broadcast strategy lifecycle events over WS"""
         try:
@@ -311,7 +458,12 @@ class StrategyService:
 
     # ---------- Persistence of loaded strategy names ----------
     def _loaded_file_path(self) -> Path:
-        return Path(env_str("STRATEGY_LOADED_FILE", "backend/v0_2/server/strategies/configs/.loaded.json"))
+        return Path(
+            env_str(
+                "STRATEGY_LOADED_FILE",
+                "backend/v0_2/server/strategies/configs/.loaded.json",
+            )
+        )
 
     def _read_loaded_names(self) -> List[str]:
         p = self._loaded_file_path()
@@ -319,6 +471,7 @@ class StrategyService:
             return []
         try:
             import json
+
             return json.loads(p.read_text())
         except Exception:
             return []
@@ -326,6 +479,7 @@ class StrategyService:
     def _persist_loaded_names(self) -> None:
         try:
             import json
+
             names = list(self.strategy_engine.get_strategies().keys())
             p = self._loaded_file_path()
             p.parent.mkdir(parents=True, exist_ok=True)

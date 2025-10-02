@@ -25,7 +25,7 @@ show_processes() {
     echo "----------------------------------------"
     
     # Mostrar procesos del servidor
-    SERVER_PIDS=$(pgrep -u "$USER" -f "backend/v0_2/server/app" 2>/dev/null || true)
+    SERVER_PIDS=$(pgrep -u "$USER" -f "backend.v0_2.server.app" 2>/dev/null || true)
     if [ ! -z "$SERVER_PIDS" ]; then
         echo -e "🖥️  ${GREEN}Servidor (Puerto 8200):${NC}"
         ps -p $SERVER_PIDS -o pid,ppid,etime,command 2>/dev/null || true
@@ -33,7 +33,7 @@ show_processes() {
     fi
     
     # Mostrar procesos del STM
-    STM_PIDS=$(pgrep -u "$USER" -f "backend/v0_2/stm/app" 2>/dev/null || true)
+    STM_PIDS=$(pgrep -u "$USER" -f "backend.v0_2.stm.app" 2>/dev/null || true)
     if [ ! -z "$STM_PIDS" ]; then
         echo -e "💹 ${GREEN}STM (Puerto 8100):${NC}"
         ps -p $STM_PIDS -o pid,ppid,etime,command 2>/dev/null || true
@@ -50,14 +50,14 @@ show_processes() {
 kill_server() {
     echo -e "${YELLOW}🖥️  Terminando proceso del servidor...${NC}"
     
-    SERVER_PIDS=$(pgrep -u "$USER" -f "backend/v0_2/server/app" 2>/dev/null || true)
+    SERVER_PIDS=$(pgrep -u "$USER" -f "backend.v0_2.server.app" 2>/dev/null || true)
     if [ ! -z "$SERVER_PIDS" ]; then
         echo -e "${YELLOW}🔪 Enviando SIGTERM a PIDs: $SERVER_PIDS${NC}"
         kill -TERM $SERVER_PIDS 2>/dev/null || true
         sleep 2
         
         # Verificar si aún están corriendo
-        SERVER_PIDS=$(pgrep -u "$USER" -f "backend/v0_2/server/app" 2>/dev/null || true)
+        SERVER_PIDS=$(pgrep -u "$USER" -f "backend.v0_2.server.app" 2>/dev/null || true)
         if [ ! -z "$SERVER_PIDS" ]; then
             echo -e "${RED}⚡ Forzando terminación con SIGKILL: $SERVER_PIDS${NC}"
             kill -9 $SERVER_PIDS 2>/dev/null || true
@@ -65,7 +65,7 @@ kill_server() {
         fi
         
         # Verificación final
-        SERVER_PIDS=$(pgrep -u "$USER" -f "backend/v0_2/server/app" 2>/dev/null || true)
+        SERVER_PIDS=$(pgrep -u "$USER" -f "backend.v0_2.server.app" 2>/dev/null || true)
         if [ -z "$SERVER_PIDS" ]; then
             echo -e "${GREEN}✅ Servidor terminado correctamente${NC}"
         else
@@ -80,14 +80,14 @@ kill_server() {
 kill_stm() {
     echo -e "${YELLOW}💹 Terminando proceso del STM...${NC}"
     
-    STM_PIDS=$(pgrep -u "$USER" -f "backend/v0_2/stm/app" 2>/dev/null || true)
+    STM_PIDS=$(pgrep -u "$USER" -f "backend.v0_2.stm.app" 2>/dev/null || true)
     if [ ! -z "$STM_PIDS" ]; then
         echo -e "${YELLOW}🔪 Enviando SIGTERM a PIDs: $STM_PIDS${NC}"
         kill -TERM $STM_PIDS 2>/dev/null || true
         sleep 2
         
         # Verificar si aún están corriendo
-        STM_PIDS=$(pgrep -u "$USER" -f "backend/v0_2/stm/app" 2>/dev/null || true)
+        STM_PIDS=$(pgrep -u "$USER" -f "backend.v0_2.stm.app" 2>/dev/null || true)
         if [ ! -z "$STM_PIDS" ]; then
             echo -e "${RED}⚡ Forzando terminación con SIGKILL: $STM_PIDS${NC}"
             kill -9 $STM_PIDS 2>/dev/null || true
@@ -95,7 +95,7 @@ kill_stm() {
         fi
         
         # Verificación final
-        STM_PIDS=$(pgrep -u "$USER" -f "backend/v0_2/stm/app" 2>/dev/null || true)
+        STM_PIDS=$(pgrep -u "$USER" -f "backend.v0_2.stm.app" 2>/dev/null || true)
         if [ -z "$STM_PIDS" ]; then
             echo -e "${GREEN}✅ STM terminado correctamente${NC}"
         else
@@ -114,15 +114,15 @@ kill_all() {
     
     # Usar pkill para mayor eficiencia
     echo -e "${YELLOW}🔸 Terminando servidor...${NC}"
-    pkill -f "backend/v0_2/server/app" 2>/dev/null || true
+    pkill -f "backend.v0_2.server.app" 2>/dev/null || true
     
     echo -e "${YELLOW}🔸 Terminando STM...${NC}"
-    pkill -f "backend/v0_2/stm/app" 2>/dev/null || true
+    pkill -f "backend.v0_2.stm.app" 2>/dev/null || true
     
     sleep 3
     
     # Verificar si quedaron procesos
-    REMAINING=$(pgrep -u "$USER" -f "backend/v0_2.*app" 2>/dev/null || true)
+    REMAINING=$(pgrep -u "$USER" -f "backend.v0_2.*app" 2>/dev/null || true)
     if [ ! -z "$REMAINING" ]; then
         echo -e "${RED}⚡ Procesos persistentes: $REMAINING - Forzando terminación...${NC}"
         echo $REMAINING | xargs kill -9 2>/dev/null || true
@@ -130,7 +130,7 @@ kill_all() {
     fi
     
     # Verificación final
-    REMAINING=$(pgrep -u "$USER" -f "backend/v0_2.*app" 2>/dev/null || true)
+    REMAINING=$(pgrep -u "$USER" -f "backend.v0_2.*app" 2>/dev/null || true)
     if [ -z "$REMAINING" ]; then
         echo -e "${GREEN}✅ Todos los procesos terminados correctamente${NC}"
     else

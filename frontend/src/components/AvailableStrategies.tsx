@@ -27,7 +27,12 @@ const AvailableStrategies: React.FC = () => {
 
   useEffect(() => {
     fetchConfigs()
-    const handler = () => fetchConfigs()
+    // Solo refetch cuando se carga/descarga una estrategia, no en cada evento
+    const handler = (msg: any) => {
+      if (msg?.type === 'strategy_loaded' || msg?.type === 'strategy_unloaded') {
+        fetchConfigs()
+      }
+    }
     eventBus.on(EventType.WS_SERVER_STRATEGIES, handler)
     return () => eventBus.off(EventType.WS_SERVER_STRATEGIES, handler)
   }, [])

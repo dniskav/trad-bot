@@ -1088,6 +1088,7 @@ class PositionService:
                             "positionId"
                         ),  # Add positionId for server compatibility
                         "symbol": pos.get("symbol"),
+                        "side": pos.get("side"),  # Add side for server compatibility
                         "initialMargin": "0",
                         "maintMargin": "0",
                         "unrealizedProfit": str(pos.get("pnl", 0)),
@@ -1096,6 +1097,14 @@ class PositionService:
                         "leverage": str(pos.get("leverage", 1)),
                         "isolated": pos.get("isIsolated", False),
                         "entryPrice": pos.get("entryPrice"),
+                        "stopLossPrice": pos.get("stopLossPrice"),  # Add SL price
+                        "takeProfitPrice": pos.get("takeProfitPrice"),  # Add TP price
+                        "stopLossOrderId": pos.get(
+                            "stopLossOrderId"
+                        ),  # Add SL order ID
+                        "takeProfitOrderId": pos.get(
+                            "takeProfitOrderId"
+                        ),  # Add TP order ID
                         "maxNotional": "0",
                         "bidNotional": "0",
                         "askNotional": "0",
@@ -1160,7 +1169,7 @@ class PositionService:
     async def _find_matching_position_fifo(
         self, symbol: str, quantity: str, order_side: str
     ) -> Optional[Dict[str, Any]]:
-        """Find matching position using FIFO (First In, First Out) - Binance compatible"""
+        """Find matching position using LIFO (Last In, First Out) for SL/TP orders"""
         try:
             positions = self._load_positions()
 
@@ -1184,16 +1193,16 @@ class PositionService:
             if not matching_positions:
                 return None
 
-            # Sort by creation time (FIFO - oldest first)
-            matching_positions.sort(key=lambda x: x.get("createdAt", ""))
+            # Sort by creation time (LIFO - newest first for SL/TP)
+            matching_positions.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
 
-            # Return the oldest matching position
-            oldest_position = matching_positions[0]
+            # Return the newest matching position (most recently created)
+            newest_position = matching_positions[0]
             log.info(
-                f"FIFO matching: Found position {oldest_position['positionId']} for {symbol} {quantity} {order_side}"
+                f"LIFO matching: Found position {newest_position['positionId']} for {symbol} {quantity} {order_side}"
             )
 
-            return oldest_position
+            return newest_position
 
         except Exception as e:
             log.error(f"Error finding matching position: {e}")

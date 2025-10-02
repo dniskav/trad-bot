@@ -11,6 +11,7 @@ from .services.websocket_manager import WebSocketManager
 from .services.binance_service import BinanceService
 from .services.stm_service import STMService
 from .services.strategy_service import StrategyService
+from .services.queue_service import queue_service
 from .middlewares.logging import log_requests_middleware
 
 log = get_logger("server.v0.2")
@@ -38,7 +39,16 @@ async def lifespan(app: FastAPI):
 
     # Inject strategy service into router AFTER initialization
     from .routers.strategies import set_strategy_service
+
     set_strategy_service(strategy_service)
+
+    # Start queue service
+    await queue_service.start()
+
+    # Register queue handlers
+    from .routers.positions import _handle_open_position_task
+
+    queue_service.register_handler("open_position", _handle_open_position_task)
 
     # Start background tasks
     asyncio.create_task(stm_service.heartbeat_loop())
@@ -51,6 +61,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     log.info("🛑 Shutting down Server v0.2 services...")
+    await queue_service.stop()
     await strategy_service.shutdown()
 
 

@@ -187,13 +187,12 @@ export const useAccountBalance = () => {
 
     const onPositionsLifecycle = (msg: any) => {
       const t = msg?.type
-      if (
-        t === SocketMsg.POSITION_OPENED ||
-        t === SocketMsg.POSITION_CLOSED ||
-        t === SocketMsg.POSITION_CHANGE
-      ) {
-        fetchAccountBalance()
+      // ⚠️ FIX: Ya NO hacer HTTP - el balance se actualiza por WebSocket
+      if (t === SocketMsg.POSITION_OPENED || t === SocketMsg.POSITION_CLOSED) {
+        console.log('🔔 Position lifecycle event:', t, '- Balance will update via WebSocket (NO HTTP)')
+        // Ya NO llamamos fetchAccountBalance() - el balance llega por WebSocket automáticamente
       }
+      // Ignore POSITION_CHANGE - too frequent and will cause spam
     }
 
     eventBus.on(EventType.WS_SERVER_ACCOUNT_BALANCE, onAccountUpdate)
@@ -202,12 +201,12 @@ export const useAccountBalance = () => {
       eventBus.off(EventType.WS_SERVER_ACCOUNT_BALANCE, onAccountUpdate)
       eventBus.off(EventType.WS_SERVER_POSITIONS, onPositionsLifecycle)
     }
-  }, [fetchAccountBalance])
+  }, []) // ⚠️ FIJO: Sin dependencias para romper el ciclo infinito
 
   // Función para actualizar balance manualmente
   const refreshBalance = useCallback(() => {
     fetchAccountBalance()
-  }, [fetchAccountBalance])
+  }, []) // ⚠️ FIJO: Sin dependencias para evitar recreación innecesaria
 
   // Usar precio en tiempo real si está disponible, sino el del balance
   const effectivePrice = currentPrice || balance?.doge_price || 0

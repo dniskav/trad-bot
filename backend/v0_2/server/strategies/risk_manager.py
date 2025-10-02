@@ -58,6 +58,14 @@ class RiskManager:
                 signal.entry_price, signal.signal_type
             )
 
+            # Debug: Log SL/TP calculation
+            self.logger.info(
+                f"Calculated SL/TP - Entry: {signal.entry_price}, SL: {stop_loss}, TP: {take_profit}"
+            )
+            self.logger.info(
+                f"Risk config - SL%: {self.risk_config.stop_loss_pct}, TP%: {self.risk_config.take_profit_pct}"
+            )
+
             # Create modified signal
             modified_signal = StrategySignal(
                 strategy_name=signal.strategy_name,

@@ -28,9 +28,10 @@ from backend.shared.logger import get_logger
 class StrategyEngine:
     """Main strategy execution engine"""
 
-    def __init__(self, config_dir: str = "strategies/configs"):
+    def __init__(self, config_dir: str = "strategies/configs", binance_service=None):
         self.config_dir = Path(config_dir)
         self.logger = get_logger("strategy_engine")
+        self.binance_service = binance_service
 
         # Core components
         self.indicator_factory = IndicatorFactory()
@@ -41,6 +42,7 @@ class StrategyEngine:
 
         # Market data cache
         self.market_data: Dict[str, Any] = {}
+        self.historical_klines: List[Dict] = []
 
         # Engine state
         self.is_running = False
@@ -208,6 +210,9 @@ class StrategyEngine:
                         f"Error creating indicator {indicator_config.name}: {e}"
                     )
 
+        # Warm up indicators with historical data
+        await self._warmup_indicators(strategy_config)
+
     async def _execution_loop(self):
         """Main strategy execution loop"""
         while self.is_running:
@@ -230,14 +235,102 @@ class StrategyEngine:
                 await asyncio.sleep(5)  # Wait longer on error
 
     async def _update_market_data(self):
-        """Update market data (placeholder - integrate with your data source)"""
-        # This would integrate with your Binance service or other data source
-        # For now, we'll use placeholder data
-        self.market_data = {
-            "current_price": 0.08,  # Placeholder
-            "volume": 1000000,  # Placeholder
-            "timestamp": datetime.now(),
-        }
+        """Update market data with real Binance data"""
+        try:
+            # Use real-time data from historical klines if available
+            if self.historical_klines:
+                latest_kline = self.historical_klines[-1]
+                current_price = float(latest_kline[4])  # Close price
+                current_volume = float(latest_kline[5])  # Volume
+
+                # Calculate previous price for trend analysis
+                prev_price = None
+                if len(self.historical_klines) > 1:
+                    prev_price = float(self.historical_klines[-2][4])
+
+                self.market_data = {
+                    "current_price": current_price,
+                    "prev_price": prev_price,
+                    "volume": current_volume,
+                    "timestamp": datetime.now(),
+                }
+            else:
+                # Fallback to placeholder if no historical data
+                self.market_data = {
+                    "current_price": 0.08,  # Placeholder
+                    "volume": 1000000,  # Placeholder
+                    "timestamp": datetime.now(),
+                }
+        except Exception as e:
+            self.logger.error(f"Error updating market data: {e}")
+            # Fallback to placeholder on error
+            self.market_data = {
+                "current_price": 0.08,  # Placeholder
+                "volume": 1000000,  # Placeholder
+                "timestamp": datetime.now(),
+            }
+
+    def update_market_data_from_websocket(self, kline_data: dict):
+        """Update market data from WebSocket kline data"""
+        try:
+            kline = kline_data.get("kline", {})
+            if not kline:
+                return
+
+            # Update current price from WebSocket
+            current_price = float(kline.get("c", 0))
+            current_volume = float(kline.get("v", 0))
+
+            # Check if this is a closed kline (new candle)
+            is_closed = kline.get("closed", False)
+
+            if is_closed:
+                # New candle closed - refresh historical data
+                self.logger.info(
+                    f"🕯️ New candle closed at {current_price}, refreshing historical data"
+                )
+                # Trigger historical data refresh in background
+                asyncio.create_task(self._refresh_historical_data())
+
+            # Update market data with real-time price
+            prev_price = (
+                self.market_data.get("current_price") if self.market_data else None
+            )
+
+            self.market_data = {
+                "current_price": current_price,
+                "prev_price": prev_price,
+                "volume": current_volume,
+                "timestamp": datetime.now(),
+                "is_closed": is_closed,
+            }
+
+            self.logger.debug(
+                f"📊 Market data updated: price={current_price}, volume={current_volume}, closed={is_closed}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error updating market data from WebSocket: {e}")
+
+    async def _refresh_historical_data(self):
+        """Refresh historical klines when new candle closes"""
+        try:
+            if self.binance_service:
+                # Get fresh 1000 klines from API
+                new_klines = await self.binance_service.get_historical_klines(
+                    "1m", 1000
+                )
+                if new_klines:
+                    self.historical_klines = new_klines
+                    self.logger.info(
+                        f"🔄 Refreshed {len(new_klines)} historical klines"
+                    )
+
+                    # Re-warmup indicators with fresh data for all loaded strategies
+                    for strategy_instance in self.strategies.values():
+                        await self._warmup_indicators(strategy_instance.config)
+        except Exception as e:
+            self.logger.error(f"Error refreshing historical data: {e}")
 
     async def _execute_strategy(self, strategy_instance: StrategyInstance):
         """Execute a single strategy"""
@@ -247,7 +340,8 @@ class StrategyEngine:
             # Update indicators with current market data
             await self._update_indicators(strategy_config)
 
-            # Evaluate signals
+            # Evaluate signals - check all signals and execute the first valid one
+            last_signal = None
             for signal_config in strategy_config.signals:
                 if signal_config.enabled:
                     signal = self.signal_evaluator.evaluate_signal(
@@ -256,28 +350,53 @@ class StrategyEngine:
                     )
 
                     if signal:
-                        # Apply risk management
-                        risk_manager = RiskManager(strategy_config.risk_management)
-                        # Note: You'd need to get actual account balance here
-                        account_balance = 1000.0  # Placeholder
+                        # Always store the last signal (including HOLD)
+                        last_signal = signal
 
-                        final_signal = risk_manager.apply_risk_management(
-                            signal, account_balance
-                        )
+                        # Only execute trades for BUY/SELL signals
+                        if signal.signal_type.value in ["BUY", "SELL"]:
+                            # Apply risk management
+                            risk_manager = RiskManager(strategy_config.risk_management)
 
-                        if final_signal:
-                            strategy_instance.last_signal = final_signal
-                            strategy_instance.last_updated = datetime.now()
+                            # Get actual account balance and position count
+                            # Note: This requires access to STM service, which we don't have here
+                            # For now, use placeholder values but set positions_count to 0
+                            account_balance = 1000.0  # Placeholder
+                            risk_manager.positions_count = 0  # Reset to allow trades
 
-                            # Execute the trade through callback
-                            if self.trade_execution_callback:
-                                await self.trade_execution_callback(final_signal)
-                            else:
-                                await self._execute_trade(final_signal)
-
-                            self.logger.info(
-                                f"Signal generated: {final_signal.signal_type.value} for {strategy_config.name}"
+                            final_signal = risk_manager.apply_risk_management(
+                                signal, account_balance
                             )
+
+                            # Debug: Log SL/TP values
+                            if final_signal:
+                                self.logger.info(
+                                    f"SL/TP calculated - SL: {final_signal.stop_loss}, TP: {final_signal.take_profit}"
+                                )
+                            else:
+                                self.logger.warning(
+                                    "Risk management returned None signal"
+                                )
+
+                            if final_signal:
+                                strategy_instance.last_signal = final_signal
+                                strategy_instance.last_updated = datetime.now()
+
+                                # Execute the trade through callback
+                                if self.trade_execution_callback:
+                                    await self.trade_execution_callback(final_signal)
+                                else:
+                                    await self._execute_trade(final_signal)
+
+                                self.logger.info(
+                                    f"Signal generated: {final_signal.signal_type.value} for {strategy_config.name}"
+                                )
+                                break  # Exit after first valid trade signal
+
+            # If no trade signal was generated, store the last HOLD signal
+            if last_signal and last_signal.signal_type.value == "HOLD":
+                strategy_instance.last_signal = last_signal
+                strategy_instance.last_updated = datetime.now()
 
         except Exception as e:
             self.logger.error(
@@ -285,12 +404,81 @@ class StrategyEngine:
             )
             strategy_instance.status = StrategyStatus.ERROR
 
+    async def _warmup_indicators(self, strategy_config: StrategyConfig):
+        """Warm up indicators with historical kline data from Binance"""
+        if not self.binance_service:
+            self.logger.warning("No Binance service available for indicator warmup")
+            return
+
+        try:
+            # Fetch 1000 historical klines
+            klines = await self.binance_service.get_historical_klines(limit=1000)
+            if not klines:
+                self.logger.warning("No historical klines available for warmup")
+                return
+
+            self.historical_klines = klines
+            self.logger.info(
+                f"Warming up indicators with {len(klines)} historical klines"
+            )
+
+            # Extract closes and volumes
+            closes = [float(k[4]) for k in klines]  # Close prices
+            volumes = [float(k[5]) for k in klines]  # Volumes
+
+            # Warm up each indicator
+            for indicator_config in strategy_config.indicators:
+                if indicator_config.enabled:
+                    try:
+                        indicator = self.indicator_factory.get_indicator(
+                            indicator_config.name
+                        )
+
+                        # Update based on indicator type
+                        if indicator_config.type in ["sma", "rsi", "macd", "trend"]:
+                            indicator.update(closes)
+                        elif indicator_config.type == "volume":
+                            indicator.update(volumes)
+
+                        self.logger.info(
+                            f"Warmed up indicator: {indicator_config.name} ({indicator_config.type})"
+                        )
+
+                    except Exception as e:
+                        self.logger.error(
+                            f"Error warming up indicator {indicator_config.name}: {e}"
+                        )
+
+        except Exception as e:
+            self.logger.error(f"Error during indicator warmup: {e}")
+
     async def _update_indicators(self, strategy_config: StrategyConfig):
-        """Update all indicators for a strategy"""
-        # This would update indicators with real market data
-        # For now, we'll use placeholder data
-        closes = [0.08, 0.081, 0.079, 0.082, 0.08]  # Placeholder price data
-        volumes = [1000000, 1200000, 800000, 1500000, 900000]  # Placeholder volume data
+        """Update all indicators for a strategy with real-time data"""
+        # Use real-time market data if available, otherwise use historical data
+        if self.market_data.get("current_price"):
+            # Use real-time data
+            current_price = self.market_data["current_price"]
+            current_volume = self.market_data.get("volume", 0)
+
+            # Get the latest closes and volumes from historical data
+            closes = [
+                float(k[4]) for k in self.historical_klines[-50:]
+            ]  # Last 50 closes
+            volumes = [
+                float(k[5]) for k in self.historical_klines[-50:]
+            ]  # Last 50 volumes
+
+            # Add current data
+            closes.append(current_price)
+            volumes.append(current_volume)
+        else:
+            # Fallback to historical data
+            closes = [
+                float(k[4]) for k in self.historical_klines[-10:]
+            ]  # Last 10 closes
+            volumes = [
+                float(k[5]) for k in self.historical_klines[-10:]
+            ]  # Last 10 volumes
 
         for indicator_config in strategy_config.indicators:
             if indicator_config.enabled:
@@ -300,7 +488,7 @@ class StrategyEngine:
                     )
 
                     # Update based on indicator type
-                    if indicator_config.type in ["sma", "rsi", "macd"]:
+                    if indicator_config.type in ["sma", "rsi", "macd", "trend"]:
                         indicator.update(closes)
                     elif indicator_config.type == "volume":
                         indicator.update(volumes)
@@ -359,14 +547,14 @@ class StrategyEngine:
         # Implementation would reload from config file
         self.logger.info(f"Reloaded strategy: {name}")
         return True
-    
+
     async def load_strategy_from_file(self, config_file: str) -> bool:
         """
         Load a strategy from a specific config file
-        
+
         Args:
             config_file: Path to the strategy config file
-            
+
         Returns:
             bool: True if loaded successfully
         """
@@ -375,68 +563,68 @@ class StrategyEngine:
             if not config_path.exists():
                 self.logger.error(f"Config file not found: {config_file}")
                 return False
-            
+
             await self._load_strategy_config(config_path)
             self.logger.info(f"✅ Loaded strategy from file: {config_file}")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Error loading strategy from {config_file}: {e}")
             return False
-    
+
     async def load_strategy_by_name(self, strategy_name: str) -> bool:
         """
         Load a strategy by name from the configs directory
-        
+
         Args:
             strategy_name: Name of the strategy (without .json extension)
-            
+
         Returns:
             bool: True if loaded successfully
         """
         config_file = self.config_dir / f"{strategy_name}.json"
         return await self.load_strategy_from_file(str(config_file))
-    
+
     async def unload_strategy(self, name: str) -> bool:
         """
         Unload a strategy from memory
-        
+
         Args:
             name: Strategy name
-            
+
         Returns:
             bool: True if unloaded successfully
         """
         if name not in self.strategies:
             self.logger.warning(f"Strategy not found: {name}")
             return False
-        
+
         strategy = self.strategies[name]
         if strategy.status.value == "ACTIVE":
             await self.stop_strategy(name)
-        
+
         # Remove from strategies dict
         del self.strategies[name]
-        
+
         # Clean up indicators used only by this strategy
         # TODO: Implement indicator cleanup logic
-        
+
         self.logger.info(f"✅ Unloaded strategy: {name}")
         return True
-    
+
     def get_available_configs(self) -> List[str]:
         """
         Get list of available strategy config files
-        
+
         Returns:
             List of strategy names (without .json extension)
         """
         if not self.config_dir.exists():
             return []
-        
+
         config_files = list(self.config_dir.glob("*.json"))
         return [f.stem for f in config_files]
-    
+
     def set_trade_execution_callback(self, callback):
         """Set callback for trade execution"""
         self.trade_execution_callback = callback

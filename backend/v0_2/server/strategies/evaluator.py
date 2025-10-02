@@ -39,7 +39,7 @@ class SignalEvaluator:
             reasoning_parts = []
 
             for condition in signal_config.conditions:
-                result = self._evaluate_condition(condition, market_data)
+                result = self._evaluate_condition(condition, market_data, signal_config.signal_type)
                 conditions_met.append(result["met"])
                 reasoning_parts.append(result["reasoning"])
 
@@ -90,7 +90,7 @@ class SignalEvaluator:
             return None
 
     def _evaluate_condition(
-        self, condition: SignalCondition, market_data: Dict[str, Any]
+        self, condition: SignalCondition, market_data: Dict[str, Any], signal_type: SignalType
     ) -> Dict[str, Any]:
         """
         Evaluate a single condition
@@ -98,6 +98,7 @@ class SignalEvaluator:
         Args:
             condition: Condition to evaluate
             market_data: Current market data
+            signal_type: The signal type (BUY/SELL) this condition is for
 
         Returns:
             Dictionary with 'met' boolean and 'reasoning' string
@@ -139,7 +140,7 @@ class SignalEvaluator:
             )
 
             # Generate detailed reasoning based on indicator type and condition
-            reasoning = self._generate_detailed_reasoning(condition, indicator_value, comparison_value, market_data, signal_config.signal_type)
+            reasoning = self._generate_detailed_reasoning(condition, indicator_value, comparison_value, market_data, signal_type)
 
             return {"met": met, "reasoning": reasoning}
 
