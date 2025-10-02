@@ -744,13 +744,17 @@ git checkout -b feature/trading-domain-extraction
 
 ### 🔄 **PRÓXIMAS FASES PENDIENTES**
 
-#### **💰 FASE 3: ACCOUNT DOMAIN (85%)**
+#### **💰 FASE 3: ACCOUNT DOMAIN (100%)**
 
 - [x] ✅ COMPLETADO - Extraer lógica de accounts de servicios mezclados
 - [x] ✅ COMPLETADO - Crear `BalanceService` independiente - BalanceCalculator
 - [x] ✅ COMPLETADO - Separar lógica de cálculo de comisiones - CommissionCalculator
 - [x] ✅ COMPLETADO - Implementar `AccountValidator` y `TransactionHandler`
 - [x] ✅ COMPLETADO - Domain models funcionando: AccountAggregate, AssetBalance
+- [x] ✅ COMPLETADO - AccountServiceAdapter para compatibilidad con router legacy
+- [x] ✅ COMPLETADO - Integración hexagonal con router account.py
+- [x] ✅ COMPLETADO - Router con fallback automático (hexagonal → legacy)
+- [x] ✅ COMPLETADO - Endpoints account/synth y account/synth/reset funcionando
 
 #### **🤖 FASE 4: STRATEGY DOMAIN REFACTORING (100%)**
 
@@ -775,22 +779,31 @@ git checkout -b feature/trading-domain-extraction
 - [x] ✅ COMPLETADO - Restart de servicios STM (8100) y Server (8200)
 - [x] ✅ COMPLETADO - Health checks: ambos servicios respondiendo correctamente
 - [x] ✅ COMPLETADO - Endpoint `/strategies/` funcionando con 4 estrategias cargadas
+- [x] ✅ COMPLETADO - Endpoint `/account/synth` funcionando con datos integrados
 - [x] ✅ COMPLETADO - Router integration con hexagonal architecture funcionando
 - [x] ✅ COMPLETADO - Sistema completo estable y operativo en producción
 
+#### **💰 ACCOUNT DOMAIN COMPLETADO (100%)**
+
+- [x] ✅ COMPLETADO - AccountDomain hexagonal integration
+- [x] ✅ COMPLETADO - Router adapters con fallback automático
+- [x] ✅ COMPLETADO - Endpoints `/account/synth`, `/account/synth/reset`, `/account/status`
+- [x] ✅ COMPLETADO - Compatibilidad completa con sistema legacy
+- [x] ✅ COMPLETADO - Health checks Account Domain funcionando
+
 ### 🎯 **MÉTRICAS DE PROGRESO**
 
-| Componente                  | Progreso | Estado       | Servicios Activos     |
-| --------------------------- | -------- | ------------ | --------------------- |
-| **Trading Domain**          | 95%      | ✅ FUNCIONAL | Position/Order Mgmt   |
-| **Account Domain**          | 85%      | ✅ FUNCIONAL | Balance/Commission    |
+| Componente                  | Progreso | Estado        | Servicios Activos     |
+| --------------------------- | -------- | ------------- | --------------------- |
+| **Trading Domain**          | 95%      | ✅ FUNCIONAL  | Position/Order Mgmt   |
+| **Account Domain**          | 100%     | ✅ COMPLETADO | Balance/Commission    |
 | **Strategy Domain**         | 100%     | ✅ COMPLETADO | Indicators/Strategies |
-| **Router Integration**       | 100%     | ✅ FUNCIONAL | API Endpoints         |
-| **Infrastructure Adapters** | 95%      | ✅ FUNCIONAL | Data/External APIs    |
-| **Application Services**    | 100%     | ✅ FUNCIONAL | 3 Domains Complete    |
-| **Domain Models**           | 98%      | ✅ FUNCIONAL | Clean Architecture    |
-| **DI Container**            | 100%     | ✅ FUNCIONAL | Dependency Injection  |
-| **Integration Testing**     | 100%     | ✅ PASANDO   | Production Live       |
+| **Router Integration**      | 100%     | ✅ FUNCIONAL  | API Endpoints         |
+| **Infrastructure Adapters** | 95%      | ✅ FUNCIONAL  | Data/External APIs    |
+| **Application Services**    | 100%     | ✅ FUNCIONAL  | 3 Domains Complete    |
+| **Domain Models**           | 98%      | ✅ FUNCIONAL  | Clean Architecture    |
+| **DI Container**            | 100%     | ✅ FUNCIONAL  | Dependency Injection  |
+| **Integration Testing**     | 100%     | ✅ PASANDO    | Production Live       |
 
 ### 🔥 **BENEFICIOS CONSEGUIDOS**
 
@@ -802,11 +815,12 @@ git checkout -b feature/trading-domain-extraction
 
 ---
 
-_Última actualización: octubre 2, 2025 - 18:33_
+_Última actualización: octubre 2, 2025 - 20:35_
 _Rama: feature/hexagonal-architecture-refactor_
 _Contexto: Refactoring incremental hacia Clean Architecture_
 _Estado: ✅ ARQUITECTURA HEXAGONAL COMPLETAMENTE IMPLEMENTADA Y FUNCIONAL_
-_Progreso: Strategy Domain 100% + Router Integration + Sistema Verificado_
+_Progreso: Strategy Domain 100% + Account Domain 100% + Router Integration + Sistema Verificado_
+_Completado: ✅ Account Domain hexagonal + Router adapters + Fallback automático_
 _Servicios: ✅ STM (8100) + Server (8200) activos y healthy tras restart completo_
-_Integración: ✅ Router `/strategies/` funcionando con hexagonal architecture_
+_Integración: ✅ Routers `/strategies/` y `/account/synth` funcionando con hexagonal architecture_
 _Verificación: ✅ Health checks + endpoints funcionando en producción_

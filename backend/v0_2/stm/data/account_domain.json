@@ -1,0 +1,43 @@
+{
+  "account_id": "main_account",
+  "type": "spot",
+  "status": "active",
+  "created_at": "2025-10-02T19:30:00.000000+00:00",
+  "last_updated": "2025-10-02T19:30:00.000000+00:00",
+  "balances": [
+    {
+      "asset": "USDT",
+      "free": 499.98,
+      "locked": 17.70,
+      "total": 517.68
+    },
+    {
+      "asset": "DOGE",
+      "free": 1516.95,
+      "locked": 709.15,
+      "total": 2226.10
+    }
+  ],
+  "total_usdt_value": 1193.56,
+  "initial_balance_usdt": 1000.0,
+  "total_pnl_usdt": 193.56,
+  "commission_settings": {
+    "maker": 0.001,
+    "taker": 0.001,
+    "additional_fees": {}
+  },
+  "risk_settings": {
+    "max_position_size": 0.95,
+    "stop_loss_percentage": 0.05,
+    "take_profit_percentage": 0.10
+  },
+  "performance_metrics": {
+    "total_trades": 0,
+    "winning_trades": 0,
+    "losing_trades": 0,
+    "win_rate": 0.0,
+    "total_profit_percentage": 19.36,
+    "max_drawdown": 0.0,
+    "sharpe_ratio": 0.0
+  }
+}
