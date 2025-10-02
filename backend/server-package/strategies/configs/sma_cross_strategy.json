@@ -1,0 +1,98 @@
+{
+  "name": "sma_cross_strategy",
+  "description": "SMA Crossover Strategy with RSI filter",
+  "version": "1.0.0",
+  "author": "Strategy Engine",
+  "symbol": "DOGEUSDT",
+  "interval": "1m",
+  "enabled": true,
+  "indicators": [
+    {
+      "name": "sma_fast",
+      "type": "sma",
+      "params": {
+        "period": 5
+      },
+      "enabled": true
+    },
+    {
+      "name": "sma_slow",
+      "type": "sma",
+      "params": {
+        "period": 13
+      },
+      "enabled": true
+    },
+    {
+      "name": "rsi_14",
+      "type": "rsi",
+      "params": {
+        "period": 14
+      },
+      "enabled": true
+    },
+    {
+      "name": "volume_ratio",
+      "type": "volume",
+      "params": {
+        "type": "volume_ratio",
+        "period": 20
+      },
+      "enabled": true
+    }
+  ],
+  "signals": [
+    {
+      "signal_type": "BUY",
+      "conditions": [
+        {
+          "indicator": "sma_fast",
+          "operator": ">",
+          "value": "indicator:sma_slow"
+        },
+        {
+          "indicator": "rsi_14",
+          "operator": "<",
+          "value": 70
+        },
+        {
+          "indicator": "volume_ratio",
+          "operator": ">",
+          "value": 1.0
+        }
+      ],
+      "confidence": 0.7,
+      "enabled": true
+    },
+    {
+      "signal_type": "SELL",
+      "conditions": [
+        {
+          "indicator": "sma_fast",
+          "operator": "<",
+          "value": "indicator:sma_slow"
+        },
+        {
+          "indicator": "rsi_14",
+          "operator": ">",
+          "value": 30
+        }
+      ],
+      "confidence": 0.6,
+      "enabled": true
+    }
+  ],
+  "risk_management": {
+    "stop_loss_pct": 0.015,
+    "take_profit_pct": 0.025,
+    "max_positions": 2,
+    "position_size": 0.3,
+    "max_daily_loss": 0.03,
+    "enabled": true
+  },
+  "custom_params": {
+    "fast_period": 5,
+    "slow_period": 13,
+    "rsi_filter": true
+  }
+}
