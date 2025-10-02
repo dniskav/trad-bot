@@ -427,17 +427,17 @@ def setup_dependencies():
 
 #### 💰 Account Domain Extraction
 
-- [ ] Extraer lógica de accounts de servicios mezclados
-- [ ] Crear `BalanceService` independiente
-- [ ] Separar lógica de cálculo de comisiones
-- [ ] Implementar `CommissionCalculator`
+- [x] ✅ COMPLETADO - Extraer lógica de accounts de servicios mezclados - AccountAggregate creado
+- [x] ✅ COMPLETADO - Crear `BalanceService` independiente - BalanceCalculator implementado  
+- [x] ✅ COMPLETADO - Separar lógica de cálculo de comisiones - CommissionCalculator creado
+- [x] ✅ COMPLETADO - Implementar `CommissionCalculator` - StandardCommissionCalculator funcional
 
 #### 🤖 Strategy Domain Extraction
 
-- [ ] Dividir `StrategyEngine` en servicios específicos
-- [ ] Crear `IndicatorService` independiente
-- [ ] Separar `SignalEvaluator`
-- [ ] Crear `StrategyManager` para gestión de lifecycle
+- [x] ✅ COMPLETADO - Dividir `StrategyEngine` en servicios específicos - StrategyApplicationService creado
+- [x] ✅ COMPLETADO - Crear `IndicatorService` independiente - IndicatorService hexagonal implementado
+- [x] ✅ COMPLETADO - Separar `SignalEvaluator` - SignalEvaluatorService independiente creado
+- [x] ✅ COMPLETADO - Crear `StrategyManager` para gestión de lifecycle - StrategyManager completo
 
 ### FASE 3: ADAPTERS Y INFRAESTRUCTURA (Semana 4)
 
@@ -445,7 +445,7 @@ def setup_dependencies():
 
 - [x] Implementar `IPositionRepository` con archivos JSON ✅ COMPLETADO - FilePositionRepository
 - [x] Implementar `IOrderRepository` independiente ✅ COMPLETADO - FileOrderRepository
-- [ ] Crear `IAccountRepository`
+- [x] ✅ COMPLETADO - Crear `IAccountRepository` - FileAccountRepository implementado
 - [x] Migrar lógica de persistencia actual ✅ COMPLETADO con JsonStore
 
 #### 🌐 Market Data Adapters
@@ -457,7 +457,7 @@ def setup_dependencies():
 
 #### 📡 Communication Adapters
 
-- [ ] Refactorizar `WebSocketManager` eliminando singleton
+- [x] ✅ COMPLETADO - Refactorizar `WebSocketManager` eliminando singleton - WebSocketService hexagonal implementado
 - [x] Crear `STMServerAdapter` para comunicación con STM ✅ COMPLETADO - STMTradingExecutor
 - [x] Implementar `EventPublisher` centralizado ✅ COMPLETADO - DomainEventPublisher
 - [x] Migrar todas las notificaciones ✅ COMPLETADO con eventos de dominio
@@ -780,12 +780,19 @@ git checkout -b feature/trading-domain-extraction
 - [x] ✅ COMPLETADO - TradingServiceIntegration con background initialization
 - [x] ✅ COMPLETADO - Fallback legacy funcionando perfectamente
 
-#### **📡 FASE 5: COMMUNICATION.RefACTORING (25%)**
+#### **📡 FASE 6: COMMUNICATION REFACTORING (100%)**
 
-- [ ] Refactorizar `WebSocketManager` eliminando singleton
-- [x] ✅ COMPLETADO - EventPublisher centralizado
-- [x] ✅ COMPLETADO - STMServerAdapter implementado
-- [x] ✅ COMPLETADO - Migración de notificaciones
+- [x] ✅ COMPLETADO - Refactorizar `WebSocketManager` eliminando singleton - WebSocketService hexagonal implementado
+- [x] ✅ COMPLETADO - EventPublisher centralizado - DomainEventPublisher funcional
+- [x] ✅ COMPLETADO - STMServerAdapter implementado - STMTradingExecutor creado
+- [x] ✅ COMPLETADO - Migración de notificaciones - Router websocket.py hexagonalizado con fallback automático
+- [x] ✅ COMPLETADO - Router Integration - websocket.py actualizado con WebSocketService hexagonal
+- [x] ✅ COMPLETADO - Router con fallback automático (hexagonal → legacy WebSocketManager)
+- [x] ✅ COMPLETADO - Endpoints `/ws/status` funcionando correctamente
+- [x] ✅ COMPLETADO - Sistema verificado con reinicio completo y health checks
+- [x] ✅ COMPLETADO - DI Container actualizado con Communication Domain dependencies
+- [x] ✅ COMPLETADO - WebSocketServiceIntegration con background initialization
+- [x] ✅ COMPLETADO - Fallback legacy funcionando perfectamente
 
 #### **🎯 INTEGRACIÓN COMPLETA VERIFICADA**
 
@@ -811,9 +818,10 @@ git checkout -b feature/trading-domain-extraction
 | **Trading Domain**          | 100%     | ✅ COMPLETADO | Positions/Orders/Fees |
 | **Account Domain**          | 100%     | ✅ COMPLETADO | Balance/Commission    |
 | **Strategy Domain**         | 100%     | ✅ COMPLETADO | Indicators/Strategies |
+| **Communication Domain**    | 100%     | ✅ COMPLETADO | WebSocket Service     |
 | **Router Integration**      | 100%     | ✅ FUNCIONAL  | API Endpoints         |
 | **Infrastructure Adapters** | 100%     | ✅ FUNCIONAL  | Data/External APIs    |
-| **Application Services**    | 100%     | ✅ FUNCIONAL  | 3 Domains Complete    |
+| **Application Services**    | 100%     | ✅ FUNCIONAL  | 4 Domains Complete    |
 | **Domain Models**           | 100%     | ✅ FUNCIONAL  | Clean Architecture    |
 | **DI Container**            | 100%     | ✅ FUNCIONAL  | Dependency Injection  |
 | **Integration Testing**     | 100%     | ✅ PASANDO    | Production Live       |
@@ -828,13 +836,13 @@ git checkout -b feature/trading-domain-extraction
 
 ---
 
-_Última actualización: octubre 2, 2025 - 20:56_
+_Última actualización: octubre 2, 2025 - 21:04_
 _Rama: feature/hexagonal-architecture-refactor_
-_Contexto: Refactoring incremental hacia Clean Architecture_
+_Contexto: Refactor incremental hacia Clean Architecture_
 _Estado: ✅ ARQUITECTURA HEXAGONAL 100% COMPLETADA Y FUNCIONAL_
-_Progreso: Trading Domain 100% + Strategy Domain 100% + Account Domain 100%_
-_Completado: ✅ 3 Dominios principales completamente hexagonalizados_
+_Progreso: 4 Dominios principales completamente hexagonalizados_
+_Completado: ✅ Trading Domain 100% + Strategy Domain 100% + Account Domain 100% + Communication Domain 100%_
 _Servicios: ✅ STM (8100) + Server (8200) activos y healthy tras restart completo_
-_Integración: ✅ Routers `/strategies/`, `/account/synth`, `/positions/hexagonal` funcionando_
-_Métrica: ✅ Trading Domain (100%) - Positions/Orders/Fees completamente integrado_
-_Verificación: ✅ Health checks + endpoints funcionando en producción con fallback automático_
+_Integración: ✅ Routers `/strategies/`, `/account/synth`, `/positions/hexagonal`, `/ws/status` funcionando_
+_Métrica: ✅ WebSocket Domain (100%) - Singleton eliminado, hexagonal con fallback automático_
+_Verificación: ✅ Health checks + endpoints funcionando en producción con arquitectura hexagonal completa_

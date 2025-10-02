@@ -1,19 +1,43 @@
 import asyncio
-from typing import Dict
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
+from typing import Dict, Optional
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, Depends
 from backend.shared.logger import get_logger
-from ..services.websocket_manager import WebSocketManager
+from ..websocket_service_integration import websocket_service_dependency
 from ..services.stm_service import STMService
 
 router = APIRouter(tags=["websocket"])
 log = get_logger("server.websocket")
 
-# Use singleton instances
-ws_manager = WebSocketManager()
+# STM Service legacy
 stm_service = STMService()
 
 # In-memory cache to log PnL changes only when they actually change
 _last_pnl_by_position: Dict[str, float] = {}
+
+# Función helper para obtener servicio WebSocket con fallback
+async def get_websocket_service():
+    """Obtener servicio WebSocket hexagonal o legacy como fallback"""
+    try:
+        # Intentar obtener servicio hexagonal
+        from ..websocket_service_integration import websocket_service_factory
+        service = await websocket_service_factory()
+        
+        # Verificar si es el servicio hexagonal (WebSocketAdapter compatible)
+        if hasattr(service, "connect") and hasattr(service, "broadcast"):
+            log.info("Using Hexagonal WebSocket Service")
+            return service
+        else:
+            # Es el servicio hexagonal, crear adapter
+            from ..infrastructure.adapters.communication.websocket_service import WebSocketServiceAdapter
+            adapter = WebSocketServiceAdapter(service)
+            log.info("Using Hexagonal WebSocket Service (via adapter)")
+            return adapter
+            
+    except Exception as e:
+        log.warning(f"Hexagonal WebSocket service not available, using legacy singleton: {e}")
+        # Fallback a servicio legacy
+        from ..services.websocket_manager import WebSocketManager
+        return WebSocketManager()
 
 # Allowed mutable fields for "position_change" events
 _ALLOWED_POSITION_FIELDS = {
@@ -61,13 +85,19 @@ def _sanitize_position_change(payload: dict) -> dict:
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time data broadcasting"""
-    await ws_manager.connect(websocket)
+    ws_service = await get_websocket_service()
+    
+    # Conectar cliente
+    client_id = await ws_service.connect(websocket)
+    log.info(f"WebSocket client connected: {client_id}")
+    
     try:
         while True:
             # Keep connection alive; we don't expect incoming messages
             await asyncio.sleep(60)
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        await ws_service.disconnect(websocket)
+        log.info(f"WebSocket client disconnected: {client_id}")
 
 
 @router.post("/ws/notify")
@@ -77,6 +107,9 @@ async def notify_websocket_clients(request: Request):
         data = await request.json()
         log.info(f"Received notification: {data.get('type')}")
 
+        # Obtener servicio WebSocket con fallback
+        ws_service = await get_websocket_service()
+
         # Normalize and broadcast to all clients
         # Expected payloads:
         # { type: 'position_change', positionId, fields: { ... }, ts }
@@ -84,7 +117,7 @@ async def notify_websocket_clients(request: Request):
         # { type: 'account_balance_update', data, ts }
         if data.get("type") == "position_change":
             data = _sanitize_position_change(data)
-        await ws_manager.broadcast(data)
+        await ws_service.broadcast(data)
 
         # Handle different event types
         event_type = data.get("type")
@@ -124,7 +157,7 @@ async def notify_websocket_clients(request: Request):
                         fee_close = TAKER * (curr_price or entry) * qty
                         pnl_net = gross - fee_open - fee_close
                         # Broadcast pnl update for this position
-                        await ws_manager.broadcast(
+                        await ws_service.broadcast(
                             {
                                 "type": "position_change",
                                 "positionId": pid,
@@ -152,7 +185,7 @@ async def notify_websocket_clients(request: Request):
             try:
                 normalized = await stm_service.get_account_synth()
                 payload = {"type": "account_balance_update", "data": normalized}
-                await ws_manager.broadcast(payload)
+                await ws_service.broadcast(payload)
                 log.info("📊 Broadcasted normalized account_balance_update to clients")
             except Exception as e:
                 log.error(f"Failed to normalize account update: {e}")
@@ -200,7 +233,7 @@ async def notify_websocket_clients(request: Request):
                         "type": "account_balance_update",
                         "data": account_data,
                     }
-                    await ws_manager.broadcast(balance_update)
+                    await ws_service.broadcast(balance_update)
                     log.info("📊 Account balance update broadcasted to frontend")
             except Exception as e:
                 log.error(f"Failed to fetch and broadcast account balance: {e}")
@@ -209,3 +242,36 @@ async def notify_websocket_clients(request: Request):
     except Exception as e:
         log.error(f"Error processing notification: {e}")
         return {"success": False, "error": str(e)}
+
+
+@router.get("/ws/status")
+async def websocket_service_status():
+    """Estado del servicio WebSocket (hexagonal o legacy)"""
+    try:
+        ws_service = await get_websocket_service()
+        
+        # Intentar obtener status si es servicio hexagonal
+        if hasattr(ws_service, "get_service_status"):
+            status = await ws_service.get_service_status()
+            service_type = "Hexagonal WebSocket Service"
+        else:
+            # Servicio legacy
+            status = {
+                "service_status": "legacy",
+                "active_connections": len(ws_service.connections),
+                "service_type": "Legacy WebSocketManager (singleton)"
+            }
+            service_type = "Legacy WebSocket Manager"
+        
+        return {
+            "status": "success",
+            "service_type": service_type,
+            "data": status
+        }
+        
+    except Exception as e:
+        log.error(f"Error getting WebSocket service status: {e}")
+        return {
+            "status": "error",
+            "error": str(e)
+        }

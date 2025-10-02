@@ -8,14 +8,14 @@
     {
       "asset": "USDT",
       "free": 499.98,
-      "locked": 17.70,
+      "locked": 17.7,
       "total": 517.68
     },
     {
       "asset": "DOGE",
       "free": 1516.95,
       "locked": 709.15,
-      "total": 2226.10
+      "total": 2226.1
     }
   ],
   "total_usdt_value": 1193.56,
@@ -29,7 +29,7 @@
   "risk_settings": {
     "max_position_size": 0.95,
     "stop_loss_percentage": 0.05,
-    "take_profit_percentage": 0.10
+    "take_profit_percentage": 0.1
   },
   "performance_metrics": {
     "total_trades": 0,
